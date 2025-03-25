@@ -18,9 +18,15 @@ Trang web cho phép người dùng nhập code hợp ngữ RISC-V vào một ô 
 Code JavaScript được chia thành các hàm chính sau:
 
 *   **`registerMapping`:** Một đối tượng (object) được sử dụng để ánh xạ các tên thanh ghi theo chuẩn MIPS và các tên thanh ghi thông thường sang tên thanh ghi RISC-V tương ứng.
-*   **`normalizeRegisterNames(instruction)`:** Hàm chuẩn hóa tên các thanh ghi trong một lệnh hợp ngữ.
-*   **`convertToBinary()`:** Hàm lấy code hợp ngữ RISC-V từ ô nhập liệu, chuyển đổi nó thành mã nhị phân và hiển thị kết quả.
+Ví dụ: '$T0': ['X5', 'T0']
+=> $T0, T0 sẽ được chuyển thành X5.
+*   **`normalizeRegisterNames(instruction)`:**  thay thế tất cả các tên thanh ghi MIPS (ví dụ: $zero, $ra, $sp) và các tên thanh ghi thông thường (ví dụ: t0, t1, s0) bằng tên thanh ghi RISC-V tương ứng.
+Ví dụ: ADD $T0, $T1, $T2  =>  ADD X5, X6, X7
+*   **`convertToBinary()`:** Hàm này đọc đầu vào từ người dùng, chuẩn hóa nó và chuyển đổi từng dòng lệnh assembly thành mã nhị phân bằng cách gọi riscvToBinary(instruction). Nó cũng hiển thị kết quả trên giao diện.
 *   **`riscvToBinary(instruction)`:** Hàm chính để chuyển đổi một lệnh hợp ngữ RISC-V thành mã nhị phân.
+Bước 1: Chuẩn hóa lệnh
+**`instruction = normalizeRegisterNames(instruction);`**
+=> Chuyển thanh ghi về dạng Xn.
 
 ## Các định dạng lệnh được hỗ trợ
 
