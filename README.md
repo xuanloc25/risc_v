@@ -27,16 +27,21 @@ Ví dụ: **`'$T0': ['X5', 'T0']`**
 Ví dụ: **`ADD $T0, $T1, $T2  =>  ADD X5, X6, X7`**
 
 *   **`convertToBinary()`:** Hàm này đọc đầu vào từ người dùng, chuẩn hóa nó và chuyển đổi từng dòng lệnh assembly thành mã nhị phân bằng cách gọi riscvToBinary(instruction). Nó cũng hiển thị kết quả trên giao diện.
-*   
+
 *   **`riscvToBinary(instruction)`:** Hàm chính để chuyển đổi một lệnh hợp ngữ RISC-V thành mã nhị phân.
 
-Bước 1: Chuẩn hóa lệnh
-**`instruction = normalizeRegisterNames(instruction);`**
-=> Chuyển thanh ghi về dạng Xn.
-Ví dụ: **`ADD $T0, $T1, $T2  =>  ADD X5, X6, X7`**
+Bước 1: Chuẩn hóa lệnh.
 
-Bước 2: Phân tách các thành phần lệnh
-**`const parts = instruction.trim().toUpperCase().split(/[ ,]+/);`**
+**`instruction = normalizeRegisterNames(instruction);`**
+
+=> Chuyển thanh ghi về dạng Xn.
+
+Ví dụ: **`ADD $T0, $T1, $T2  =>  ADD X5, X6, X7`**.
+
+Bước 2: Phân tách các thành phần lệnh.
+
+**`const parts = instruction.trim().toUpperCase().split(/[ ,]+/);`**.
+=> Chia lệnh thành các thành phần: opcode, rd, rs1, rs2 hoặc imm.
 ## Các định dạng lệnh được hỗ trợ
 
 Hiện tại, trình biên dịch chỉ hỗ trợ một số định dạng lệnh RISC-V cơ bản. Việc mở rộng hỗ trợ cho nhiều định dạng lệnh hơn là một trong những mục tiêu phát triển trong tương lai.
