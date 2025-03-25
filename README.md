@@ -63,8 +63,10 @@ Bước 4: Chuyển đổi opcode thành dạng nhị phân. Dựa vào loại l
 Ví dụ: Lệnh R-type (ADD, SUB, AND, OR, XOR...).
 
 **`case 'ADD':`**
-**`binaryInstruction =0000000 ${rs2Num} ${rs1Num} 000 ${rdNum} 0110011;`**
-**`break;`**
+
+   **`binaryInstruction = '0000000 ${rs2Num} ${rs1Num} 000 ${rdNum} 0110011';`**
+
+   **`break;`**
 
 0000000 → funct7
 
