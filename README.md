@@ -48,9 +48,11 @@ Ví dụ: **`"ADD X5, X6, X7"  =>  ["ADD", "X5", "X6", "X7"]`**
 
 Bước 3: Chuyển thanh ghi thành mã số
 
-**`const rdNum = getRegisterNumber(rd);
-   const rs1Num = getRegisterNumber(rs1);
-   const rs2Num = getRegisterNumber(rs2OrImm);`**
+**`const rdNum = getRegisterNumber(rd);`**
+
+**`const rs1Num = getRegisterNumber(rs1);`**
+   
+**`const rs2Num = getRegisterNumber(rs2OrImm);`**
 
 Hàm getRegisterNumber(register) chuyển đổi Xn thành số nhị phân 5-bit:
 
@@ -60,11 +62,9 @@ Bước 4: Chuyển đổi opcode thành dạng nhị phân. Dựa vào loại l
 
 Ví dụ: Lệnh R-type (ADD, SUB, AND, OR, XOR...).
 
-**`
-case 'ADD':
-    binaryInstruction = `0000000 ${rs2Num} ${rs1Num} 000 ${rdNum} 0110011`;
-    break;
-`**
+**`case 'ADD':`**
+**`binaryInstruction =0000000 ${rs2Num} ${rs1Num} 000 ${rdNum} 0110011;`**
+**`break;`**
 
 0000000 → funct7
 
