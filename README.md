@@ -41,7 +41,45 @@ Ví dụ: **`ADD $T0, $T1, $T2  =>  ADD X5, X6, X7`**.
 Bước 2: Phân tách các thành phần lệnh.
 
 **`const parts = instruction.trim().toUpperCase().split(/[ ,]+/);`**.
+
 => Chia lệnh thành các thành phần: opcode, rd, rs1, rs2 hoặc imm.
+
+Ví dụ: **`"ADD X5, X6, X7"  =>  ["ADD", "X5", "X6", "X7"]`**
+
+Bước 3: Chuyển thanh ghi thành mã số
+
+**`const rdNum = getRegisterNumber(rd);
+   const rs1Num = getRegisterNumber(rs1);
+   const rs2Num = getRegisterNumber(rs2OrImm);`**
+
+Hàm getRegisterNumber(register) chuyển đổi Xn thành số nhị phân 5-bit:
+
+Ví dụ: **`getRegisterNumber("X5")  =>  "00101"`**
+
+Bước 4: Chuyển đổi opcode thành dạng nhị phân. Dựa vào loại lệnh, chương trình tạo ra mã nhị phân phù hợp.
+
+Ví dụ: Lệnh R-type (ADD, SUB, AND, OR, XOR...).
+
+**`
+case 'ADD':
+    binaryInstruction = `0000000 ${rs2Num} ${rs1Num} 000 ${rdNum} 0110011`;
+    break;
+`**
+
+0000000 → funct7
+
+${rs2Num} → rs2
+
+${rs1Num} → rs1
+
+000 → funct3
+
+${rdNum} → rd
+
+0110011 → opcode
+
+Ví dụ: **`ADD X5, X6, X7  // X5 = X6 + X7`** => **`0000000 00111 00110 000 00101 0110011`**
+
 ## Các định dạng lệnh được hỗ trợ
 
 Hiện tại, trình biên dịch chỉ hỗ trợ một số định dạng lệnh RISC-V cơ bản. Việc mở rộng hỗ trợ cho nhiều định dạng lệnh hơn là một trong những mục tiêu phát triển trong tương lai.
