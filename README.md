@@ -2,8 +2,7 @@
 
 ## Giới thiệu
 
-Dự án này là một trình biên dịch hợp ngữ RISC-V đơn giản, được xây dựng bằng JavaScript và chạy trực tiếp trên trình duyệt web. Mục tiêu của dự án là giúp người học và các nhà phát triển khám phá và hiểu rõ hơn về kiến trúc RISC-V bằng cách chuyển đổi mã hợp ngữ RISC-V thành mã nhị phân tương ứng.
-
+Dự án này là một trình biên dịch hợp ngữ RISC-V đơn giản, được xây dựng bằng JavaScript và chạy trực tiếp trên trình duyệt web.
 ## Chức năng
 
 Trang web cho phép người dùng nhập code hợp ngữ RISC-V vào một ô nhập liệu và sau đó chuyển đổi nó thành mã nhị phân. Kết quả được hiển thị trực tiếp trên trang web.
