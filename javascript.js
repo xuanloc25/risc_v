@@ -23,4 +23,4 @@ function assembleAndShow() {
     }
 }
 
-window.assembleAndShow = assembleAndShow; // Để truy cập từ onclick trong HTML
+document.getElementById('assembleButton').addEventListener('click', assembleAndShow);
