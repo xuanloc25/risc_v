@@ -1,6 +1,7 @@
 import { assembler } from './js/assembler.js';
 
 function assembleAndShow() {
+    console.log("assembleAndShow called!");
     const instructionInput = document.getElementById('instructionInput').value;
     const binaryOutput = document.getElementById('binaryOutput');
     const memoryOutput = document.getElementById('memoryOutput');
