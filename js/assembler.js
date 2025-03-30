@@ -8,58 +8,225 @@ export const assembler = {
     instructions: [],     // Mảng chứa các lệnh đã được phân tích và kiểm tra
     binary: [],       //chứa mã nhị phân
 
-    directives: { //tất cả các directives
+    directives: {
        ".data": {
-            minArgs: 0, maxArgs: 1,
-            handler: handleDataDirective
+            minArgs: 0,
+            maxArgs: 1,
+            handler: function(args) { // Sửa ở đây
+                if (args.length === 1) {
+                    this.currentAddress = parseInt(args[0]);
+                }
+                this.currentSection = "data";
+            }
         },
         ".text": {
-            minArgs: 0, maxArgs: 1,
-            handler: handleTextDirective
+            minArgs: 0,
+            maxArgs: 1,
+            handler: function(args) { // Sửa ở đây
+                if (args.length === 1) {
+                    this.currentAddress = parseInt(args[0]);
+                }
+                this.currentSection = "text";
+            }
         },
         ".word": {
-            minArgs: 1, maxArgs: Infinity,
-            handler: handleWordDirective
+            minArgs: 1,
+            maxArgs: Infinity, // Không giới hạn số lượng tham số
+            handler:  function(args) { // Sửa ở đây
+                if (this.currentSection !== "data") {
+                    throw new Error(".word directive can only be used in .data section");
+                }
+
+                for (const arg of args) {
+                    let value;
+
+                    if (isNaN(parseInt(arg))) {
+                        if (this.labels[arg]) {
+                            value = this.labels[arg].address || this.labels[arg];
+                        } else {
+                            throw new Error(`Undefined label or symbol: ${arg}`);
+                        }
+                    } else {
+                        value = parseInt(arg);
+                    }
+
+                    const byte1 = value & 0xFF;
+                    const byte2 = (value >> 8) & 0xFF;
+                    const byte3 = (value >> 16) & 0xFF;
+                    const byte4 = (value >> 24) & 0xFF;
+
+                    this.memory[this.currentAddress++] = byte1;
+                    this.memory[this.currentAddress++] = byte2;
+                    this.memory[this.currentAddress++] = byte3;
+                    this.memory[this.currentAddress++] = byte4;
+                }
+            }
         },
-        ".half": { //thêm
-            minArgs: 1, maxArgs: Infinity,
-            handler: handleHalfDirective
+        ".half": {
+            minArgs: 1,
+            maxArgs: Infinity,
+            handler: function (args) { // Sửa ở đây
+                if (this.currentSection !== "data") {
+                    throw new Error(".half directive can only be used in .data section");
+                }
+
+                for (const arg of args) {
+                    let num = parseInt(arg);
+                    if (isNaN(num)) {
+                        // Xử lý trường hợp tham số là nhãn (label)
+                        if (this.labels[arg]) {
+                            num = this.labels[arg].address; //gán địa chỉ của label
+                        } else {
+                            throw new Error(`Undefined label: ${arg}`);
+                        }
+                    }
+
+                    // Chia số nguyên 16-bit thành 2 byte (little-endian)
+                    const byte1 = num & 0xFF;
+                    const byte2 = (num >> 8) & 0xFF;
+
+                    // Lưu vào bộ nhớ
+                    this.memory[this.currentAddress++] = byte1;
+                    this.memory[this.currentAddress++] = byte2;
+                }
+            }
         },
-        ".byte": { //thêm
-            minArgs: 1, maxArgs: Infinity,
-            handler: handleByteDirective
+        ".byte": {
+            minArgs: 1,
+            maxArgs: Infinity,
+            handler: function(args) { // Sửa ở đây
+                if (this.currentSection !== "data") {
+                    throw new Error(".byte directive can only be used in .data section");
+                }
+
+                for (const arg of args) {
+                    let num = parseInt(arg);
+                    if (isNaN(num)) {
+                        if (this.labels[arg]) {
+                            num = this.labels[arg].address;
+                        } else {
+                            throw new Error(`Undefined label: ${arg}`);
+                        }
+                    }
+
+                    if (num < -128 || num > 255) {
+                        throw new Error(`Byte value out of range: ${arg}`);
+                    }
+
+                    // Đảm bảo giá trị nằm trong phạm vi 8-bit
+                    const byte = num & 0xFF;
+
+                    // Lưu vào bộ nhớ
+                    this.memory[this.currentAddress++] = byte;
+                }
+            }
         },
-        ".ascii": { //thêm
-            minArgs: 1, maxArgs: 1,
-            handler: handleAsciiDirective
+        ".ascii": {
+            minArgs: 1,
+            maxArgs: 1,
+            handler: function (args) { // Sửa ở đây
+                if (this.currentSection !== "data") {
+                    throw new Error(".ascii directive can only be used in .data section");
+                }
+                const str = args[0].slice(1, -1);
+
+                for (let i = 0; i < str.length; i++) {
+                    this.memory[this.currentAddress++] = str.charCodeAt(i);
+                }
+            }
         },
         ".asciiz": {
-            minArgs: 1, maxArgs: 1,
-            handler: handleAsciizDirective
+            minArgs: 1,
+            maxArgs: 1,
+            handler: function (args) { // Sửa ở đây
+                if (this.currentSection !== "data") {
+                throw new Error(".asciiz directive can only be used in .data section");
+              }
+              const str = args[0].slice(1, -1); //xóa dấu nháy
+
+                // Thêm các ký tự của chuỗi vào bộ nhớ
+                for (let i = 0; i < str.length; i++) {
+                    this.memory[this.currentAddress++] = str.charCodeAt(i); //lấy giá trị của kí tự
+                }
+
+                // Thêm ký tự null kết thúc chuỗi
+                this.memory[this.currentAddress++] = 0;
+            }
         },
         ".space": {
-            minArgs: 1, maxArgs: 1,
-            handler: handleSpaceDirective
+            minArgs: 1,
+            maxArgs: 1,
+            handler: function (args) { // Sửa ở đây
+                if (this.currentSection !== "data") {
+                    throw new Error(".space directive can only be used in .data section");
+                }
+                const bytes = parseInt(args[0]);
+                if (isNaN(bytes)) {
+                    throw new Error(`Invalid number of bytes in .space: ${args[0]}`);
+                }
+
+                this.currentAddress += bytes; //tăng biến đếm địa chỉ
+            }
         },
-        ".align": {
-            minArgs: 1, maxArgs: 1,
-            handler: handleAlignDirective
-        },
-        ".global": {  // Hoặc .globl
-            minArgs: 1, maxArgs: 1, // Tối đa 1 tham số (tên nhãn)
-            handler: handleGlobalDirective
+        ".global": {
+            minArgs: 1,
+            maxArgs: 1,
+            handler: function(args) { //sửa ở đây
+                const label = args[0];
+                if(this.labels[label] !== undefined) {
+                this.labels[label].isGlobal = true;
+                } else {
+                this.labels[label] = {address: null, isGlobal: true};
+                }
+
+            }
         },
         ".extern": {
-            minArgs: 2, maxArgs: 2,
-            handler: handleExternDirective
-        },
-        ".equ": { //thêm
             minArgs: 2,
             maxArgs: 2,
-            handler: handleEquDirective
+            handler:  function (args) { // Sửa ở đây
+              console.log(".extern directive called with args:", args);
+              // TODO: Implement .extern directive handling
+            }
         },
+        ".equ": {
+            minArgs: 2,
+            maxArgs: 2,
+            handler: function (args){ // Sửa ở đây
+                const label = args[0];
+                let value = parseInt(args[1]);
+                if (isNaN(value)) {
+                    if (this.labels[args[1]]) { //kiểm tra xem có phải label không
+                    value = this.labels[args[1]].address; //gán bằng địa chỉ của label đó
+                    }
+                    else
+                    throw new Error(`Undefined label: ${args[1]}`);
+                }
+                if (this.labels[label]) { //kiểm tra xem label đã tồn tại chưa
+                    throw new Error(`Duplicate label definition: ${label}`);
+                }
+                this.labels[label] = value; //gán giá trị cho label
+            }
+        },
+        ".align": {
+            minArgs: 1,
+            maxArgs: 1,
+            handler: function(args) { // Sửa ở đây
+                if (this.currentSection !== "data") {
+                    throw new Error(".align directive can only be used in .data section");
+                }
+                const n = parseInt(args[0]);
+                if (isNaN(n) || n < 0) {
+                    throw new Error(`Invalid alignment value: ${args[0]}`);
+                }
+                const align = 2**n;
+                let remainder = this.currentAddress % align;
+                if(remainder != 0){
+                    this.currentAddress += align - remainder;
+                }
+            }
+        }
     },
-
     instructionFormats: { //thêm các lệnh
         "ADD":  { type: "R", opcode: "0110011", funct3: "000", funct7: "0000000" },
         "SUB":  { type: "R", opcode: "0110011", funct3: "000", funct7: "0100000" },
