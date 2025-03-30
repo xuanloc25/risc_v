@@ -1,60 +1,29 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <title>RISC-V Instruction to Binary Converter</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RISC-V Assembler</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f0f0;
-            margin: 0;
-        }
-
-        .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 90%;
-            height: 90%;
-            display: flex;
-            flex-direction: column;
-        }
-
-        textarea,
-        button {
-            margin: 5px 0;
-            padding: 10px;
-            font-size: 16px;
-            width: 100%;
-        }
-
-        textarea {
-            flex: 1;
-            resize: none;
-        }
-
-        pre {
-            flex: 1;
-            background-color: #e0e0e0;
-            padding: 10px;
-            overflow: auto;
-        }
+        /* Tối giản CSS */
+        body { font-family: monospace; }
+        textarea { width: 80%; height: 200px; }
+        pre { background-color: #eee; padding: 10px; }
     </style>
 </head>
-
 <body>
-    <div class="container">
-        <h1>RISC-V Instruction to Binary Converter</h1>
-        <textarea id="instructionInput" placeholder="Enter RISC-V assembly code"></textarea>
-        <button onclick="convertToBinary()">Convert</button>
-        <pre id="binaryOutput"></pre>
-    </div>
-    <script src="javascript.js"></script>
-</body>
+    <h1>RISC-V Assembler</h1>
 
+    <textarea id="instructionInput" placeholder="Enter RISC-V assembly code here"></textarea>
+    <button onclick="assembleAndShow()">Assemble</button>
+
+    <h2>Binary Output:</h2>
+    <pre id="binaryOutput"></pre>
+
+     <h2>Memory (Hex):</h2>
+    <pre id="memoryOutput"></pre>
+
+    <script src="js/assembler.js" type="module"></script>
+    <script src="script.js" type="module"></script>
+</body>
 </html>
