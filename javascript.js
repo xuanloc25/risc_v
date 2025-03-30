@@ -10,11 +10,11 @@ function assembleAndShow() {
         const assembledCode = assembler.assemble(instructionInput);
         binaryOutput.textContent = assembledCode.join('\n');
 
-         // Hiển thị bộ nhớ (dạng hex)
+        // Hiển thị bộ nhớ (dạng hex)
         let memoryString = "";
         for (const address in assembler.memory) {
             const hexValue = assembler.memory[address].toString(16).padStart(2, '0');
-            memoryString += `${address.toString(16).padStart(8, '0')}: ${hexValue}\n`;
+            memoryString += `${address.toString(16).padStart(8, '0')}: ${hexValue}\n`; // Đã sửa
         }
         memoryOutput.textContent = memoryString;
 
