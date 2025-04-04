@@ -1,29 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RISC-V Assembler</title>
-    <style>
-        /* Tối giản CSS */
-        body { font-family: monospace; }
-        textarea { width: 80%; height: 200px; }
-        pre { background-color: #eee; padding: 10px; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <h1>RISC-V Assembler</h1>
 
-    <textarea id="instructionInput" placeholder="Enter RISC-V assembly code here"></textarea>
-    <button id="assembleButton">Assemble</button>
+    <div class="container">
+        <!-- Cột trái: Input & Binary Output -->
+        <div class="column left-column">
+            <h2>Input your RISC-V code here:</h2>
+            <textarea id="instructionInput" placeholder="Enter RISC-V assembly code"></textarea>
 
-    <h2>Binary Output:</h2>
-    <pre id="binaryOutput"></pre>
+            <button id="assembleButton">Assemble</button>
 
-    <h2>Memory (Hex):</h2>
-    <pre id="memoryOutput"></pre>
+            <h2>Binary Output:</h2>
+            <pre id="binaryOutput"></pre>
+        </div>
 
-    <script src="javascript.js" type="module"></script>  <!-- Đã sửa -->
+        <!-- registerregister -->
+        <div class="column right-column">
+            <table id="registerTable">
+                <thead>
+                    <tr>
+                        <th>Register</th>
+                        <th>Decimal</th>
+                        <th>Hex</th>
+                        <th>Binary</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <script src="js/assembler.js" type="module"></script>
+    <script src="js/simulator.js" type="module"></script>
+    <script src="js/javascript.js" type="module"></script>
+
 </body>
+
 </html>
