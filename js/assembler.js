@@ -1,11 +1,10 @@
 export const assembler = {
-    memory: {},        // Bộ nhớ ảo (địa chỉ byte -> giá trị byte)
+    memory: {},        // Bộ nhớ ảo (địa chỉ byte -> giá trị byte) - CHỈ CHO DATA
     labels: {},        // Bảng nhãn { labelName: { address: number, isGlobal: boolean } | number (cho .equ) }
     equValues: {},     // Lưu trữ giá trị của các hằng số .equ riêng biệt
     currentSection: null, // Section hiện tại: 'data' hoặc 'text'
     currentAddress: 0,   // Địa chỉ bộ nhớ hiện tại (tính bằng byte)
-    instructionLines: [], // Mảng lưu trữ các dòng lệnh gốc để xử lý sau khi có đủ label
-    binary: [],       // Mảng chứa mã nhị phân được tạo ra
+    instructionLines: [], // Mảng lưu trữ các dòng gốc và thông tin tạm thời (địa chỉ)
 
     // Ánh xạ tên thanh ghi (ABI Names và MIPS-style) sang tên RISC-V chuẩn (Xn)
     registerMapping: {
@@ -50,7 +49,7 @@ export const assembler = {
         'X30': 'X30', 'X31': 'X31'
     },
 
-    // Định nghĩa các chỉ thị assembler và hàm xử lý tương ứng
+    // Định nghĩa các chỉ thị assembler
     directives: {
         ".data": { minArgs: 0, maxArgs: 1, handler: function (args) { this._handleDataDirective(args); } },
         ".text": { minArgs: 0, maxArgs: 1, handler: function (args) { this._handleTextDirective(args); } },
@@ -59,13 +58,13 @@ export const assembler = {
         ".byte": { minArgs: 1, maxArgs: Infinity, handler: function (args) { this._handleByteDirective(args); } },
         ".ascii": { minArgs: 1, maxArgs: 1, handler: function (args) { this._handleAsciiDirective(args); } },
         ".asciiz": { minArgs: 1, maxArgs: 1, handler: function (args) { this._handleAsciizDirective(args); } },
+        ".string": { minArgs: 1, maxArgs: 1, handler: function (args) { this._handleAsciizDirective(args); } }, //alias cho .asciiz 
         ".space": { minArgs: 1, maxArgs: 1, handler: function (args) { this._handleSpaceDirective(args); } },
         ".align": { minArgs: 1, maxArgs: 1, handler: function (args) { this._handleAlignDirective(args); } },
         ".global": { minArgs: 1, maxArgs: 1, handler: function (args) { this._handleGlobalDirective(args); } },
-        ".globl": { minArgs: 1, maxArgs: 1, handler: function (args) { this._handleGlobalDirective(args); } }, // .globl là alias của .global
-        ".extern": { minArgs: 2, maxArgs: 2, handler: function (args) { this._handleExternDirective(args); } },
+        ".globl": { minArgs: 1, maxArgs: 1, handler: function (args) { this._handleGlobalDirective(args); } }, // alias
+        ".extern": { minArgs: 1, maxArgs: Infinity, handler: function (args) { this._handleExternDirective(args); } }, // Cho phép nhiều externals
         ".equ": { minArgs: 2, maxArgs: 2, handler: function (args) { this._handleEquDirective(args); } },
-        // Thêm các chỉ thị khác nếu cần
     },
 
     // Định nghĩa định dạng các lệnh RISC-V
@@ -93,9 +92,9 @@ export const assembler = {
         "XORI": { type: "I", opcode: "0010011", funct3: "100" },
         "ORI": { type: "I", opcode: "0010011", funct3: "110" },
         "ANDI": { type: "I", opcode: "0010011", funct3: "111" },
-        "SLLI": { type: "I", opcode: "0010011", funct3: "001", funct7: "0000000" }, // Shift amount trong imm[4:0]
-        "SRLI": { type: "I", opcode: "0010011", funct3: "101", funct7: "0000000" }, // Shift amount trong imm[4:0]
-        "SRAI": { type: "I", opcode: "0010011", funct3: "101", funct7: "0100000" }, // Shift amount trong imm[4:0]
+        "SLLI": { type: "I", opcode: "0010011", funct3: "001", funct7: "0000000" },
+        "SRLI": { type: "I", opcode: "0010011", funct3: "101", funct7: "0000000" },
+        "SRAI": { type: "I", opcode: "0010011", funct3: "101", funct7: "0100000" },
         "JALR": { type: "I", opcode: "1100111", funct3: "000" },
         // S-Type
         "SW": { type: "S", opcode: "0100011", funct3: "010" },
@@ -113,64 +112,75 @@ export const assembler = {
         "AUIPC": { type: "U", opcode: "0010111" },
         // J-Type
         "JAL": { type: "J", opcode: "1101111" },
-        // System instructions (Ví dụ: ecall)
-        "ECALL": { type: "I", opcode: "1110011", funct3: "000", imm: "000000000000" }, // Immediate 12-bit là 0
-        // Thêm các lệnh khác nếu cần
+        // System
+        "ECALL": { type: "I", opcode: "1110011", funct3: "000", immField: "000000000000" },
+        "EBREAK": { type: "I", opcode: "1110011", funct3: "000", immField: "000000000001" },
     },
 
-    /**
-     * Hàm chính để biên dịch mã hợp ngữ.
-     * @param {string} assemblyCode - Chuỗi chứa mã hợp ngữ.
-     * @returns {string[]} - Mảng chứa các chuỗi mã nhị phân.
-     */
     assemble(assemblyCode) {
-        // Reset trạng thái biên dịch
         this._reset();
-
         const lines = assemblyCode.split("\n");
+        let assembledInstructions = [];
 
-        // ===== PASS 1: Xử lý chỉ thị, nhãn và tính toán địa chỉ =====
+        console.log("Starting Assembly Pass 1...");
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             try {
-                const parsedLine = this._parseLine(line, i); // Truyền cả số dòng để báo lỗi
+                const parsedLine = this._parseLine(line, i);
                 if (parsedLine) {
-                    // Nếu là lệnh, tính toán địa chỉ và lưu trữ để dùng ở Pass 2
                     if (parsedLine.type === 'instruction') {
-                        parsedLine.address = this.currentAddress; // Gán địa chỉ cho lệnh
-                        this.currentAddress += 4; // Lệnh RISC-V dài 4 byte
+                        if (this.currentSection !== 'text') {
+                            if (this.currentSection === null) {
+                                console.warn(`Instruction "${parsedLine.line}" found outside explicit section. Assuming .text at default address.`);
+                                this._handleTextDirective([]);
+                            } else {
+                                throw new Error(`Instruction "${parsedLine.line}" found in .${this.currentSection} section.`);
+                            }
+                        }
+                        parsedLine.address = this.currentAddress;
+                        this.instructionLines.push(parsedLine);
+                        this.currentAddress += 4;
                     }
-                    this.instructionLines.push(parsedLine); // Lưu dòng đã phân tích
                 }
             } catch (error) {
                 console.error(`Error assembling line ${i + 1}: ${line}\n`, error);
-                throw new Error(`Line ${i + 1}: ${error.message}`); // Re-throw với số dòng
+                throw new Error(`Line ${i + 1}: ${error.message}`);
             }
         }
+        console.log("Assembly Pass 1 Finished.");
+        console.log("  Labels:", this.labels);
+        console.log("  Data Memory (Initial):", this.memory);
+        console.log("  Instruction Lines for Pass 2:", this.instructionLines);
 
-        // ===== PASS 2: Sinh mã nhị phân =====
-        for (const instr of this.instructionLines) {
-            if (instr.type === "instruction") {
-                this.currentAddress = instr.address; // Cập nhật lại currentAddress cho Pass 2
-                const mc = this._riscvToBinary(instr.line);
-                if (mc && typeof mc === 'string' && !mc.startsWith('Error:')) { // Chỉ push mã nhị phân hợp lệ
-                    this.binary.push(mc);
+        console.log("Starting Assembly Pass 2...");
+        for (const instrInfo of this.instructionLines) {
+            if (instrInfo.type === "instruction" && instrInfo.address !== undefined) {
+                const mc = this._riscvToBinary(instrInfo.line, instrInfo.address);
+                if (mc && typeof mc === 'string' && !mc.startsWith('Error:')) {
+                    assembledInstructions.push({ address: instrInfo.address, binary: mc });
                 } else if (mc && mc.startsWith('Error:')) {
-                    throw new Error(`Instruction "${instr.line}": ${mc}`); // Ném lỗi nếu riscvToBinary trả về lỗi
+                    throw new Error(`Instruction "${instrInfo.line}" at address 0x${instrInfo.address.toString(16)}: ${mc.substring(7)}`);
                 }
             }
         }
+        console.log("Assembly Pass 2 Finished.");
+        console.log("  Assembled Instructions:", assembledInstructions);
 
-        console.log("Assembly Pass 1 - Labels:", this.labels);
-        console.log("Assembly Pass 1 - Memory:", this.memory);
-        console.log("Assembly Pass 2 - Binary:", this.binary);
-        return this.binary; // Trả về mảng mã nhị phân
+        let startAddress = this.labels['main']?.address;
+        if (startAddress === undefined) {
+            const firstInstruction = assembledInstructions[0];
+            startAddress = firstInstruction ? firstInstruction.address : 0x00400000; // Default nếu không có lệnh nào
+        }
+        startAddress = Number(startAddress) || 0;
+        console.log(`Determined Start Address: 0x${startAddress.toString(16).padStart(8, '0')}`);
+
+        return {
+            dataMemory: this.memory,
+            instructions: assembledInstructions,
+            startAddress: startAddress
+        };
     },
 
-    /**
-     * Reset trạng thái của assembler.
-     * @private
-     */
     _reset() {
         this.memory = {};
         this.labels = {};
@@ -178,117 +188,107 @@ export const assembler = {
         this.currentSection = null;
         this.currentAddress = 0;
         this.instructionLines = [];
-        this.binary = [];
+        console.log("Assembler state reset.");
     },
 
-    /**
-     * Phân tích cú pháp một dòng mã hợp ngữ.
-     * @param {string} line - Dòng mã hợp ngữ.
-     * @param {number} lineNumber - Số dòng (để báo lỗi).
-     * @returns {object|null} - Đối tượng biểu diễn dòng đã phân tích hoặc null.
-     * @private
-     */
     _parseLine(line, lineNumber) {
         line = line.trim();
+        const originalLine = line;
         if (!line) return null;
 
-        // Loại bỏ comment
         const commentIndex = line.indexOf("#");
         if (commentIndex !== -1) {
             line = line.substring(0, commentIndex).trim();
         }
         if (!line) return null;
 
-        // Xử lý nhãn (Label) ở đầu dòng
+        // Xử lý nhãn
         if (line.includes(':') && !line.startsWith('.')) {
             const labelEndIndex = line.indexOf(':');
             const label = line.substring(0, labelEndIndex).trim();
             const remainingLine = line.substring(labelEndIndex + 1).trim();
 
-            // Kiểm tra tên nhãn hợp lệ (ví dụ: chỉ chứa chữ cái, số, dấu gạch dưới, bắt đầu bằng chữ cái hoặc dấu gạch dưới)
             if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(label)) {
                 throw new Error(`Invalid label name: "${label}"`);
             }
-
-            if (this.labels[label] && this.labels[label].address !== undefined) {
+            // Kiểm tra định nghĩa trùng lặp (cho phép cập nhật nếu là global chưa có địa chỉ)
+            if (this.labels[label] && this.labels[label].address !== undefined && !(this.labels[label].isGlobal && this.labels[label].address === undefined)) {
                 throw new Error(`Duplicate label definition: "${label}"`);
             }
-            // Lưu hoặc cập nhật nhãn với địa chỉ hiện tại
-            this.labels[label] = { ...this.labels[label], address: this.currentAddress };
+            // Gán địa chỉ hiện tại (sẽ được cập nhật đúng trong Pass 1 khi xử lý directive/instruction)
+            const currentLabelAddress = this.currentAddress;
+            this.labels[label] = { ...this.labels[label], address: currentLabelAddress };
+            console.log(` Pass 1: Found label "${label}" at potential address 0x${currentLabelAddress.toString(16)}`);
 
-            // Nếu có lệnh hoặc chỉ thị trên cùng dòng với nhãn, xử lý tiếp
+            // Xử lý phần còn lại trên cùng dòng nếu có
             if (remainingLine) {
-                return this._parseLine(remainingLine, lineNumber); // Đệ quy để xử lý phần còn lại
+                return this._parseLine(remainingLine, lineNumber);
             } else {
-                return { type: "label", name: label, address: this.currentAddress }; // Trả về thông tin nhãn
+                return { type: "label", name: label, address: currentLabelAddress };
             }
 
+            // Xử lý chỉ thị
         } else if (line.startsWith(".")) {
-            // Xử lý chỉ thị (Directive)
-            const parts = line.split(/\s+/);
-            const directive = parts[0].toLowerCase();
-            const args = parts.slice(1).join(' ').split(',').map(arg => arg.trim()).filter(arg => arg !== ''); // Xử lý tham số phức tạp hơn
+            const parts = line.match(/(?:[^\s"]+|"[^"]*")+/g) || []; // Tách tốt hơn
+            const directive = parts[0]?.toLowerCase();
+            if (!directive) return null;
 
-            // Xử lý chuỗi trong .ascii và .asciiz
-            if ((directive === '.ascii' || directive === '.asciiz') && line.includes('"')) {
-                const firstQuote = line.indexOf('"');
-                const lastQuote = line.lastIndexOf('"');
-                if (firstQuote !== -1 && lastQuote > firstQuote) {
-                    args = [line.substring(firstQuote)]; // Lấy toàn bộ chuỗi làm một tham số
+            let args = parts.slice(1);
+            // Xử lý đặc biệt cho chuỗi trong .ascii/.asciiz
+            if ((directive === '.ascii' || directive === '.asciiz')) {
+                const fullLineMatch = originalLine.match(/^\s*\.(?:ascii|asciiz)\s+(.*)/i);
+                if (fullLineMatch && fullLineMatch[1]) {
+                    const potentialString = fullLineMatch[1].trim();
+                    // Chỉ coi là chuỗi nếu nó bắt đầu và kết thúc bằng dấu nháy kép
+                    if (potentialString.startsWith('"') && potentialString.endsWith('"')) {
+                        args = [potentialString]; // Một arg duy nhất là chuỗi
+                    } else {
+                        // Nếu không, coi như là danh sách các giá trị byte (có thể là số hoặc ký tự đơn)
+                        args = potentialString.split(',').map(a => a.trim()).filter(a => a);
+                    }
+                } else {
+                    args = []; // Không có tham số
                 }
+            } else {
+                // Tách tham số thông thường bằng dấu phẩy
+                args = parts.slice(1).join(' ').split(',').map(arg => arg.trim()).filter(arg => arg !== '');
             }
 
             if (this.directives[directive]) {
                 const { minArgs, maxArgs, handler } = this.directives[directive];
-
-                // Kiểm tra số lượng tham số (linh hoạt hơn)
                 if (args.length < minArgs || (maxArgs !== Infinity && args.length > maxArgs)) {
-                    throw new Error(`Invalid number of arguments for directive ${directive}. Expected ${minArgs}${maxArgs === Infinity ? '+' : '-' + maxArgs}, got ${args.length}`);
+                    throw new Error(`Invalid number of arguments for directive ${directive}. Expected ${minArgs}${maxArgs === Infinity ? '+' : '-' + maxArgs}, got ${args.length} (${args.join(', ')})`);
                 }
-
-                handler.call(this, args); // Gọi hàm xử lý, `this` trỏ đến assembler
-                return { type: "directive", name: directive, args: args }; // Trả về thông tin chỉ thị
+                const addressBeforeHandling = this.currentAddress;
+                handler.call(this, args); // Gọi handler để cập nhật trạng thái assembler
+                // Trả về thông tin directive, bao gồm địa chỉ *trước khi* handler chạy
+                return { type: "directive", name: directive, args: args, address: addressBeforeHandling };
             } else {
                 throw new Error(`Unknown directive: "${directive}"`);
             }
+            // Xử lý lệnh
         } else {
-            // Xử lý lệnh (Instruction)
-            if (this.currentSection === "text") {
-                return { type: "instruction", line: line }; // Trả về dòng lệnh gốc
-            } else if (this.currentSection === "data") {
-                throw new Error(`Instruction "${line}" found in .data section.`);
-            } else {
-                console.warn(`Instruction or data "${line}" found outside of .text or .data section. Assuming .text.`);
-                this.currentSection = "text"; // Mặc định là .text nếu chưa xác định
-                return { type: "instruction", line: line };
-            }
+            // Chỉ trả về dòng lệnh gốc, Pass 2 sẽ xử lý chi tiết
+            return { type: "instruction", line: line };
         }
     },
 
-    /**
-     * Chuyển đổi một lệnh hợp ngữ thành mã nhị phân.
-     * @param {string} instruction - Dòng lệnh hợp ngữ gốc.
-     * @returns {string|null} - Chuỗi mã nhị phân hoặc null nếu có lỗi.
-     * @private
-     */
-    _riscvToBinary(instruction) {
-        // 1. Chuẩn hóa tên thanh ghi
+    _riscvToBinary(instruction, currentInstructionAddress) {
         const normalizedInstruction = this._normalizeRegisterNames(instruction);
 
-        // 2. Phân tích cú pháp lệnh (đã chuẩn hóa)
-        // Cần xử lý các trường hợp như lw rd, offset(rs1)
         let parts;
-        const loadStoreMatch = normalizedInstruction.match(/^(\w+)\s+([^,]+),\s*(-?\w+)\(([^)]+)\)$/i); // Match lw/sw rd, offset(rs1)
+        // Regex linh hoạt hơn cho offset: số, hex, bin, label, label+/-offset
+        const loadStoreMatch = normalizedInstruction.match(/^(\w+)\s+([^,]+),\s*(-?(?:0x[0-9a-f]+|0b[01]+|\d+|[a-zA-Z_][a-zA-Z0-9_]*(?:\s*[+-]\s*\d+)?))\(([^)]+)\)$/i);
         if (loadStoreMatch) {
             parts = [loadStoreMatch[1], loadStoreMatch[2], loadStoreMatch[4], loadStoreMatch[3]]; // opcode, rd/rs2, rs1, imm(offset)
         } else {
-            parts = normalizedInstruction.trim().toUpperCase().split(/[,\s()]+/); // Tách cơ bản hơn
+            // Tách thông thường, giữ lại các phần tử có nghĩa
+            parts = normalizedInstruction.trim().split(/[\s,()]+/).filter(p => p);
         }
 
-        const opcode = parts[0];
+        const opcode = parts[0].toUpperCase();
 
         if (!this.instructionFormats[opcode]) {
-            // Có thể là lệnh giả? (Sẽ xử lý sau)
             throw new Error(`Invalid or unsupported opcode: "${opcode}" in instruction "${instruction}"`);
         }
 
@@ -298,389 +298,424 @@ export const assembler = {
         let binaryInstruction = "";
         let rd, rs1, rs2, imm, rdEncoded, rs1Encoded, rs2Encoded, immEncoded;
 
-        // Hàm encodeRegister và encodeImmediate nên được định nghĩa bên ngoài hoặc truyền vào
-        // Để dễ đọc, tạm thời giữ bên trong nhưng nên tách ra sau
+        // Hàm helper để mã hóa thanh ghi
         const encodeRegister = (register) => {
-            const regName = this.registerMapping[register.toUpperCase()]; // Sử dụng mapping đã chuẩn hóa
-            if (!regName) {
-                throw new Error(`Invalid register name: "${register}" in instruction "${instruction}"`);
-            }
+            if (!register) throw new Error(`Missing register operand in "${instruction}"`);
+            const regName = this.registerMapping[register.toUpperCase()];
+            if (!regName) throw new Error(`Invalid register name: "${register}" in "${instruction}"`);
             const regNumber = parseInt(regName.slice(1));
+            if (isNaN(regNumber) || regNumber < 0 || regNumber > 31) throw new Error(`Invalid register number for: "${register}"`);
             return regNumber.toString(2).padStart(5, '0');
         };
 
-        const encodeImmediate = (immediate, format) => {
+        // Hàm helper để mã hóa immediate (đã cập nhật)
+        const encodeImmediate = (immediateStr, formatType, instructionAddr) => {
             let immValue;
-            if (isNaN(parseInt(immediate))) {
-                // Xử lý nhãn (label) hoặc giá trị .equ
-                if (this.equValues[immediate] !== undefined) {
-                    immValue = this.equValues[immediate];
-                } else if (this.labels[immediate] !== undefined && this.labels[immediate].address !== null) {
-                    let labelAddress = this.labels[immediate].address;
-                    // Tính toán offset tương đối cho lệnh branch và jump
-                    if (format === "B" || format === "J") {
-                        if (this.currentSection !== "text") {
-                            throw new Error(`Cannot use label "${immediate}" for branch/jump outside .text section`);
-                        }
-                        // Lấy địa chỉ của lệnh hiện tại từ instructionLines
-                        const currentInstructionInfo = this.instructionLines.find(item => item.line === instruction);
-                        const currentInstructionAddress = currentInstructionInfo ? currentInstructionInfo.address : this.currentAddress; // Fallback
-                        immValue = labelAddress - currentInstructionAddress;
-                    } else {
-                        immValue = labelAddress; // Sử dụng địa chỉ tuyệt đối cho các lệnh khác
-                    }
-                } else {
-                    throw new Error(`Undefined label or symbol: "${immediate}" in instruction "${instruction}"`);
+            const trimmedImm = immediateStr.trim();
+            let isLiteralNumber = false;
+
+            // 1. Parse số literal (dec, hex, bin)
+            if (/^-?0x[0-9a-f]+$/i.test(trimmedImm)) {
+                immValue = parseInt(trimmedImm, 16);
+                isLiteralNumber = true;
+            } else if (/^-?0b[01]+$/i.test(trimmedImm)) {
+                const isNegative = trimmedImm.startsWith('-');
+                const binPart = trimmedImm.replace(/^-?0b/, '');
+                immValue = parseInt(binPart, 2);
+                if (isNegative) immValue = -immValue;
+                isLiteralNumber = true;
+            } else if (/^-?\d+$/.test(trimmedImm)) {
+                immValue = parseInt(trimmedImm, 10);
+                isLiteralNumber = true;
+            }
+
+            // 2. Resolve symbol nếu không phải literal
+            if (!isLiteralNumber) {
+                try {
+                    immValue = this._resolveSymbolOrValue(trimmedImm); // Dùng hàm đã sửa
+                } catch (e) {
+                    throw new Error(`Cannot resolve immediate "${trimmedImm}": ${e.message}`);
                 }
+            }
+
+            if (immValue === undefined || isNaN(immValue)) {
+                throw new Error(`Could not resolve immediate value: "${trimmedImm}"`);
+            }
+
+            // 3. Tính offset tương đối nếu là B/J và không phải literal
+            if (!isLiteralNumber && (formatType === "B" || formatType === "J")) {
+                if (instructionAddr === undefined) throw new Error(`Internal error: instructionAddr needed for relative offset for symbol "${trimmedImm}"`);
+                immValue = immValue - instructionAddr;
+                if (immValue % 2 !== 0) throw new Error(`Branch/Jump offset to symbol "${trimmedImm}" (${immValue}) is not halfword aligned.`);
+            }
+
+            // 4. Kiểm tra giới hạn và tạo binary two's complement
+            let maxBits, minVal, maxVal;
+            switch (formatType) {
+                case "I": maxBits = 12; minVal = -2048; maxVal = 2047; break;
+                case "S": maxBits = 12; minVal = -2048; maxVal = 2047; break;
+                case "B":
+                    maxBits = 13; minVal = -4096; maxVal = 4094;
+                    if (immValue % 2 !== 0) throw new Error(`Branch target offset ${immValue} must be even.`);
+                    break;
+                case "U":
+                    maxBits = 20; minVal = 0; maxVal = (1 << 20) - 1;
+                    if (isLiteralNumber) {
+                        // Immediate literal cho LUI/AUIPC phải nằm trong 20 bit không dấu
+                        if (immValue < minVal || immValue > maxVal) {
+                            throw new Error(`U-type immediate literal 0x${immValue.toString(16)} out of 20-bit range [0, 0x${maxVal.toString(16)}]`);
+                        }
+                    } else { // Giá trị từ symbol (địa chỉ 32 bit)
+                        // Lấy 20 bit cao (có thể cộng 0x800 để làm tròn cho %hi)
+                        // immValue = ((immValue + 0x800) >>> 12) & 0xFFFFF; // %hi
+                        immValue = (immValue >>> 12) & 0xFFFFF; // Chỉ lấy 20 bit cao
+                    }
+                    // immValue bây giờ phải là giá trị 20 bit
+                    if (immValue < minVal || immValue > maxVal) {
+                        throw new Error(`Internal error: Processed U-type immediate 0x${immValue.toString(16)} out of 20-bit range.`);
+                    }
+                    break;
+                case "J":
+                    maxBits = 21; minVal = -1048576; maxVal = 1048574;
+                    if (immValue % 2 !== 0) throw new Error(`Jump target offset ${immValue} must be even.`);
+                    break;
+                default: throw new Error(`Unsupported format type for immediate: ${formatType}`);
+            }
+
+            // Kiểm tra range cuối cùng
+            if (immValue < minVal || immValue > maxVal) {
+                if (formatType !== "U") { // U-type đã kiểm tra bên trong
+                    throw new Error(`Immediate value ${immValue} (0x${immValue.toString(16)}) out of range [${minVal}, ${maxVal}] for ${formatType}-type encoding`);
+                }
+            }
+
+            // Tạo chuỗi binary two's complement
+            let binaryImm = "";
+            if ((formatType === "I" || formatType === "S" || formatType === "B" || formatType === "J") && immValue < 0) {
+                binaryImm = ((1 << maxBits) + immValue).toString(2);
+                if (binaryImm.length > maxBits) binaryImm = binaryImm.slice(-maxBits);
+                else if (binaryImm.length < maxBits) binaryImm = binaryImm.padStart(maxBits, '1');
             } else {
-                immValue = parseInt(immediate, 10);
+                binaryImm = immValue.toString(2).padStart(maxBits, '0');
             }
-
-
-            let maxBits;
-            switch (format) {
-                case "I": maxBits = 12; break;
-                case "S": maxBits = 12; break;
-                case "B": maxBits = 13; break; // 12 bits + 1 bit sign
-                case "U": maxBits = 20; break;
-                case "J": maxBits = 21; break;  // 20 bits + 1 bit sign
-                default: throw new Error(`Unsupported format for immediate encoding: ${format}`);
-            }
-
-            const limit = Math.pow(2, maxBits - 1);
-            if (immValue < -limit || immValue >= limit) {
-                throw new Error(`Immediate value ${immValue} out of range for ${format}-type instruction "${instruction}"`);
-            }
-
-            if (immValue < 0) {
-                immValue = (1 << maxBits) + immValue; // Two's complement
-            }
-            return immValue.toString(2).padStart(maxBits, '0');
+            return binaryImm;
         };
+        // --- Kết thúc encodeImmediate ---
 
+        // Mã hóa các phần của lệnh dựa trên type
         try {
             switch (type) {
-                case "R":
-                    if (parts.length !== 4) throw new Error(`Incorrect arguments for R-type instruction "${instruction}"`);
-                    rd = parts[1];
-                    rs1 = parts[2];
-                    rs2 = parts[3];
+                case "R": // rd, rs1, rs2
+                    if (parts.length !== 4) throw new Error(`R-type expects 3 registers (rd, rs1, rs2), got: ${parts.slice(1).join(', ')}`);
+                    rd = parts[1]; rs1 = parts[2]; rs2 = parts[3];
                     rdEncoded = encodeRegister(rd);
                     rs1Encoded = encodeRegister(rs1);
                     rs2Encoded = encodeRegister(rs2);
                     binaryInstruction = funct7 + rs2Encoded + rs1Encoded + funct3 + rdEncoded + binOpcode;
                     break;
 
-                case "I":
-                    if (parts.length !== 4) throw new Error(`Incorrect arguments for I-type instruction "${instruction}"`);
+                case "I": // rd, rs1, imm | rd, imm(rs1)
+                    if (parts.length !== 4) throw new Error(`I-type expects rd, rs1, imm or rd, imm(rs1), got: ${parts.slice(1).join(', ')}`);
                     rd = parts[1];
-                    rs1 = parts[2];
-                    imm = parts[3];
+                    if (loadStoreMatch) { rs1 = parts[2]; imm = parts[3]; } // Dạng load/store
+                    else { rs1 = parts[2]; imm = parts[3]; } // Dạng tính toán
                     rdEncoded = encodeRegister(rd);
                     rs1Encoded = encodeRegister(rs1);
-                    immEncoded = encodeImmediate(imm, type);
+                    immEncoded = encodeImmediate(imm, type, currentInstructionAddress);
 
-                    // Xử lý riêng cho SLLI, SRLI, SRAI
                     if (opcode === 'SLLI' || opcode === 'SRLI' || opcode === 'SRAI') {
-                        const shamt = parseInt(imm) & 0x1F; // Lấy 5 bit thấp
-                        immEncoded = funct7.padStart(7, '0') + shamt.toString(2).padStart(5, '0'); // Ghép funct7 và shamt
-                        binaryInstruction = immEncoded + rs1Encoded + funct3 + rdEncoded + binOpcode;
+                        const shamtVal = parseInt(imm); // Imm cho shift phải là số literal
+                        if (isNaN(shamtVal) || shamtVal < 0 || shamtVal > 31) { // RV32 shamt 5 bits
+                            throw new Error(`Shift amount for ${opcode} must be a literal number 0-31, got ${imm}`);
+                        }
+                        const shamtBin = (shamtVal & 0x1F).toString(2).padStart(5, '0');
+                        // funct7 của SRAI khác SRLI/SLLI
+                        const actualFunct7 = instructionFormats[opcode].funct7;
+                        binaryInstruction = actualFunct7 + shamtBin + rs1Encoded + funct3 + rdEncoded + binOpcode;
                     } else {
-                        binaryInstruction = immEncoded.padStart(12, '0') + rs1Encoded + funct3 + rdEncoded + binOpcode;
+                        // imm[11:0] + rs1 + funct3 + rd + opcode
+                        binaryInstruction = immEncoded.slice(-12) + rs1Encoded + funct3 + rdEncoded + binOpcode;
                     }
                     break;
 
-
-                case "S":
-                    if (parts.length !== 4) throw new Error(`Incorrect arguments for S-type instruction "${instruction}"`);
-                    rs2 = parts[1]; // Giá trị để lưu
-                    rs1 = parts[2]; // Thanh ghi địa chỉ cơ sở
-                    imm = parts[3]; // Offset
+                case "S": // rs2, imm(rs1)
+                    if (!loadStoreMatch || parts.length !== 4) throw new Error(`S-type expects rs2, imm(rs1), got: ${instruction}`);
+                    rs2 = parts[1]; rs1 = parts[2]; imm = parts[3];
                     rs1Encoded = encodeRegister(rs1);
                     rs2Encoded = encodeRegister(rs2);
-                    immEncoded = encodeImmediate(imm, type);
+                    immEncoded = encodeImmediate(imm, type, currentInstructionAddress); // 12 bit
                     // imm[11:5] + rs2 + rs1 + funct3 + imm[4:0] + opcode
                     binaryInstruction = immEncoded.slice(0, 7) + rs2Encoded + rs1Encoded + funct3 + immEncoded.slice(7) + binOpcode;
                     break;
 
-                case "B":
-                    if (parts.length !== 4) throw new Error(`Incorrect arguments for B-type instruction "${instruction}"`);
-                    rs1 = parts[1];
-                    rs2 = parts[2];
-                    imm = parts[3]; // Label hoặc offset
+                case "B": // rs1, rs2, label/offset
+                    if (parts.length !== 4) throw new Error(`B-type expects rs1, rs2, label/offset, got: ${parts.slice(1).join(', ')}`);
+                    rs1 = parts[1]; rs2 = parts[2]; imm = parts[3];
                     rs1Encoded = encodeRegister(rs1);
                     rs2Encoded = encodeRegister(rs2);
-                    immEncoded = encodeImmediate(imm, type);
-                    // imm[12] + imm[10:5] + rs2 + rs1 + funct3 + imm[4:1] + imm[11] + opcode
+                    immEncoded = encodeImmediate(imm, type, currentInstructionAddress); // 13 bit offset
+                    // imm[12] imm[10:5] rs2 rs1 funct3 imm[4:1] imm[11] opcode
                     binaryInstruction =
-                        immEncoded.slice(0, 1) +  // imm[12]
-                        immEncoded.slice(2, 8) +  // imm[10:5]
-                        rs2Encoded +
-                        rs1Encoded +
-                        funct3 +
-                        immEncoded.slice(8, 12) + // imm[4:1]
-                        immEncoded.slice(1, 2) +  // imm[11]
+                        immEncoded.slice(0, 1) +   // imm[12]
+                        immEncoded.slice(2, 8) +   // imm[10:5]
+                        rs2Encoded + rs1Encoded + funct3 +
+                        immEncoded.slice(8, 12) +  // imm[4:1]
+                        immEncoded.slice(1, 2) +   // imm[11]
                         binOpcode;
                     break;
 
-                case "U":
-                    if (parts.length !== 3) throw new Error(`Incorrect arguments for U-type instruction "${instruction}"`);
-                    rd = parts[1];
-                    imm = parts[2];
+                case "U": // rd, imm
+                    if (parts.length !== 3) throw new Error(`U-type expects rd, imm, got: ${parts.slice(1).join(', ')}`);
+                    rd = parts[1]; imm = parts[2];
                     rdEncoded = encodeRegister(rd);
-                    immEncoded = encodeImmediate(imm, type);
-                    // imm[31:12] + rd + opcode
-                    binaryInstruction = immEncoded + rdEncoded + binOpcode; // imm đã là 20 bit cao
+                    immEncoded = encodeImmediate(imm, type, currentInstructionAddress); // 20 bit
+                    // imm[31:12] (20 bits) + rd + opcode
+                    binaryInstruction = immEncoded + rdEncoded + binOpcode;
                     break;
 
-                case "J":
-                    if (parts.length !== 3) throw new Error(`Incorrect arguments for J-type instruction "${instruction}"`);
-                    rd = parts[1];
-                    imm = parts[2]; // Label hoặc offset
+                case "J": // rd, label/offset
+                    if (parts.length !== 3) throw new Error(`J-type expects rd, label/offset, got: ${parts.slice(1).join(', ')}`);
+                    rd = parts[1]; imm = parts[2];
                     rdEncoded = encodeRegister(rd);
-                    immEncoded = encodeImmediate(imm, type);
-                    // imm[20] + imm[10:1] + imm[11] + imm[19:12] + rd + opcode
+                    immEncoded = encodeImmediate(imm, type, currentInstructionAddress); // 21 bit offset
+                    // imm[20] imm[10:1] imm[11] imm[19:12] rd opcode
                     binaryInstruction =
-                        immEncoded.slice(0, 1) +  // imm[20]
-                        immEncoded.slice(11, 21) + // imm[10:1]
-                        immEncoded.slice(10, 11) + // imm[11]
-                        immEncoded.slice(1, 9) +  // imm[19:12] --- Sửa logic này
-                        rdEncoded +
-                        binOpcode;
+                        immEncoded.slice(0, 1) +   // imm[20]
+                        immEncoded.slice(10, 20) + // imm[10:1] (10 bits)
+                        immEncoded.slice(9, 10) +  // imm[11] (1 bit)
+                        immEncoded.slice(1, 9) +   // imm[19:12] (8 bits)
+                        rdEncoded + binOpcode;
                     break;
 
-                default:
-                    throw new Error(`Unsupported instruction type: "${type}" for instruction "${instruction}"`);
+                default: throw new Error(`Unsupported instruction type: "${type}"`);
             }
         } catch (error) {
-            console.error(`Error encoding instruction "${instruction}":`, error);
-            // Trả về thông báo lỗi thay vì ném lên trên nếu muốn xử lý mềm dẻo hơn
+            console.error(`Error encoding instruction "${instruction}" at 0x${currentInstructionAddress?.toString(16)}:`, error);
             return `Error: ${error.message}`;
         }
 
         if (binaryInstruction.length !== 32) {
-            console.error(`Generated binary instruction length is not 32 bits for "${instruction}": L=${binaryInstruction.length}`);
-            // Có thể ném lỗi ở đây
+            console.error(`Internal Error: Generated binary length is not 32 bits for "${instruction}": Length=${binaryInstruction.length}, Binary=${binaryInstruction}`);
+            return `Error: Internal error during binary generation (length != 32)`;
         }
-
-        //        console.log("binary before return:", binaryInstruction)
-        return binaryInstruction.replace(/ /g, ''); // Xóa khoảng trắng và trả về
+        return binaryInstruction;
     },
 
-    /**
-    * Chuẩn hóa tên thanh ghi trong một lệnh.
-    * @param {string} instruction - Dòng lệnh hợp ngữ.
-    * @returns {string} - Dòng lệnh với tên thanh ghi đã được chuẩn hóa sang dạng Xn.
-    * @private
-    */
     _normalizeRegisterNames(instruction) {
         let normalized = instruction;
-        // Thay thế các alias bằng tên Xn chuẩn, ưu tiên các alias dài hơn trước
         const aliases = Object.keys(this.registerMapping).sort((a, b) => b.length - a.length);
         for (const alias of aliases) {
-            const riscvName = this.registerMapping[alias];
-            // Biểu thức chính quy để tìm alias (xuất hiện như một từ riêng biệt)
             const regex = new RegExp(`\\b${alias.replace('$', '\\$')}\\b`, 'gi');
-            normalized = normalized.replace(regex, riscvName); // Thay thế bằng Xn
+            normalized = normalized.replace(regex, this.registerMapping[alias]);
         }
         return normalized;
     },
 
-
-    // --- Các hàm xử lý chỉ thị (Private methods) ---
+    // --- Directive Handlers ---
     _handleDataDirective(args) {
         this.currentSection = "data";
+        let addr = 0x10010000; // Default data address
         if (args.length === 1) {
-            const addr = parseInt(args[0]);
-            if (isNaN(addr)) throw new Error(`Invalid address for .data: ${args[0]}`);
-            this.currentAddress = addr;
+            try { addr = this._parseNumericArg(args[0], '.data address'); }
+            catch (e) { throw new Error(`Invalid address for .data: ${args[0]} - ${e.message}`); }
         }
+        this.currentAddress = addr;
+        console.log(` Switched to .data section at address 0x${this.currentAddress.toString(16)}`);
     },
     _handleTextDirective(args) {
         this.currentSection = "text";
+        let addr = 0x00400000; // Default text address
         if (args.length === 1) {
-            const addr = parseInt(args[0]);
-            if (isNaN(addr)) throw new Error(`Invalid address for .text: ${args[0]}`);
-            this.currentAddress = addr;
-        } else {
-            // Địa chỉ mặc định cho .text nếu không được chỉ định
-            this.currentAddress = 0x00400000; // Ví dụ
+            try { addr = this._parseNumericArg(args[0], '.text address'); }
+            catch (e) { throw new Error(`Invalid address for .text: ${args[0]} - ${e.message}`); }
         }
+        this.currentAddress = addr;
+        console.log(` Switched to .text section at address 0x${this.currentAddress.toString(16)}`);
     },
     _handleWordDirective(args) {
-        if (this.currentSection !== "data") {
-            throw new Error(".word directive can only be used in .data section");
-        }
+        this._ensureDataSection(".word");
+        this._alignAddress(4, ".word");
         for (const arg of args) {
             let value = this._resolveSymbolOrValue(arg);
-            this._storeValue(value, 4); // Lưu 4 byte
+            this._storeValue(value, 4);
         }
     },
     _handleHalfDirective(args) {
-        if (this.currentSection !== "data") {
-            throw new Error(".half directive can only be used in .data section");
-        }
+        this._ensureDataSection(".half");
+        this._alignAddress(2, ".half");
         for (const arg of args) {
             let value = this._resolveSymbolOrValue(arg);
-            this._storeValue(value, 2); // Lưu 2 byte
+            if (value < -32768 || value > 65535) { console.warn(`Value ${value} for .half may be truncated.`); }
+            this._storeValue(value, 2);
         }
     },
     _handleByteDirective(args) {
-        if (this.currentSection !== "data") {
-            throw new Error(".byte directive can only be used in .data section");
-        }
+        this._ensureDataSection(".byte");
         for (const arg of args) {
             let value = this._resolveSymbolOrValue(arg);
-            if (value < -128 || value > 255) {
-                throw new Error(`Byte value out of range: ${arg}`);
-            }
-            this._storeValue(value, 1); // Lưu 1 byte
+            if (value < -128 || value > 255) { throw new Error(`Byte value ${value} out of range (-128 to 255)`); }
+            this._storeValue(value, 1);
         }
     },
     _handleAsciiDirective(args) {
-        if (this.currentSection !== "data") {
-            throw new Error(".ascii directive can only be used in .data section");
-        }
+        this._ensureDataSection(".ascii");
+        // args[0] nên là chuỗi literal đã được trích xuất bởi _parseLine
         const str = this._parseStringLiteral(args[0], '.ascii');
-        for (let i = 0; i < str.length; i++) {
-            this.memory[this.currentAddress++] = str.charCodeAt(i);
-        }
+        for (let i = 0; i < str.length; i++) { this.memory[this.currentAddress++] = str.charCodeAt(i) & 0xFF; }
     },
     _handleAsciizDirective(args) {
-        if (this.currentSection !== "data") {
-            throw new Error(".asciiz directive can only be used in .data section");
-        }
+        this._ensureDataSection(".asciiz");
         const str = this._parseStringLiteral(args[0], '.asciiz');
-        for (let i = 0; i < str.length; i++) {
-            this.memory[this.currentAddress++] = str.charCodeAt(i);
-        }
-        this.memory[this.currentAddress++] = 0; // Thêm null terminator
+        for (let i = 0; i < str.length; i++) { this.memory[this.currentAddress++] = str.charCodeAt(i) & 0xFF; }
+        this.memory[this.currentAddress++] = 0; // Null terminator
     },
     _handleSpaceDirective(args) {
-        if (this.currentSection !== "data") {
-            throw new Error(".space directive can only be used in .data section");
-        }
-        const bytes = parseInt(args[0]);
-        if (isNaN(bytes) || bytes < 0) { // Kiểm tra bytes âm
-            throw new Error(`Invalid number of bytes in .space: ${args[0]}`);
-        }
-        // Thay vì tăng trực tiếp, hãy ghi byte 0 vào các vị trí bộ nhớ
-        for (let i = 0; i < bytes; i++) {
-            this.memory[this.currentAddress++] = 0;
-        }
-        // this.currentAddress += bytes; // Chỉ tăng địa chỉ mà không ghi gì
+        this._ensureDataSection(".space");
+        const bytes = this._parseNumericArg(args[0], '.space size');
+        if (bytes < 0) { throw new Error(`Invalid negative size for .space: ${bytes}`); }
+        for (let i = 0; i < bytes; i++) { this.memory[this.currentAddress++] = 0; }
     },
     _handleAlignDirective(args) {
-        if (this.currentSection !== "data" && this.currentSection !== "text") { // .align có thể dùng trong .text
-            throw new Error(".align directive needs to be in .data or .text section");
-        }
-        const n = parseInt(args[0]);
-        if (isNaN(n) || n < 0) {
-            throw new Error(`Invalid alignment value: ${args[0]}`);
-        }
-        const align = 1 << n; // Tương đương 2**n
-        const remainder = this.currentAddress % align;
-        if (remainder !== 0) {
-            const padding = align - remainder;
-            for (let i = 0; i < padding; i++) {
-                // Ghi byte 0 để căn chỉnh, quan trọng cho section .data
-                if (this.currentSection === 'data') {
-                    this.memory[this.currentAddress++] = 0; // Ghi byte 0 vào bộ nhớ data
-                } else {
-                    this.currentAddress++; // Chỉ tăng địa chỉ trong section text
-                }
-            }
-        }
+        if (!this.currentSection) { throw new Error(".align directive must be within .data or .text section"); }
+        const exponent = this._parseNumericArg(args[0], '.align exponent');
+        if (exponent < 0) { throw new Error(`Invalid negative exponent for .align: ${exponent}`); }
+        this._alignAddress(1 << exponent); // Căn chỉnh theo 2^n
     },
     _handleGlobalDirective(args) {
         const label = args[0];
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(label)) { // Kiểm tra tên hợp lệ
-            throw new Error(`Invalid label name for .global: "${label}"`);
-        }
-        if (this.labels[label] !== undefined) {
-            this.labels[label].isGlobal = true;
-        } else {
-            this.labels[label] = { address: undefined, isGlobal: true }; // Dùng undefined thay null để rõ ràng hơn
-        }
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(label)) { throw new Error(`Invalid label name for .global: "${label}"`); }
+        if (this.labels[label]) { this.labels[label].isGlobal = true; }
+        else { this.labels[label] = { address: undefined, isGlobal: true }; }
+        console.log(` Label "${label}" marked as global.`);
     },
     _handleExternDirective(args) {
-        // .extern chỉ để thông báo, không thực sự làm gì trong assembler đơn giản này
-        console.warn(".extern directive is noted but not fully handled:", args);
-        const label = args[0];
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(label)) {
-            throw new Error(`Invalid label name for .extern: "${label}"`);
+        for (const label of args) {
+            if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(label)) { throw new Error(`Invalid label name for .extern: "${label}"`); }
+            console.warn(`.extern directive noted for label "${label}" (no action taken).`);
+            if (!this.labels[label]) { this.labels[label] = { address: undefined, isExternal: true }; }
+            else { this.labels[label].isExternal = true; }
         }
-        // Có thể thêm vào danh sách externals nếu cần
     },
     _handleEquDirective(args) {
         const label = args[0];
         const valueStr = args[1];
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(label)) {
-            throw new Error(`Invalid label name for .equ: "${label}"`);
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(label)) { throw new Error(`Invalid name for .equ: "${label}"`); }
+        if (this.labels[label] !== undefined || this.equValues[label] !== undefined) { throw new Error(`Symbol "${label}" already defined`); }
+        try {
+            // Phân giải giá trị ngay lập tức, nó phải là số hoặc .equ khác đã định nghĩa
+            let value = this._resolveSymbolOrValue(valueStr);
+            // Kiểm tra lại kết quả resolve có phải là số không
+            if (typeof value !== 'number' || isNaN(value)) {
+                throw new Error(`Value for .equ must resolve to a number, but "${valueStr}" did not.`);
+            }
+            this.equValues[label] = value;
+            console.log(` Defined .equ "${label}" = ${value} (0x${value.toString(16)})`);
+        } catch (e) {
+            throw new Error(`Cannot resolve value "${valueStr}" for .equ "${label}": ${e.message}`);
         }
-        if (this.labels[label] !== undefined || this.equValues[label] !== undefined) {
-            throw new Error(`Symbol "${label}" already defined`);
-        }
-
-        // Cố gắng phân giải giá trị (có thể là số hoặc một .equ khác)
-        let value = this._resolveSymbolOrValue(valueStr); // Hàm này cần xử lý cả .equ
-
-        this.equValues[label] = value; // Lưu vào bảng riêng cho .equ
-        // Không lưu vào this.labels nữa để tránh nhầm lẫn địa chỉ
-        // this.labels[label] = value;
     },
 
-
-    // --- Hàm trợ giúp ---
-    /**
-     * Phân giải một tham số có thể là số, nhãn hoặc hằng số .equ.
-     * @param {string} symbolOrValue - Tham số cần phân giải.
-     * @returns {number} - Giá trị số tương ứng.
-     * @private
-     */
+    // --- Helpers ---
+    _ensureDataSection(directiveName) {
+        if (this.currentSection !== "data") {
+            console.warn(`${directiveName} used outside .data section. Assuming .data at default address.`);
+            this._handleDataDirective([]); // Tự động chuyển sang .data
+        }
+    },
+    _alignAddress(alignment, directiveName = ".align") {
+        if (alignment <= 0 || (alignment & (alignment - 1)) !== 0) { throw new Error(`Invalid alignment value ${alignment} for ${directiveName}. Must be a positive power of 2.`); }
+        const remainder = this.currentAddress % alignment;
+        if (remainder !== 0) {
+            const padding = alignment - remainder;
+            console.log(` Aligning address 0x${this.currentAddress.toString(16)} to ${alignment} bytes (padding ${padding} bytes)`);
+            for (let i = 0; i < padding; i++) {
+                if (this.currentSection === 'data') { this.memory[this.currentAddress++] = 0; } // Ghi 0 vào data
+                else { this.currentAddress++; } // Chỉ tăng địa chỉ trong text
+            }
+        }
+    },
+    // Hàm này giờ chỉ dùng cho các directive cần giá trị số tường minh
+    _parseNumericArg(arg, context) {
+        try {
+            const value = this._resolveSymbolOrValue(arg); // Thử resolve
+            // Kiểm tra kết quả có phải là số không
+            if (typeof value !== 'number' || isNaN(value)) {
+                throw new Error(`Resolved value for "${arg}" is not a number.`);
+            }
+            return value;
+        } catch (e) {
+            throw new Error(`Invalid numeric or symbolic value for ${context}: "${arg}" (${e.message})`);
+        }
+    },
+    // Hàm chính để phân giải giá trị (số literal, .equ, label, biểu thức đơn giản)
     _resolveSymbolOrValue(symbolOrValue) {
-        const value = parseInt(symbolOrValue);
-        if (!isNaN(value)) {
-            return value; // Là số
-        } else if (this.equValues[symbolOrValue] !== undefined) {
-            return this.equValues[symbolOrValue]; // Là hằng số .equ
-        } else if (this.labels[symbolOrValue] !== undefined && this.labels[symbolOrValue].address !== undefined) {
-            return this.labels[symbolOrValue].address; // Là nhãn đã có địa chỉ
-        } else {
-            // Có thể trả về một giá trị đặc biệt hoặc ném lỗi tùy thuộc vào ngữ cảnh cần xử lý nhãn chưa xác định địa chỉ
-            throw new Error(`Undefined symbol or label: "${symbolOrValue}"`);
-        }
-    },
+        const trimmed = symbolOrValue.trim();
+        let value;
 
-    /**
-    * Lưu trữ giá trị vào bộ nhớ ảo (little-endian).
-    * @param {number} value - Giá trị cần lưu.
-    * @param {number} bytes - Số byte để lưu (1, 2, hoặc 4).
-    * @private
-    */
+        // 1. Thử parse số literal (hex, bin, dec)
+        if (/^-?0x[0-9a-f]+$/i.test(trimmed)) {
+            value = parseInt(trimmed, 16);
+        } else if (/^-?0b[01]+$/i.test(trimmed)) {
+            const isNegative = trimmed.startsWith('-');
+            const binPart = trimmed.replace(/^-?0b/, '');
+            value = parseInt(binPart, 2);
+            if (isNegative) value = -value;
+        } else if (/^-?\d+$/.test(trimmed)) {
+            value = parseInt(trimmed, 10);
+        }
+
+        // Nếu là số literal, trả về
+        if (value !== undefined && !isNaN(value)) {
+            return value;
+        }
+
+        // 2. Thử là .equ
+        if (this.equValues[trimmed] !== undefined) {
+            return this.equValues[trimmed];
+        }
+
+        // 3. Thử là label
+        if (this.labels[trimmed] !== undefined && this.labels[trimmed].address !== undefined) {
+            return this.labels[trimmed].address;
+        }
+
+        // 4. Thử biểu thức label +/- offset (chỉ hỗ trợ offset thập phân)
+        const exprMatch = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*([+-])\s*(\d+)$/);
+        if (exprMatch) {
+            const [, label, op, offsetStr] = exprMatch;
+            const offset = parseInt(offsetStr);
+            if (this.labels[label]?.address !== undefined && !isNaN(offset)) {
+                const baseAddr = this.labels[label].address;
+                return op === '+' ? baseAddr + offset : baseAddr - offset;
+            } else {
+                throw new Error(`Cannot resolve label "${label}" or offset in expression "${trimmed}"`);
+            }
+        }
+
+        // 5. Không phân giải được
+        throw new Error(`Undefined symbol, label, or invalid value: "${trimmed}"`);
+    },
     _storeValue(value, bytes) {
+        value = Math.trunc(value); // Đảm bảo là số nguyên
+        console.log(` Storing value ${value} (0x${value.toString(16)}) (${bytes} bytes) at address 0x${this.currentAddress.toString(16)}`);
         for (let i = 0; i < bytes; i++) {
-            const byte = (value >> (i * 8)) & 0xFF;
+            const byte = (value >> (i * 8)) & 0xFF; // Little-endian
             this.memory[this.currentAddress++] = byte;
         }
     },
-    /**
-     * Phân tích cú pháp chuỗi ký tự từ chỉ thị .ascii/.asciiz.
-     * @param {string} arg - Tham số chuỗi (ví dụ: "\"Hello\"").
-     * @param {string} directiveName - Tên chỉ thị (để báo lỗi).
-     * @returns {string} - Chuỗi đã được xử lý (loại bỏ dấu ngoặc kép).
-     * @private
-     */
     _parseStringLiteral(arg, directiveName) {
-        if (!arg.startsWith('"') || !arg.endsWith('"')) {
-            throw new Error(`Invalid string literal for ${directiveName}: ${arg}`);
+        const trimmedArg = arg.trim();
+        // Kiểm tra chặt chẽ hơn: phải bắt đầu và kết thúc bằng "
+        if (!trimmedArg.startsWith('"') || !trimmedArg.endsWith('"')) {
+            // Nếu là .byte hoặc .word, có thể là ký tự đơn 'A'
+            if ((directiveName === '.byte' || directiveName === '.word' || directiveName === '.half') && trimmedArg.length === 3 && trimmedArg.startsWith("'") && trimmedArg.endsWith("'")) {
+                return trimmedArg.charCodeAt(1); // Trả về mã ASCII của ký tự đơn
+            }
+            throw new Error(`Invalid string literal for ${directiveName}: ${arg}. Must be enclosed in double quotes.`);
         }
-        // Xử lý các ký tự escape cơ bản (thêm các ký tự khác nếu cần)
-        return arg.slice(1, -1)
-            .replace(/\\n/g, '\n')
-            .replace(/\\t/g, '\t')
-            .replace(/\\"/g, '"')
-            .replace(/\\\\/g, '\\');
+        // Xử lý escape sequences
+        return trimmedArg.slice(1, -1)
+            .replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"')
+            .replace(/\\'/g, "'").replace(/\\\\/g, '\\').replace(/\\0/g, '\0');
     },
-
 };
