@@ -1,28 +1,18 @@
 body {
     font-family: sans-serif, monospace;
-    /* Ưu tiên font sans-serif dễ đọc, dự phòng monospace */
     margin: 20px;
-    /* Khoảng cách lề xung quanh trang */
     background-color: #f8f9fa;
-    /* Màu nền xám  nhạt cho toàn trang */
     color: #333;
-    /* Màu chữ mặc định (xám đậm) */
     line-height: 1.5;
-    /* Chiều cao dòng mặc định dễ đọc hơn */
 }
 
 h1,
 h2 {
     text-align: center;
-    /* Căn giữa tiêu đề */
     color: #444;
-    /* Màu chữ tiêu đề đậm hơn chút */
     margin-top: 20px;
-    /* Khoảng cách phía trên tiêu đề */
     margin-bottom: 25px;
-    /* Khoảng cách phía dưới tiêu đề */
     font-weight: 600;
-    /* Tăng độ đậm cho tiêu đề */
 }
 
 /* ================================== */
@@ -31,163 +21,104 @@ h2 {
 
 .container {
     display: flex;
-    /* Sử dụng Flexbox để tạo layout 2 cột */
     gap: 30px;
-    /* Khoảng cách giữa cột trái và cột phải */
     max-width: 1400px;
-    /* Tăng chiều rộng tối đa của container */
     margin: 0 auto 30px auto;
-    /* Căn giữa container và thêm khoảng cách dưới */
 }
 
 .column {
     background-color: #fff;
-    /* Nền trắng cho các cột */
     padding: 20px;
-    /* Khoảng đệm bên trong cột */
     border-radius: 8px;
-    /* Bo góc nhẹ */
     box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
-    /* Đổ bóng nhẹ */
 }
 
-/* --- Cột Trái (Input Code, Controls, Binary Output) --- */
 .left-column {
-    flex: 2;
-    /* Chiếm 2 phần không gian (rộng hơn) */
+    flex: 3;
     display: flex;
-    /* Sử dụng Flexbox cho các thành phần bên trong */
     flex-direction: column;
-    /* Sắp xếp các thành phần theo chiều dọc */
 }
 
-/* --- Cột Phải (Bảng Thanh ghi) --- */
 .right-column {
     flex: 1;
-    /* Chiếm 1 phần không gian (hẹp hơn) */
-    /* Không giới hạn chiều cao để bảng thanh ghi hiển thị hết */
-    /* max-height và overflow-y đã bị xóa/comment ở bước trước */
 }
 
 /* ================================== */
 /* == CÁC THÀNH PHẦN TRONG CỘT TRÁI == */
 /* ================================== */
 
-/* --- Ô nhập liệu Code Assembly --- */
 textarea#instructionInput {
-    /* Áp dụng cụ thể cho textarea này */
-    width: calc(100% - 22px);
-    /* Chiều rộng 100% trừ đi padding ngang (10px*2 + border 1px*2) */
-    min-height: 300px;
-    /* Chiều cao tối thiểu */
-    margin-bottom: 20px;
-    /* Khoảng cách với phần tử bên dưới (khối nút) */
+    width: calc(100% - 22px); /* Chiều rộng 100% trừ padding và border */   
+    height: 350px; /* Giảm chiều cao của textarea */
+    /* min-height: 150px; /* Có thể bỏ min-height nếu đã đặt height cố định */
+    /* flex-grow: 0; /* Ngăn textarea tự động giãn ra nếu không cần */
+    margin-bottom: 15px; /* Giảm khoảng cách dưới một chút */
     font-family: monospace;
-    /* Font monospace cho code */
     border: 1px solid #ced4da;
-    /* Viền xám nhạt */
     border-radius: 4px;
-    /* Bo góc nhẹ */
     padding: 10px;
-    /* Đệm bên trong */
     font-size: 1em;
-    /* Cỡ chữ */
     line-height: 1.5;
-    /* Chiều cao dòng */
     resize: vertical;
-    /* Cho phép thay đổi kích thước theo chiều dọc */
-    flex-grow: 1;
-    /* Cho phép textarea giãn ra nếu cột trái cần cao hơn */
 }
 
 /* --- Khu vực chứa các nút điều khiển chính --- */
 .controls {
-    display: flex;
-    /* Sắp xếp các nút trên một hàng */
-    justify-content: center;
-    /* Căn giữa nhóm nút theo chiều ngang */
-    flex-wrap: wrap;
-    /* Cho phép xuống dòng nếu không đủ chỗ */
-    gap: 15px;
-    /* Khoảng cách giữa các nút */
-    margin-bottom: 25px;
-    /* Khoảng cách với phần tử bên dưới (Binary Output) */
+    display: flex; /* Sắp xếp các nút trên một hàng */
+    flex-direction: row; /* Đảm bảo các nút nằm ngang */
+    justify-content: space-around; /* Căn đều các nút hoặc dùng center/flex-start */
+    align-items: center; /* Căn giữa các nút theo chiều dọc nếu chiều cao khác nhau */
+    flex-wrap: wrap; /* Cho phép xuống dòng nếu không đủ chỗ */
+    gap: 10px; /* Khoảng cách giữa các nút */
+    margin-bottom: 20px; /* Khoảng cách với phần tử Binary Output */
 }
 
-/* --- Style chung cho các nút điều khiển chính --- */
+/* Style chung cho các nút điều khiển chính */
+/* Bỏ các margin inline trong HTML của button nếu đã có gap ở .controls */
 #assembleButton,
 #runButton,
 #stepButton,
 #resetButton {
-    min-width: 100px;
-    /* Độ rộng tối thiểu */
+    min-width: 90px; /* Có thể điều chỉnh độ rộng tối thiểu */
     padding: 10px 15px;
-    /* Đệm trong nút (dọc ngang) */
     cursor: pointer;
-    /* Con trỏ hình bàn tay khi di chuột */
     background-color: #007bff;
-    /* Màu nền xanh dương */
     color: white;
-    /* Màu chữ trắng */
     border: none;
-    /* Không có viền */
     border-radius: 5px;
-    /* Bo góc */
-    font-size: 1em;
-    /* Cỡ chữ */
+    font-size: 0.95em; /* Có thể giảm nhẹ cỡ chữ nếu cần */
     font-weight: bold;
-    /* Chữ đậm */
     text-align: center;
-    /* Căn giữa chữ trong nút */
     transition: background-color 0.2s;
-    /* Hiệu ứng chuyển màu nền mượt mà */
 }
 
-/* --- Hiệu ứng khi di chuột qua nút --- */
 #assembleButton:hover,
 #runButton:hover,
 #stepButton:hover,
 #resetButton:hover {
     background-color: #0056b3;
-    /* Màu xanh đậm hơn */
 }
 
-/* --- Hiệu ứng khi nhấn nút --- */
 #assembleButton:active,
 #runButton:active,
 #stepButton:active,
 #resetButton:active {
     background-color: #004085;
-    /* Màu xanh đậm hơn nữa */
 }
 
-/* --- Khu vực hiển thị Mã nhị phân --- */
 pre#binaryOutput {
     background-color: #e9ecef;
-    /* Màu nền xám nhạt cho output */
     padding: 15px;
-    /* Đệm bên trong */
     border: 1px solid #ced4da;
-    /* Viền xám nhạt */
     border-radius: 4px;
-    /* Bo góc */
     white-space: pre-wrap;
-    /* Tự động xuống dòng nhưng giữ khoảng trắng */
     word-wrap: break-word;
-    /* Ngắt từ nếu cần */
-    min-height: 100px;
-    /* Chiều cao tối thiểu */
-    max-height: 300px;
-    /* Tăng chiều cao tối đa một chút */
+    min-height: 80px; /* Giảm chiều cao tối thiểu nếu cần */
+    max-height: 250px; 
     overflow-y: auto;
-    /* Hiển thị thanh cuộn dọc nếu nội dung dài */
     font-family: monospace;
-    /* Font monospace */
     font-size: 0.95em;
-    /* Cỡ chữ nhỏ hơn một chút */
     line-height: 1.6;
-    /* Tăng chiều cao dòng */
-    /* Không cần margin-bottom vì .controls đã có */
 }
 
 /* ================================== */
@@ -196,89 +127,57 @@ pre#binaryOutput {
 
 #registerTable {
     width: 100%;
-    /* Chiếm toàn bộ chiều rộng cột phải */
     border-collapse: collapse;
-    /* Gộp đường viền các ô */
     font-size: 0.9em;
-    /* Cỡ chữ nhỏ hơn mặc định */
 }
 
 #registerTable th,
 #registerTable td {
     border: 1px solid #dee2e6;
-    /* Viền ô màu xám nhạt */
     padding: 8px 10px;
-    /* Đệm trong ô */
     text-align: left;
-    /* Căn lề trái mặc định */
-    /* Selector &:nth-child() là của SCSS/SASS, không phải CSS chuẩn */
-    /* Cần viết lại cho CSS chuẩn */
 }
 
-/* Căn phải và dùng font monospace cho các cột giá trị số */
-#registerTable td:nth-child(2),
-/* Cột Decimal */
-#registerTable td:nth-child(3),
 /* Cột Hex */
-#registerTable td:nth-child(4) {
-    /* Cột Binary */
+#registerTable td:nth-child(2) { 
     text-align: right;
     font-family: monospace;
 }
 
-
 #registerTable th {
     background-color: #f1f3f5;
-    /* Màu nền cho header */
     font-weight: 600;
-    /* Chữ đậm */
     position: sticky;
-    /* Giữ header cố định khi cuộn trang (nếu cột phải dài) */
     top: 0;
-    /* Đặt ở đỉnh của vùng chứa cuộn */
     z-index: 1;
-    /* Đảm bảo header nằm trên nội dung cuộn */
 }
 
-/* Bỏ màu nền xen kẽ nếu muốn đơn giản hơn */
-/* #registerTable tr:nth-child(even) td {
-    background-color: #f8f9fa;
-} */
-
-/* Highlight cho thanh ghi/PC thay đổi */
 #registerTable tr.highlight td {
     background-color: #fff3cd !important;
-    /* Màu vàng nhạt, dùng !important để ghi đè nếu cần */
     transition: background-color 0.5s ease-out;
-    /* Hiệu ứng mờ dần highlight */
 }
 
 
 /* ================================== */
 /* == BẢNG DATA SEGMENT (Ở DƯỚI) == */
 /* ================================== */
-
+/* (Phần CSS cho Data Segment không thay đổi) */
 .data-segment-container {
     margin-top: 30px;
-    /* Khoảng cách với phần container 2 cột ở trên */
     padding: 20px;
     background-color: #fff;
     border-radius: 8px;
     box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
     max-width: 1400px;
-    /* Cùng max-width với container trên */
     margin-left: auto;
     margin-right: auto;
     margin-bottom: 30px;
-    /* Khoảng cách với cuối trang */
 }
 
-/* --- Thanh tìm kiếm địa chỉ và nút Toggle --- */
 .address-search {
     margin-bottom: 15px;
     display: flex;
     flex-wrap: wrap;
-    /* Cho phép xuống dòng nếu màn hình hẹp */
     align-items: center;
     gap: 10px;
 }
@@ -286,7 +185,6 @@ pre#binaryOutput {
 .address-search label {
     font-weight: bold;
     margin-right: 5px;
-    /* Khoảng cách nhỏ sau label */
 }
 
 .address-search input[type="text"] {
@@ -294,19 +192,14 @@ pre#binaryOutput {
     border: 1px solid #ccc;
     border-radius: 4px;
     font-family: monospace;
-    /* flex-grow: 1; */
-    /* Bỏ grow để nút không bị đẩy quá xa */
     width: 200px;
-    /* Đặt chiều rộng cố định hoặc min-width */
 }
 
-/* --- Nút trong thanh tìm kiếm và nút Toggle --- */
 .address-search button,
 #toggleDataSegmentMode {
     padding: 6px 12px;
     cursor: pointer;
     background-color: #6c757d;
-    /* Màu xám mặc định */
     color: white;
     border: none;
     border-radius: 4px;
@@ -317,25 +210,18 @@ pre#binaryOutput {
 .address-search button:hover,
 #toggleDataSegmentMode:hover {
     background-color: #5a6268;
-    /* Xám đậm hơn khi hover */
 }
 
-/* --- Wrapper cho bảng để cuộn ngang --- */
 .table-wrapper {
     overflow-x: auto;
-    /* Thêm thanh cuộn ngang nếu bảng rộng hơn container */
 }
 
-/* --- Bảng Data Segment --- */
 #dataSegmentTable {
     width: 100%;
-    /* Chiếm đủ chiều rộng của wrapper */
     border-collapse: collapse;
     font-size: 0.85em;
-    /* Cỡ chữ nhỏ hơn bảng thanh ghi */
     font-family: monospace;
     white-space: pre;
-    /* Giữ khoảng trắng cho ASCII */
     margin-top: 10px;
 }
 
@@ -344,9 +230,7 @@ pre#binaryOutput {
     border: 1px solid #dee2e6;
     padding: 5px 8px;
     text-align: center;
-    /* Căn giữa nội dung ô */
     min-width: 75px;
-    /* Giảm độ rộng tối thiểu một chút */
 }
 
 #dataSegmentTable th {
@@ -354,28 +238,19 @@ pre#binaryOutput {
     font-weight: 600;
     position: sticky;
     top: 0;
-    /* Giữ header khi cuộn dọc wrapper (nếu wrapper có height) */
     z-index: 1;
 }
 
 #dataSegmentTable td:first-child {
-    /* Cột địa chỉ */
     text-align: left;
-    /* Căn trái địa chỉ */
     font-weight: bold;
     background-color: #f8f9fa;
-    /* Màu nền riêng */
     min-width: 110px;
-    /* Rộng hơn cho địa chỉ 8 hex + 0x */
     position: sticky;
-    /* Giữ cột địa chỉ cố định khi cuộn ngang */
     left: 0;
-    /* Đặt ở mép trái */
     z-index: 2;
-    /* Nằm trên cả header khi cuộn chéo */
 }
 
-/* Đảm bảo header cũng nằm trên cột địa chỉ khi cuộn */
 #dataSegmentTable th:first-child {
     z-index: 3;
 }
