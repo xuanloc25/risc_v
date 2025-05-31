@@ -12,54 +12,44 @@
     <h1>RISC-V Assembler</h1>
 
     <div class="container">
-        <!-- Cột trái: Input & Binary Output -->
         <div class="column left-column">
             <h2>Input your RISC-V code here:</h2>
             <textarea id="instructionInput" placeholder="Enter RISC-V assembly code"></textarea>
 
-            <button id="assembleButton">Assemble</button>
-            <button id="runButton" style="margin: 5px;">Run</button>
-            <button id="stepButton" style="margin: 5px;">Step</button>
-            <button id="resetButton" style="margin: 5px;">Reset</button>
+            <div class="controls">
+                <button id="assembleButton">Assemble</button>
+                <button id="runButton">Run</button>
+                <button id="stepButton">Step</button>
+                <button id="resetButton">Reset</button>
+            </div>
 
             <h2>Binary Output:</h2>
             <pre id="binaryOutput"></pre>
         </div>
 
-        <!-- registerregister -->
         <div class="column right-column">
             <table id="registerTable">
                 <thead>
                     <tr>
                         <th>Register</th>
-                        <th>Decimal</th>
                         <th>Hex</th>
-                        <th>Binary</th>
-                    </tr>
+                        </tr>
                 </thead>
                 <tbody>
-
-                </tbody>
+                    </tbody>
             </table>
         </div>
     </div>
 
-    <!-- ====================================================== -->
-    <!-- PHẦN DATA SEGMENT VIEW -->
-    <!-- ====================================================== -->
     <div class="data-segment-container">
         <h2>Data Segment View</h2>
-
-        <!-- Thanh tìm kiếm địa chỉ -->
         <div class="address-search">
             <label for="dataSegmentAddressInput">Go to Address:</label>
             <input type="text" id="dataSegmentAddressInput" placeholder="e.g., 0x10010000">
             <button id="goToDataSegmentAddress">Go</button>
             <button id="toggleDataSegmentMode" style="margin-left: 10px;">Toggle Hex/ASCII</button>
         </div>
-
-        <!-- Bảng hiển thị Data Segment -->
-        <div class="table-wrapper"> <!-- Thêm wrapper để xử lý cuộn ngang nếu cần -->
+        <div class="table-wrapper">
             <table id="dataSegmentTable">
                 <thead>
                     <tr>
@@ -75,19 +65,13 @@
                     </tr>
                 </thead>
                 <tbody id="dataSegmentBody">
-                    <!-- Nội dung bảng được tạo bởi JS -->
-                </tbody>
+                    </tbody>
             </table>
         </div>
     </div>
-    <!-- ====================================================== -->
-    <!-- KẾT THÚC DATA SEGMENT VIEW -->
-    <!-- ====================================================== -->
-
-    <script src="js/javascript.js" type="module"></script>
     <script src="js/assembler.js" type="module"></script>
     <script src="js/simulator.js" type="module"></script>
+    <script src="js/javascript.js" type="module"></script>
 
 </body>
-
 </html>
