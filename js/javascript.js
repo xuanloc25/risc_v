@@ -1,28 +1,29 @@
+// javascript.js (Cập nhật cho bảng thanh ghi 2 cột)
+
 import { assembler } from './assembler.js';
 import { simulator } from './simulator.js';
 
 // --- DOM Elements ---
 const instructionInput = document.getElementById('instructionInput');
 const binaryOutput = document.getElementById('binaryOutput');
-// const memoryOutput = document.getElementById('memoryOutput'); // Không dùng nữa
 const registerTableBody = document.getElementById('registerTable')?.querySelector('tbody');
 const assembleButton = document.getElementById('assembleButton');
 const runButton = document.getElementById('runButton');
 const stepButton = document.getElementById('stepButton');
 const resetButton = document.getElementById('resetButton');
 
-// --- THÊM: DOM Elements cho Data Segment ---
+// --- DOM Elements cho Data Segment ---
 const dataSegmentAddressInput = document.getElementById('dataSegmentAddressInput');
 const goToDataSegmentAddressButton = document.getElementById('goToDataSegmentAddress');
 const toggleDataSegmentModeButton = document.getElementById('toggleDataSegmentMode');
 const dataSegmentBody = document.getElementById('dataSegmentBody');
 
-// --- THÊM: Trạng thái cho Data Segment View ---
-let dataSegmentStartAddress = 0x10010000; // Địa chỉ bắt đầu mặc định (data section)
-let dataSegmentDisplayMode = 'hex'; // 'hex' hoặc 'ascii'
-const dataSegmentRows = 8;          // Số hàng hiển thị
-const bytesPerRow = 32;         // Số byte trên mỗi hàng (8 words * 4 bytes/word)
-const wordsPerRow = 8;          // Số word (cột giá trị) trên mỗi hàng
+// --- Trạng thái cho Data Segment View ---
+let dataSegmentStartAddress = 0x10010000; 
+let dataSegmentDisplayMode = 'hex'; 
+const dataSegmentRows = 8;          
+const bytesPerRow = 32;       
+const wordsPerRow = 8;          
 
 // --- Register Table Init ---
 const abiNames = [
@@ -43,79 +44,65 @@ function initializeRegisterTable() {
     for (let i = 0; i < 32; i++) {
         const row = registerTableBody.insertRow();
         row.id = `reg-${i}`;
-        row.insertCell().textContent = `x${i} (${abiNames[i]})`; // Name/ABI
-        row.insertCell().textContent = '0';                      // Decimal
-        row.insertCell().textContent = '0x00000000';             // Hex
-        row.insertCell().textContent = '0'.repeat(32);           // Binary
+        row.insertCell().textContent = `x${i} (${abiNames[i]})`; // Cột 0: Tên Register/ABI
+        row.insertCell().textContent = '0x00000000';          // Cột 1: Giá trị Hex
+        // Đã xóa cột Decimal và Binary
     }
     // Tạo hàng riêng cho PC
     const pcRow = registerTableBody.insertRow();
     pcRow.id = 'reg-pc';
-    pcRow.insertCell().textContent = 'PC';
-    pcRow.insertCell().textContent = '0';
-    pcRow.insertCell().textContent = '0x00000000';
-    pcRow.insertCell().textContent = '0'.repeat(32);
+    pcRow.insertCell().textContent = 'PC';                     // Cột 0: Tên PC
+    pcRow.insertCell().textContent = '0x00000000';           // Cột 1: Giá trị Hex
+    // Đã xóa cột Decimal và Binary cho PC
 }
 
-// --- THÊM: Hàm render bảng Data Segment ---
+// --- Hàm render bảng Data Segment (không đổi) ---
 function renderDataSegmentTable() {
     if (!dataSegmentBody || !simulator) {
-        // console.warn("Data segment body or simulator not ready for rendering.");
         if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Simulator not ready or no data loaded.</td></tr>';
         return;
     }
-
-    // console.log(`Rendering Data Segment from 0x${dataSegmentStartAddress.toString(16)} in ${dataSegmentDisplayMode} mode`);
-    dataSegmentBody.innerHTML = ''; // Xóa nội dung cũ
+    dataSegmentBody.innerHTML = ''; 
 
     for (let i = 0; i < dataSegmentRows; i++) {
-        // Đảm bảo địa chỉ không âm
         const rowBaseAddress = Math.max(0, dataSegmentStartAddress + i * bytesPerRow);
         const row = dataSegmentBody.insertRow();
-
-        // 1. Thêm ô địa chỉ
         const addrCell = row.insertCell();
         addrCell.textContent = `0x${rowBaseAddress.toString(16).padStart(8, '0')}`;
 
-        // 2. Thêm các ô giá trị (8 words)
         for (let j = 0; j < wordsPerRow; j++) {
             const wordStartAddress = rowBaseAddress + j * 4;
             let displayValue = '';
             let wordValue = 0;
             let bytes = [];
-            let allBytesNull = true; // Cờ kiểm tra xem có byte nào tồn tại không
+            let allBytesNull = true; 
 
-            // Đọc 4 byte (little-endian)
             for (let k = 0; k < 4; k++) {
                 const byteAddr = wordStartAddress + k;
-                const byte = simulator.memory[byteAddr] ?? null; // Dùng null để phân biệt 0 và không có
+                const byte = simulator.memory[byteAddr] ?? null; 
                 bytes.push(byte);
                 if (byte !== null) {
-                    allBytesNull = false; // Tìm thấy ít nhất một byte
-                    wordValue |= (byte << (k * 8)); // Ghép thành word (little-endian)
+                    allBytesNull = false; 
+                    wordValue |= (byte << (k * 8)); 
                 }
             }
 
-            // Định dạng giá trị hiển thị
             if (dataSegmentDisplayMode === 'hex') {
                 if (allBytesNull) {
-                    displayValue = '........'; // Hiển thị nếu không có byte nào
+                    displayValue = '........'; 
                 } else {
-                    // Hiển thị hex unsigned 32-bit
                     displayValue = `0x${(wordValue >>> 0).toString(16).padStart(8, '0')}`;
                 }
             } else { // 'ascii' mode
                 displayValue = '';
                 for (const byte of bytes) {
-                    if (byte !== null && byte >= 32 && byte <= 126) { // Ký tự in được ASCII
+                    if (byte !== null && byte >= 32 && byte <= 126) { 
                         displayValue += String.fromCharCode(byte);
                     } else {
-                        displayValue += '.'; // Ký tự thay thế cho null hoặc không in được
+                        displayValue += '.'; 
                     }
                 }
             }
-
-            // Thêm ô giá trị vào hàng
             row.insertCell().textContent = displayValue;
         }
     }
@@ -125,55 +112,57 @@ function renderDataSegmentTable() {
 // --- Hàm cập nhật giao diện chính ---
 function updateUIGlobally() {
     if (!registerTableBody) return;
-    // console.log("Updating UI...");
 
     const currentSimulator = simulator;
 
     // Cập nhật bảng thanh ghi x0-x31
     for (let i = 0; i < 32; i++) {
         const row = document.getElementById(`reg-${i}`);
-        if (row && row.cells.length >= 4) {
-            const value = currentSimulator.registers[i] | 0;
+        if (row && row.cells.length >= 2) { // Chỉ cần kiểm tra có ít nhất 2 ô
+            const value = currentSimulator.registers[i]; // Lấy giá trị signed
             const cells = row.cells;
-            const oldValueHex = cells[2].textContent;
-            const newValueHex = `0x${value.toString(16).padStart(8, '0')}`;
-            const newValueBin = (value >>> 0).toString(2).padStart(32, '0'); // Unsigned binary
+            
+            // Giá trị Hex cũ là ở ô cells[1]
+            const oldValueHex = cells[1].textContent; 
+            // Hiển thị giá trị Hex dạng unsigned cho nhất quán
+            const newValueHex = `0x${(value >>> 0).toString(16).padStart(8, '0')}`;
 
             if (newValueHex !== oldValueHex && document.body.contains(row)) {
                 row.classList.add('highlight');
             } else if (document.body.contains(row)) {
                 row.classList.remove('highlight');
             }
-            cells[1].textContent = value; // Decimal (signed)
-            cells[2].textContent = newValueHex;
-            cells[3].textContent = newValueBin;
+            // Cập nhật ô Hex (cells[1])
+            cells[1].textContent = newValueHex;
+            // Đã xóa cập nhật cho ô Decimal và Binary
         }
     }
 
     // Cập nhật PC
     const pcRowElement = document.getElementById('reg-pc');
-    if (pcRowElement && pcRowElement.cells.length >= 4) {
-        const pcValue = currentSimulator.pc | 0;
+    if (pcRowElement && pcRowElement.cells.length >= 2) { // Chỉ cần kiểm tra có ít nhất 2 ô
+        const pcValue = currentSimulator.pc;
         const cells = pcRowElement.cells;
-        const oldPcHex = cells[2].textContent;
-        const newPcHex = `0x${pcValue.toString(16).padStart(8, '0')}`;
-        const newPcBin = (pcValue >>> 0).toString(2).padStart(32, '0'); // Unsigned binary
+
+        // Giá trị Hex cũ là ở ô cells[1]
+        const oldPcHex = cells[1].textContent;
+        // Hiển thị giá trị Hex dạng unsigned
+        const newPcHex = `0x${(pcValue >>> 0).toString(16).padStart(8, '0')}`;
 
         if (newPcHex !== oldPcHex && document.body.contains(pcRowElement)) {
             pcRowElement.classList.add('highlight');
         } else if (document.body.contains(pcRowElement)) {
             pcRowElement.classList.remove('highlight');
         }
-        cells[1].textContent = pcValue;
-        cells[2].textContent = newPcHex;
-        cells[3].textContent = newPcBin;
+        // Cập nhật ô Hex (cells[1])
+        cells[1].textContent = newPcHex;
+        // Đã xóa cập nhật cho ô Decimal và Binary của PC
     }
 
-    // --- THÊM: Cập nhật bảng Data Segment ---
+    // Cập nhật bảng Data Segment
     renderDataSegmentTable();
-    // --------------------------------------
 
-    // Xóa highlight
+    // Xóa highlight sau một khoảng thời gian
     setTimeout(() => {
         registerTableBody?.querySelectorAll('tr.highlight').forEach(row => {
             row.classList.remove('highlight');
@@ -183,97 +172,108 @@ function updateUIGlobally() {
 }
 window.updateUIGlobally = updateUIGlobally; // Make accessible globally
 
-// --- Event Handlers ---
+// --- Event Handlers (không đổi nhiều, chỉ đảm bảo UI được cập nhật đúng) ---
 
 function handleAssemble() {
     if (!assembler || !simulator || !binaryOutput || !instructionInput) return;
-    console.log("Assemble button clicked!");
     binaryOutput.textContent = "Assembling...";
-    // Hiển thị trạng thái reset cho bảng data
     if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Resetting simulator...</td></tr>';
 
-
-    simulator.reset();
-    // Không gọi updateUIGlobally() ngay vì bảng data sẽ trống rỗng, đợi load xong
-    // initializeRegisterTable(); // Chỉ cần gọi khi DOM load, không cần ở đây
+    // Reset simulator trước, sau đó cập nhật UI ban đầu (có thể regs về 0)
+    simulator.reset(); 
+    // initializeRegisterTable(); // Đã gọi ở DOMContentLoaded, reset() của simulator không xóa cấu trúc bảng
+    updateUIGlobally(); // Cập nhật regs về 0, PC về 0
 
     setTimeout(() => {
         try {
             const assemblyCode = instructionInput.value;
-            const programData = assembler.assemble(assemblyCode);
+            // Output từ assembler.js đã sửa: { memory: object, startAddress: number, instructions: array }
+            const programData = assembler.assemble(assemblyCode); 
 
-            // Hiển thị Binary Output (chỉ mã nhị phân)
-            const binaryStrings = programData.instructions.map(instr => instr.binary);
-            binaryOutput.textContent = binaryStrings.join('\n');
-            if (binaryStrings.length === 0) {
-                binaryOutput.textContent = "(No instructions assembled)";
+            // Hiển thị Binary Output (từ programData.instructions là mảng các {address, binary, hex})
+            const binaryHexStrings = programData.instructions.map(instr => `${instr.hex}  (${instr.binary})`);
+            binaryOutput.textContent = binaryHexStrings.join('\n');
+            if (binaryHexStrings.length === 0 && !assemblyCode.trim().startsWith('.data')) { // Nếu có .data nhưng không có lệnh
+                 if (Object.keys(programData.memory).length > 0 && assemblyCode.trim().startsWith('.data')){
+                    binaryOutput.textContent = "(Data segment assembled, no executable instructions)";
+                 } else {
+                    binaryOutput.textContent = "(No instructions assembled)";
+                 }
             }
 
-            console.log("Loading program into simulator...");
-            simulator.loadProgram(programData); // Nạp data và instructions
 
-            // Cập nhật địa chỉ bắt đầu cho Data Segment View
-            // Ưu tiên bắt đầu từ .data section nếu có
+            // Simulator.loadProgram giờ sẽ nhận programData.memory đã chứa cả data và instructions
+            simulator.loadProgram({ 
+                memory: programData.memory, // memory từ assembler giờ chứa cả data và code
+                startAddress: programData.startAddress 
+                // không cần truyền programData.instructions riêng nếu assembler đã ghi lệnh vào memory của nó
+            });
+
             let dataStartAddrFound = false;
-            if (assembler.memory && Object.keys(assembler.memory).length > 0) {
-                // Tìm địa chỉ nhỏ nhất trong memory của assembler (thường là bắt đầu .data)
-                const dataAddresses = Object.keys(assembler.memory).map(Number).filter(addr => !isNaN(addr));
+            if (programData.memory && Object.keys(programData.memory).length > 0) {
+                const dataAddresses = [];
+                // Tìm vùng nhớ có địa chỉ >= dataBaseAddress của assembler để gợi ý cho data segment view
+                const defaultDataBaseAddr = assembler.dataBaseAddress || 0x10010000; 
+                for (const addrStr in programData.memory) {
+                    const addr = parseInt(addrStr);
+                    // Ưu tiên tìm địa chỉ trong khoảng data segment dự kiến
+                    // Hoặc đơn giản là lấy địa chỉ nhỏ nhất không thuộc vùng text (nếu có cách phân biệt)
+                    // Hiện tại, assembler.memory không phân biệt rõ data và text sau khi trộn.
+                    // Chúng ta có thể tìm địa chỉ đầu tiên >= defaultDataBaseAddr
+                    if (addr >= defaultDataBaseAddr) {
+                        dataAddresses.push(addr);
+                    }
+                }
                 if (dataAddresses.length > 0) {
-                    dataSegmentStartAddress = Math.min(...dataAddresses);
-                    dataStartAddrFound = true;
+                     dataSegmentStartAddress = Math.min(...dataAddresses);
+                     dataStartAddrFound = true;
+                } else { // Nếu không có gì trong vùng data mặc định, thử tìm địa chỉ nhỏ nhất trong memory
+                    const allAddresses = Object.keys(programData.memory).map(Number).filter(addr => !isNaN(addr));
+                    if(allAddresses.length > 0) {
+                        dataSegmentStartAddress = Math.min(...allAddresses);
+                        dataStartAddrFound = true;
+                    }
                 }
             }
-            // Nếu không tìm thấy .data, dùng địa chỉ mặc định cũ
+            
             if (!dataStartAddrFound) {
-                dataSegmentStartAddress = 0x10010000;
+                dataSegmentStartAddress = assembler.dataBaseAddress || 0x10010000;
             }
-            // Căn chỉnh xuống địa chỉ bắt đầu hàng gần nhất
-            dataSegmentStartAddress = Math.floor(dataSegmentStartAddress / bytesPerRow) * bytesPerRow;
-            if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`; // Cập nhật ô tìm kiếm
+            dataSegmentStartAddress = Math.max(0, Math.floor(dataSegmentStartAddress / bytesPerRow) * bytesPerRow);
+            if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`;
+            
+            updateUIGlobally(); // Cập nhật tất cả UI sau khi load xong (Regs, PC, Data Segment)
 
-
-            console.log(`Program loaded. Data Segment view starting from 0x${dataSegmentStartAddress.toString(16)}`);
-
-            updateUIGlobally(); // Cập nhật tất cả UI (Regs, PC, Data Segment) sau khi load
-            console.log("UI updated after loading.");
-
-            // Optional: Execute first step
-            if (programData.instructions.length > 0) {
+            // Tự động thực hiện bước đầu tiên nếu có lệnh
+            // programData.instructions giờ là mảng {address, binary, hex}
+            if (programData.instructions && programData.instructions.length > 0) {
                 try {
-                    console.log("Executing single step after assembly...");
                     simulator.step(); // step() sẽ tự gọi updateUIGlobally()
-                    console.log("Single step executed.");
                 } catch (stepError) {
                     console.error("Error during initial step execution:", stepError);
                     binaryOutput.textContent += `\n\nError during initial step: ${stepError.message}`;
-                    updateUIGlobally(); // Cập nhật UI để thấy lỗi (nếu có)
+                    updateUIGlobally(); 
                 }
-            } else {
-                console.log("No instructions to execute.");
             }
 
         } catch (error) {
-            console.error("Assembly or Loading Error:", error);
+            console.error("Assembly or Loading Error:", error, error.stack);
             binaryOutput.textContent = `Error:\n${error.message}\n\n(Check console for details)`;
-            if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Assembly/Loading failed.</td></tr>'; // Hiển thị lỗi trên bảng data
-            // Cập nhật regs/PC về trạng thái reset
-            initializeRegisterTable(); // Vẽ lại bảng regs về 0
-            const pcRowElement = document.getElementById('reg-pc');
-            if (pcRowElement) {
-                pcRowElement.cells[1].textContent = '0';
-                pcRowElement.cells[2].textContent = '0x00000000';
-                pcRowElement.cells[3].textContent = '0'.repeat(32);
-            }
+            if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Assembly/Loading failed.</td></tr>';
+            // Reset lại bảng thanh ghi về 0 khi có lỗi assemble
+            initializeRegisterTable(); 
+            const pcRow = document.getElementById('reg-pc');
+            if(pcRow && pcRow.cells[1]) pcRow.cells[1].textContent = '0x00000000';
+
         }
     }, 10);
 }
 
 function handleRun() {
     if (!simulator) return;
-    console.log("Run button clicked");
     binaryOutput.textContent += "\n\n--- Running ---";
     try {
-        simulator.run(); // Bắt đầu chạy bất đồng bộ
+        simulator.run(); 
     } catch (e) {
         console.error("Error starting run:", e);
         alert(`Error starting run: ${e.message}`);
@@ -283,30 +283,31 @@ function handleRun() {
 
 function handleStep() {
     if (!simulator) return;
-    console.log("Step button clicked");
     try {
-        simulator.step(); // Thực thi 1 lệnh, step() sẽ gọi updateUIGlobally()
+        simulator.step(); 
     } catch (e) {
         console.error("Error during step:", e);
-        binaryOutput.textContent += `\n\nStep Error: ${e.message}`;
-        alert(`Step Error: ${e.message}`);
-        updateUIGlobally(); // Cập nhật UI để thấy trạng thái lỗi
+        const currentBinaryOutput = binaryOutput.textContent.split('\n\nError during step:')[0]; // Giữ lại output cũ, tránh lặp lỗi
+        binaryOutput.textContent = currentBinaryOutput + `\n\nStep Error: ${e.message}`;
+        // alert(`Step Error: ${e.message}`); // Có thể bỏ alert nếu lỗi hiển thị ở binaryOutput
+        updateUIGlobally(); 
     }
 }
 
 function handleReset() {
     if (!simulator || !instructionInput || !binaryOutput || !dataSegmentBody) return;
-    console.log("Reset button clicked!");
 
-    simulator.stop();
-    simulator.reset();
+    simulator.stop(); // Dừng nếu đang chạy
+    simulator.reset(); // Reset trạng thái simulator (regs, memory, pc)
 
     instructionInput.value = "";
     binaryOutput.textContent = "";
-    dataSegmentStartAddress = 0x10010000; // Reset địa chỉ view data
-    if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`; // Cập nhật ô tìm kiếm
+    dataSegmentStartAddress = assembler.dataBaseAddress || 0x10010000; 
+    if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`; 
 
-    updateUIGlobally(); // Cập nhật UI về trạng thái reset (Regs, PC, Data Segment)
+    // initializeRegisterTable(); // Gọi lại để đảm bảo bảng thanh ghi được vẽ lại đúng cấu trúc và giá trị 0
+    // updateUIGlobally sẽ cập nhật giá trị từ simulator.registers (đã được reset về 0)
+    updateUIGlobally(); 
 
     console.log("System reset complete.");
 }
@@ -316,39 +317,34 @@ function handleReset() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOM loaded. Initializing...");
 
-    initializeRegisterTable(); // Tạo cấu trúc bảng regs
+    initializeRegisterTable(); // Tạo cấu trúc bảng regs và giá trị ban đầu là 0
 
-    // Gắn sự kiện cho các nút của Data Segment
     if (toggleDataSegmentModeButton) {
         toggleDataSegmentModeButton.addEventListener('click', () => {
             dataSegmentDisplayMode = (dataSegmentDisplayMode === 'hex') ? 'ascii' : 'hex';
-            console.log("Toggled data segment display mode to:", dataSegmentDisplayMode);
-            renderDataSegmentTable(); // Vẽ lại bảng data segment
+            renderDataSegmentTable(); 
         });
     } else { console.error("Toggle button not found"); }
 
     if (goToDataSegmentAddressButton && dataSegmentAddressInput) {
-        const goToAddress = () => { // Tách thành hàm riêng
+        const goToAddress = () => { 
             const addrStr = dataSegmentAddressInput.value.trim();
             let newAddr;
             try {
                 if (addrStr.toLowerCase().startsWith('0x')) {
                     newAddr = parseInt(addrStr, 16);
                 } else if (addrStr === '') {
-                    newAddr = dataSegmentStartAddress; // Giữ nguyên nếu rỗng
+                    newAddr = dataSegmentStartAddress; 
                 } else {
-                    newAddr = parseInt(addrStr, 10); // Thử parse dec
+                    newAddr = parseInt(addrStr, 10); 
                 }
 
                 if (!isNaN(newAddr) && newAddr >= 0) {
-                    // Căn chỉnh địa chỉ xuống đầu hàng gần nhất
-                    dataSegmentStartAddress = Math.floor(newAddr / bytesPerRow) * bytesPerRow;
-                    console.log(`Go to address requested: 0x${newAddr.toString(16)}, displaying from 0x${dataSegmentStartAddress.toString(16)}`);
-                    renderDataSegmentTable(); // Vẽ lại bảng data segment
-                    dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`; // Cập nhật lại input box với địa chỉ đã căn chỉnh
+                    dataSegmentStartAddress = Math.max(0, Math.floor(newAddr / bytesPerRow) * bytesPerRow);
+                    renderDataSegmentTable(); 
+                    dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`; 
                 } else {
                     alert(`Invalid address format: "${addrStr}"`);
-                    // Khôi phục giá trị input box về địa chỉ hiện tại
                     dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`;
                 }
             } catch (e) {
@@ -360,23 +356,21 @@ document.addEventListener('DOMContentLoaded', () => {
         goToDataSegmentAddressButton.addEventListener('click', goToAddress);
         dataSegmentAddressInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
-                goToAddress(); // Gọi hàm xử lý khi nhấn Enter
+                goToAddress(); 
             }
         });
 
     } else { console.error("Address search elements not found"); }
 
-    // Khởi tạo simulator và UI ban đầu
     if (typeof simulator !== 'undefined') {
-        simulator.reset();
-        if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`; // Đặt giá trị ban đầu cho ô tìm kiếm
-        updateUIGlobally(); // Cập nhật UI ban đầu (gồm cả data segment)
+        simulator.reset(); // Reset simulator
+        if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`;
+        updateUIGlobally(); // Cập nhật UI ban đầu (regs về 0, data segment trống)
     } else {
         console.error("Simulator module not loaded!");
         if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Error: Simulator not loaded.</td></tr>';
     }
 
-    // Gắn listener cho các nút điều khiển chính
     assembleButton?.addEventListener('click', handleAssemble);
     runButton?.addEventListener('click', handleRun);
     stepButton?.addEventListener('click', handleStep);
