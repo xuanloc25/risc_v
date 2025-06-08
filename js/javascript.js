@@ -1,461 +1,729 @@
-// javascript.js
-// File này điều khiển giao diện người dùng, tương tác với assembler và simulator.
+// assembler.js
+// Chịu trách nhiệm biên dịch mã assembly RISC-V (RV32IMF) thành mã máy.
+// Thực hiện quy trình biên dịch hai lượt (two-pass) để xử lý các nhãn.
 
-import { assembler } from './assembler.js';
-import { simulator } from './simulator.js';
+export const assembler = {
+    // --- Trạng thái nội bộ của assembler, được reset mỗi khi biên dịch ---
+    memory: {},              // Lưu trữ dữ liệu và mã lệnh (địa chỉ byte -> giá trị byte)
+    labels: {},              // Bảng nhãn: { tenNhan: { diaChi, laToanCuc, kieu } }
+    equValues: {},           // Lưu giá trị của các hằng số định nghĩa bởi .eqv
+    currentSection: null,    // Section hiện tại: 'data' hoặc 'text'
+    currentAddress: 0,       // Địa chỉ bộ nhớ hiện tại trong quá trình biên dịch
+    instructionLines: [],    // Mảng lưu thông tin chi tiết của từng dòng mã sau Pass 1
+    binaryCode: [],          // Mảng chứa các lệnh đã được mã hóa {address, binary, hex}
+    textBaseAddress: 0x00400000, // Địa chỉ bắt đầu mặc định cho vùng mã .text
+    dataBaseAddress: 0x10010000, // Địa chỉ bắt đầu mặc định cho vùng dữ liệu .data
+    inDataSegment: false,    // Cờ cho biết có đang ở trong vùng .data hay không
 
-// --- Tham chiếu đến các phần tử DOM ---
-const instructionInput = document.getElementById('instructionInput');         // Ô nhập liệu mã assembly
-const binaryOutput = document.getElementById('binaryOutput');               // Khu vực hiển thị mã nhị phân
-const registerTable = document.getElementById('registerTable');             // Bảng thanh ghi số nguyên
-const registerTableBody = registerTable?.querySelector('tbody');            // Phần thân của bảng thanh ghi số nguyên
-const fpRegisterTable = document.getElementById('fpRegisterTable');         // Bảng thanh ghi điểm động
-const fpRegisterTableBody = fpRegisterTable?.querySelector('tbody');        // Phần thân của bảng thanh ghi điểm động
-const toggleRegisterViewButton = document.getElementById('toggleRegisterViewButton'); // Nút chuyển đổi giữa các bảng thanh ghi
+    // Ánh xạ các tên thanh ghi (ABI, MIPS-style, ...) sang tên chuẩn Xn hoặc Fn để tiện xử lý
+    registerMapping: {
+        // Thanh ghi số nguyên (Integer Registers)
+        '$ZERO': 'X0', '$0': 'X0', 'ZERO': 'X0', 'X0': 'X0',
+        '$RA': 'X1', '$1': 'X1', 'RA': 'X1', 'X1': 'X1',
+        '$SP': 'X2', '$2': 'X2', 'SP': 'X2', 'X2': 'X2',
+        '$GP': 'X3', '$3': 'X3', 'GP': 'X3', 'X3': 'X3',
+        '$TP': 'X4', '$4': 'X4', 'TP': 'X4', 'X4': 'X4',
+        '$T0': 'X5', '$5': 'X5', 'T0': 'X5', 'X5': 'X5',
+        '$T1': 'X6', '$6': 'X6', 'T1': 'X6', 'X6': 'X6',
+        '$T2': 'X7', '$7': 'X7', 'T2': 'X7', 'X7': 'X7',
+        '$S0': 'X8', '$8': 'X8', 'S0': 'X8', '$FP': 'X8', 'FP': 'X8', 'X8': 'X8',
+        '$S1': 'X9', '$9': 'X9', 'S1': 'X9', 'X9': 'X9',
+        '$A0': 'X10', '$10': 'X10', 'A0': 'X10', 'X10': 'X10',
+        '$A1': 'X11', '$11': 'X11', 'A1': 'X11', 'X11': 'X11',
+        '$A2': 'X12', '$12': 'X12', 'A2': 'X12', 'X12': 'X12',
+        '$A3': 'X13', '$13': 'X13', 'A3': 'X13', 'X13': 'X13',
+        '$A4': 'X14', '$14': 'X14', 'A4': 'X14', 'X14': 'X14',
+        '$A5': 'X15', '$15': 'X15', 'A5': 'X15', 'X15': 'X15',
+        '$A6': 'X16', '$16': 'X16', 'A6': 'X16', 'X16': 'X16',
+        '$A7': 'X17', '$17': 'X17', 'A7': 'X17', 'X17': 'X17',
+        '$S2': 'X18', '$18': 'X18', 'S2': 'X18', 'X18': 'X18',
+        '$S3': 'X19', '$19': 'X19', 'S3': 'X19', 'X19': 'X19',
+        '$S4': 'X20', '$20': 'X20', 'S4': 'X20', 'X20': 'X20',
+        '$S5': 'X21', '$21': 'X21', 'S5': 'X21', 'X21': 'X21',
+        '$S6': 'X22', '$22': 'X22', 'S6': 'X22', 'X22': 'X22',
+        '$S7': 'X23', '$23': 'X23', 'S7': 'X23', 'X23': 'X23',
+        '$S8': 'X24', '$24': 'X24', 'S8': 'X24', 'X24': 'X24',
+        '$S9': 'X25', '$25': 'X25', 'S9': 'X25', 'X25': 'X25',
+        '$S10': 'X26', '$26': 'X26', 'S10': 'X26', 'X26': 'X26',
+        '$S11': 'X27', '$27': 'X27', 'S11': 'X27', 'X27': 'X27',
+        '$T3': 'X28', '$28': 'X28', 'T3': 'X28', 'X28': 'X28',
+        '$T4': 'X29', '$29': 'X29', 'T4': 'X29', 'X29': 'X29',
+        '$T5': 'X30', '$30': 'X30', 'T5': 'X30', 'X30': 'X30',
+        '$T6': 'X31', '$31': 'X31', 'T6': 'X31', 'X31': 'X31',
+        // Thanh ghi điểm động (Floating-Point Registers)
+        'F0': 'F0', 'FT0': 'F0', 'F1': 'F1', 'FT1': 'F1', 'F2': 'F2', 'FT2': 'F2',
+        'F3': 'F3', 'FT3': 'F3', 'F4': 'F4', 'FT4': 'F4', 'F5': 'F5', 'FT5': 'F5',
+        'F6': 'F6', 'FT6': 'F6', 'F7': 'F7', 'FT7': 'F7', 'F8': 'F8', 'FS0': 'F8',
+        'F9': 'F9', 'FS1': 'F9', 'F10': 'F10', 'FA0': 'F10', 'F11': 'F11', 'FA1': 'F11',
+        'F12': 'F12', 'FA2': 'F12', 'F13': 'F13', 'FA3': 'F13', 'F14': 'F14', 'FA4': 'F14',
+        'F15': 'F15', 'FA5': 'F15', 'F16': 'F16', 'FA6': 'F16', 'F17': 'F17', 'FA7': 'F17',
+        'F18': 'F18', 'FS2': 'F18', 'F19': 'F19', 'FS3': 'F19', 'F20': 'F20', 'FS4': 'F20',
+        'F21': 'F21', 'FS5': 'F21', 'F22': 'F22', 'FS6': 'F22', 'F23': 'F23', 'FS7': 'F23',
+        'F24': 'F24', 'FS8': 'F24', 'F25': 'F25', 'FS9': 'F25', 'F26': 'F26', 'FS10': 'F26',
+        'F27': 'F27', 'FS11': 'F27', 'F28': 'F28', 'FT8': 'F28', 'F29': 'F29', 'FT9': 'F29',
+        'F30': 'F30', 'FT10': 'F30', 'F31': 'F31', 'FT11': 'F31',
+    },
 
-// Nút điều khiển chính
-const assembleButton = document.getElementById('assembleButton');
-const runButton = document.getElementById('runButton');
-const stepButton = document.getElementById('stepButton');
-const resetButton = document.getElementById('resetButton');
+    // Bảng điều phối, ánh xạ tên chỉ thị sang hàm xử lý tương ứng
+    directives: {
+        '.text': function (operands) { this._handleTextDirective(operands); },
+        '.data': function (operands) { this._handleDataDirective(operands); },
+        '.word': function (operands) { this._handleWordDirective(operands); },
+        '.half': function (operands) { this._handleHalfDirective(operands); },
+        '.byte': function (operands) { this._handleByteDirective(operands); },
+        '.float': function (operands) { this._handleFloatDirective(operands); },
+        '.single': function (operands) { this._handleFloatDirective(operands); }, // Tên khác của .float
+        '.ascii': function (operands) { this._handleStringDirective(operands, false); },
+        '.asciiz': function (operands) { this._handleStringDirective(operands, true); },
+        '.string': function (operands) { this._handleStringDirective(operands, true); }, // Tên khác của .asciiz
+        '.space': function (operands) { this._handleSpaceDirective(operands); },
+        '.align': function (operands) { this._handleAlignDirective(operands); },
+        '.globl': function (operands) { this._handleGlobalDirective(operands); },
+        '.global': function (operands) { this._handleGlobalDirective(operands); },
+        '.extern': function (operands) { this._handleExternDirective(operands); },
+        '.eqv': function (operands) { this._handleEquDirective(operands); },
+        '.org': function (operands) { this._handleOrgDirective(operands); }, // Chỉ thị đặt địa chỉ
+    },
 
-// Phần tử DOM cho Data Segment View                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
-const dataSegmentAddressInput = document.getElementById('dataSegmentAddressInput');
-const goToDataSegmentAddressButton = document.getElementById('goToDataSegmentAddress');
-const toggleDataSegmentModeButton = document.getElementById('toggleDataSegmentMode');
-const dataSegmentBody = document.getElementById('dataSegmentBody');
+    // Bảng định nghĩa các lệnh và thông tin mã hóa của chúng
+    opcodes: {
+        // ----- RV32I Base Integer Instructions -----
+        'lb':    { opcode: '0000011', funct3: '000', type: 'I' }, 'lh': { opcode: '0000011', funct3: '001', type: 'I' },
+        'lw':    { opcode: '0000011', funct3: '010', type: 'I' }, 'lbu': { opcode: '0000011', funct3: '100', type: 'I' },
+        'lhu':   { opcode: '0000011', funct3: '101', type: 'I' }, 'sb': { opcode: '0100011', funct3: '000', type: 'S' },
+        'sh':    { opcode: '0100011', funct3: '001', type: 'S' }, 'sw': { opcode: '0100011', funct3: '010', type: 'S' },
+        'addi':  { opcode: '0010011', funct3: '000', type: 'I' }, 'slti': { opcode: '0010011', funct3: '010', type: 'I' },
+        'sltiu': { opcode: '0010011', funct3: '011', type: 'I' }, 'xori': { opcode: '0010011', funct3: '100', type: 'I' },
+        'ori':   { opcode: '0010011', funct3: '110', type: 'I' }, 'andi': { opcode: '0010011', funct3: '111', type: 'I' },
+        'slli':  { opcode: '0010011', funct3: '001', funct7: '0000000', type: 'I-shamt' },
+        'srli':  { opcode: '0010011', funct3: '101', funct7: '0000000', type: 'I-shamt' },
+        'srai':  { opcode: '0010011', funct3: '101', funct7: '0100000', type: 'I-shamt' },
+        'add':   { opcode: '0110011', funct3: '000', funct7: '0000000', type: 'R' },
+        'sub':   { opcode: '0110011', funct3: '000', funct7: '0100000', type: 'R' },
+        'sll':   { opcode: '0110011', funct3: '001', funct7: '0000000', type: 'R' },
+        'slt':   { opcode: '0110011', funct3: '010', funct7: '0000000', type: 'R' },
+        'sltu':  { opcode: '0110011', funct3: '011', funct7: '0000000', type: 'R' },
+        'xor':   { opcode: '0110011', funct3: '100', funct7: '0000000', type: 'R' },
+        'srl':   { opcode: '0110011', funct3: '101', funct7: '0000000', type: 'R' },
+        'sra':   { opcode: '0110011', funct3: '101', funct7: '0100000', type: 'R' },
+        'or':    { opcode: '0110011', funct3: '110', funct7: '0000000', type: 'R' },
+        'and':   { opcode: '0110011', funct3: '111', funct7: '0000000', type: 'R' },
+        'lui':   { opcode: '0110111', type: 'U' }, 'auipc': { opcode: '0010111', type: 'U' },
+        'jal':   { opcode: '1101111', type: 'J' }, 'jalr': { opcode: '1100111', funct3: '000', type: 'I' },
+        'beq':   { opcode: '1100011', funct3: '000', type: 'B' }, 'bne': { opcode: '1100011', funct3: '001', type: 'B' },
+        'blt':   { opcode: '1100011', funct3: '100', type: 'B' }, 'bge': { opcode: '1100011', funct3: '101', type: 'B' },
+        'bltu':  { opcode: '1100011', funct3: '110', type: 'B' }, 'bgeu': { opcode: '1100011', funct3: '111', type: 'B' },
+        'ecall': { opcode: '1110011', funct3: '000', funct7: '0000000', type: 'I' },
+        'ebreak':{ opcode: '1110011', funct3: '000', funct7: '0000001', type: 'I' },
+        'fence': { opcode: '0001111', funct3: '000', type: 'I' },
 
-// --- Biến trạng thái cho các thành phần giao diện ---
-let dataSegmentStartAddress = 0x10010000; // Địa chỉ bắt đầu mặc định cho Data Segment View
-let dataSegmentDisplayMode = 'hex';        // Chế độ hiển thị cho Data Segment ('hex' hoặc 'ascii')
-const dataSegmentRows = 8;                 // Số hàng hiển thị trong Data Segment View
-const bytesPerRow = 32;                    // Số byte trên mỗi hàng của Data Segment View (8 words)
-const wordsPerRow = 8;                     // Số word (cột giá trị) trên mỗi hàng của Data Segment View
+        // ----- RV32M Standard Extension (Multiply/Divide) -----
+        'mul':    { opcode: '0110011', funct3: '000', funct7: '0000001', type: 'R' },
+        'mulh':   { opcode: '0110011', funct3: '001', funct7: '0000001', type: 'R' },
+        'mulhsu': { opcode: '0110011', funct3: '010', funct7: '0000001', type: 'R' },
+        'mulhu':  { opcode: '0110011', funct3: '011', funct7: '0000001', type: 'R' },
+        'div':    { opcode: '0110011', funct3: '100', funct7: '0000001', type: 'R' },
+        'divu':   { opcode: '0110011', funct3: '101', funct7: '0000001', type: 'R' },
+        'rem':    { opcode: '0110011', funct3: '110', funct7: '0000001', type: 'R' },
+        'remu':   { opcode: '0110011', funct3: '111', funct7: '0000001', type: 'R' },
 
-let currentRegisterView = 'integer';       // Theo dõi bảng thanh ghi nào đang được hiển thị ('integer' hoặc 'fp')
+        // ----- RV32F Standard Extension (Single-Precision Floating-Point) -----
+        'flw': { opcode: '0000111', funct3: '010', type: 'I-FP' },
+        'fsw': { opcode: '0100111', funct3: '010', type: 'S-FP' },
 
-// --- Khởi tạo bảng thanh ghi ---
-// Tên ABI cho các thanh ghi số nguyên (x0-x31)
-const abiNames = [
-    'zero', 'ra', 'sp', 'gp', 'tp', 't0', 't1', 't2',
-    's0/fp', 's1', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5',
-    'a6', 'a7', 's2', 's3', 's4', 's5', 's6', 's7',
-    's8', 's9', 's10', 's11', 't3', 't4', 't5', 't6'
-];
+        'fadd.s':  { opcode: '1010011', funct7: '0000000', type: 'R-FP' },
+        'fsub.s':  { opcode: '1010011', funct7: '0000100', type: 'R-FP' },
+        'fmul.s':  { opcode: '1010011', funct7: '0001000', type: 'R-FP' },
+        'fdiv.s':  { opcode: '1010011', funct7: '0001100', type: 'R-FP' },
+        
+        'fsgnj.s':  { opcode: '1010011', funct3: '000', funct7: '0010000', type: 'R-FP' },
+        'fsgnjn.s': { opcode: '1010011', funct3: '001', funct7: '0010000', type: 'R-FP' },
+        'fsgnjx.s': { opcode: '1010011', funct3: '010', funct7: '0010000', type: 'R-FP' },
 
-// Tên ABI cho các thanh ghi điểm động (f0-f31) - cần kiểm tra và hoàn thiện danh sách này
-const fpAbiNames = [
-    'ft0', 'ft1', 'ft2', 'ft3', 'ft4', 'ft5', 'ft6', 'ft7', 
-    'fs0', 'fs1', 'fa0', 'fa1', 'fa2', 'fa3', 'fa4', 'fa5',
-    'fa6', 'fa7', 'fs2', 'fs3', 'fs4', 'fs5', 'fs6', 'fs7',
-    'fs8', 'fs9', 'fs10', 'fs11', 'ft8', 'ft9', 'ft10', 'ft11'
-];
+        'fcvt.w.s':  { opcode: '1010011', funct7: '1100000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
+        'fcvt.wu.s': { opcode: '1010011', funct7: '1100000', rs2_subfield: '00001', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
+        'fcvt.s.w':  { opcode: '1010011', funct7: '1101000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
+        'fcvt.s.wu': { opcode: '1010011', funct7: '1101000', rs2_subfield: '00001', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
 
-// Tạo cấu trúc ban đầu cho bảng thanh ghi số nguyên
-function initializeRegisterTable() {
-    if (!registerTableBody) {
-        console.error("DOM element for integer register table body not found!");
-        return;
-    }
-    registerTableBody.innerHTML = ''; // Xóa nội dung cũ nếu có
+        'feq.s': { opcode: '1010011', funct3: '010', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
+        'flt.s': { opcode: '1010011', funct3: '001', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
+        'fle.s': { opcode: '1010011', funct3: '000', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
 
-    // Tạo 32 hàng cho thanh ghi x0-x31
-    for (let i = 0; i < 32; i++) {
-        const row = registerTableBody.insertRow();
-        row.id = `reg-${i}`; // Đặt ID cho mỗi hàng để dễ cập nhật
-        row.insertCell().textContent = `x${i} (${abiNames[i]})`; // Cột "Name"
-        row.insertCell().textContent = '0x00000000';          // Cột "Value" (Hex)
-    }
-    // Tạo hàng cho Program Counter (PC)
-    const pcRow = registerTableBody.insertRow();
-    pcRow.id = 'reg-pc';
-    pcRow.insertCell().textContent = 'PC';
-    pcRow.insertCell().textContent = '0x00000000';
-}
+        'fmv.x.w': { opcode: '1010011', funct3: '000', funct7: '1110000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
+        'fmv.w.x': { opcode: '1010011', funct3: '000', funct7: '1111000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
 
-// Tạo cấu trúc ban đầu cho bảng thanh ghi điểm động
-function initializeFPRegisterTable() {
-    if (!fpRegisterTableBody) {
-        console.error("DOM element for floating-point register table body not found!");
-        return;
-    }
-    fpRegisterTableBody.innerHTML = ''; // Xóa nội dung cũ nếu có
+        // ----- Pseudo Instructions -----
+        'nop':  { type: 'Pseudo', expandsTo: 'addi', args: ['x0', 'x0', '0'] },
+        'li':   { type: 'Pseudo' },
+        'mv':   { type: 'Pseudo', expandsTo: 'addi', args: [null, null, '0'] },
+        'j':    { type: 'Pseudo', expandsTo: 'jal', args: ['x0', null] },
+        'jr':   { type: 'Pseudo', expandsTo: 'jalr', args: ['x0', null, '0'] },
+        'ret':  { type: 'Pseudo', expandsTo: 'jalr', args: ['x0', 'x1', '0'] },
+        'call': { type: 'Pseudo' },
+        'bnez': { type: 'Pseudo', expandsTo: 'bne', args: [null, 'x0', null] },
+        'beqz': { type: 'Pseudo', expandsTo: 'beq', args: [null, 'x0', null] },
+        'la':   { type: 'Pseudo' },
+        'fmv.s': { type: 'Pseudo', expandsTo: 'fsgnj.s', args: [null, null, null] },
+        'fabs.s':{ type: 'Pseudo', expandsTo: 'fsgnjx.s', args: [null, null, null] },
+        'fneg.s':{ type: 'Pseudo', expandsTo: 'fsgnjn.s', args: [null, null, null] },
+    },
 
-    // Tạo 32 hàng cho thanh ghi f0-f31
-    for (let i = 0; i < 32; i++) {
-        const row = fpRegisterTableBody.insertRow();
-        row.id = `freg-${i}`; // Đặt ID cho mỗi hàng
-        row.insertCell().textContent = `f${i} (${fpAbiNames[i] || '?'})`; // Cột "Register"
-        row.insertCell().textContent = '0.0';                            // Cột "Float Value"
-        row.insertCell().textContent = '0x00000000';                    // Cột "Hex (Bits)"
-    }
-}
+    // Hàm chính, điều phối quá trình biên dịch
+    assemble(assemblyCode) {
+        this._reset();
+        this._pass1(assemblyCode);
+        this._pass2();
 
-// Hiển thị nội dung của vùng nhớ Data Segment
-function renderDataSegmentTable() {
-    if (!dataSegmentBody || !simulator) {
-        if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Simulator not ready or no data loaded.</td></tr>';
-        return;
-    }
-    dataSegmentBody.innerHTML = ''; // Xóa nội dung cũ
-
-    // Lặp qua số hàng cần hiển thị
-    for (let i = 0; i < dataSegmentRows; i++) {
-        const rowBaseAddress = Math.max(0, dataSegmentStartAddress + i * bytesPerRow); // Địa chỉ bắt đầu của hàng
-        const row = dataSegmentBody.insertRow();
-        const addrCell = row.insertCell(); // Ô hiển thị địa chỉ
-        addrCell.textContent = `0x${rowBaseAddress.toString(16).padStart(8, '0')}`;
-
-        // Lặp qua các word trên mỗi hàng
-        for (let j = 0; j < wordsPerRow; j++) {
-            const wordStartAddress = rowBaseAddress + j * 4; // Địa chỉ bắt đầu của word
-            let displayValue = '';
-            let wordValue = 0;      // Giá trị số nguyên của word
-            let bytes = [];         // Mảng chứa các byte của word
-            let allBytesNull = true; // Cờ kiểm tra xem word có hoàn toàn là null không
-
-            // Đọc 4 byte cho mỗi word (little-endian)
-            for (let k = 0; k < 4; k++) {
-                const byteAddr = wordStartAddress + k;
-                const byte = simulator.memory[byteAddr] ?? null; // Lấy byte từ memory, nếu không có thì là null
-                bytes.push(byte);
-                if (byte !== null) {
-                    allBytesNull = false;
-                    wordValue |= (byte << (k * 8)); // Ghép các byte thành word (little-endian)
-                }
-            }
-
-            // Định dạng giá trị hiển thị tùy theo chế độ (hex hoặc ascii)
-            if (dataSegmentDisplayMode === 'hex') {
-                if (allBytesNull) {
-                    displayValue = '........'; // Nếu word không có dữ liệu
-                } else {
-                    // Hiển thị dạng hex không dấu 32-bit
-                    displayValue = `0x${(wordValue >>> 0).toString(16).padStart(8, '0')}`;
-                }
-            } else { // Chế độ 'ascii'
-                displayValue = '';
-                for (const byte of bytes) {
-                    if (byte !== null && byte >= 32 && byte <= 126) { // Ký tự ASCII in được
-                        displayValue += String.fromCharCode(byte);
-                    } else {
-                        displayValue += '.'; // Ký tự thay thế cho byte không in được hoặc null
-                    }
-                }
-            }
-            row.insertCell().textContent = displayValue; // Thêm ô giá trị vào hàng
+        // Xác định địa chỉ bắt đầu của chương trình
+        let startAddress = this.labels['_start']?.address ?? this.labels['main']?.address;
+        if (startAddress === undefined) {
+            const firstInstr = this.instructionLines.find(l => (l.type === 'instruction' || l.type === 'pseudo-instruction') && l.address !== undefined);
+            startAddress = firstInstr ? firstInstr.address : this.textBaseAddress;
         }
-    }
-}
 
-// Cập nhật toàn bộ giao diện người dùng với trạng thái hiện tại của simulator
-function updateUIGlobally() {
-    const currentSimulator = simulator; // Tham chiếu đến đối tượng simulator
-
-    // Cập nhật bảng thanh ghi số nguyên (x0-x31 và PC)
-    if (registerTableBody) {
-        for (let i = 0; i < 32; i++) { // Cập nhật x0-x31
-            const row = document.getElementById(`reg-${i}`);
-            if (row && row.cells.length >= 2) { // Đảm bảo hàng và ô tồn tại
-                const value = currentSimulator.registers[i]; // Lấy giá trị từ simulator
-                const cells = row.cells;
-                const oldValueHex = cells[1].textContent; // Giá trị Hex cũ trong ô
-                const newValueHex = `0x${(value >>> 0).toString(16).padStart(8, '0')}`; // Giá trị Hex mới
-
-                // Highlight nếu giá trị thay đổi
-                if (newValueHex !== oldValueHex && document.body.contains(row)) {
-                    row.classList.add('highlight');
-                } else if (document.body.contains(row)) {
-                    row.classList.remove('highlight');
-                }
-                cells[1].textContent = newValueHex; // Cập nhật ô "Value" (Hex)
-            }
-        }
-        const pcRowElement = document.getElementById('reg-pc'); // Cập nhật PC
-        if (pcRowElement && pcRowElement.cells.length >= 2) {
-            const pcValue = currentSimulator.pc;
-            const cells = pcRowElement.cells;
-            const oldPcHex = cells[1].textContent;
-            const newPcHex = `0x${(pcValue >>> 0).toString(16).padStart(8, '0')}`;
-
-            if (newPcHex !== oldPcHex && document.body.contains(pcRowElement)) {
-                pcRowElement.classList.add('highlight');
-            } else if (document.body.contains(pcRowElement)) {
-                pcRowElement.classList.remove('highlight');
-            }
-            cells[1].textContent = newPcHex;
-        }
-    }
-
-    // Cập nhật bảng thanh ghi điểm động (f0-f31)
-    if (fpRegisterTableBody && currentSimulator.fregisters) {
-        for (let i = 0; i < 32; i++) {
-            const row = document.getElementById(`freg-${i}`);
-            if (row && row.cells.length >= 3) { // Bảng FP có 3 cột
-                const floatValue = currentSimulator.fregisters[i]; // Giá trị float từ simulator
-                const cells = row.cells;
-
-                // Chuyển đổi bit pattern của floatValue sang dạng hex
-                const buffer = new ArrayBuffer(4);        // Tạo buffer 4 byte
-                const view = new DataView(buffer);
-                view.setFloat32(0, floatValue, true);     // Ghi giá trị float vào buffer (little-endian)
-                const hexBits = `0x${(view.getInt32(0, true) >>> 0).toString(16).padStart(8, '0')}`; // Đọc lại bits dạng Int32, rồi chuyển sang hex không dấu
-
-                const oldFloatDisplay = cells[1].textContent; // Giá trị float hiển thị cũ
-                const newFloatDisplay = floatValue.toPrecision(7); // Định dạng giá trị float để hiển thị
-
-                // Highlight nếu giá trị hiển thị thay đổi
-                if (newFloatDisplay !== oldFloatDisplay && document.body.contains(row)) {
-                    row.classList.add('highlight');
-                } else if (document.body.contains(row)) {
-                    row.classList.remove('highlight');
-                }
-
-                cells[1].textContent = newFloatDisplay;  // Cập nhật ô "Float Value"
-                cells[2].textContent = hexBits;          // Cập nhật ô "Hex (Bits)"
-            }
-        }
-    }
-
-    // Cập nhật hiển thị Data Segment
-    renderDataSegmentTable();
-
-    // Xóa hiệu ứng highlight sau một khoảng thời gian ngắn
-    setTimeout(() => {
-        registerTableBody?.querySelectorAll('tr.highlight').forEach(r => r.classList.remove('highlight'));
-        document.getElementById('reg-pc')?.classList.remove('highlight');
-        fpRegisterTableBody?.querySelectorAll('tr.highlight').forEach(r => r.classList.remove('highlight'));
-    }, 500);
-}
-// Đưa hàm updateUIGlobally ra phạm vi toàn cục để simulator có thể gọi khi cần (ví dụ sau khi chạy bất đồng bộ)
-window.updateUIGlobally = updateUIGlobally;
-
-// --- Xử lý sự kiện cho các nút điều khiển ---
-// Xử lý sự kiện khi nhấn nút "Assemble"
-function handleAssemble() {
-    if (!assembler || !simulator || !binaryOutput || !instructionInput) return;
-    binaryOutput.textContent = "Assembling..."; // Thông báo đang biên dịch
-    if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Resetting simulator...</td></tr>';
-
-    simulator.reset();      // Reset trạng thái simulator (bao gồm cả thanh ghi FP nếu có)
-    updateUIGlobally();     // Cập nhật UI để hiển thị trạng thái đã reset (các thanh ghi về 0)
-
-    // Dùng setTimeout để UI có thời gian cập nhật trước khi thực hiện tác vụ nặng (assemble)
-    setTimeout(() => {
-        try {
-            const assemblyCode = instructionInput.value; // Lấy mã assembly từ ô nhập liệu
-            const programData = assembler.assemble(assemblyCode); // Gọi hàm assemble từ assembler.js
-
-            // Hiển thị mã nhị phân (và hex) đã biên dịch
-            const binaryHexStrings = programData.instructions.map(instr => `${instr.hex}  (${instr.binary})`);
-            binaryOutput.textContent = binaryHexStrings.join('\n');
-            if (binaryHexStrings.length === 0 && !assemblyCode.trim().startsWith('.data')) {
-                 if (Object.keys(programData.memory).length > 0 && assemblyCode.trim().startsWith('.data')){
-                    binaryOutput.textContent = "(Data segment assembled, no executable instructions)";
-                 } else {
-                    binaryOutput.textContent = "(No instructions assembled)";
-                 }
-            }
-
-            // Nạp chương trình đã biên dịch vào simulator
-            simulator.loadProgram({
-                memory: programData.memory,         // Bộ nhớ đã chứa cả data và instructions
-                startAddress: programData.startAddress
-            });
-
-            // Cập nhật địa chỉ bắt đầu cho Data Segment View, ưu tiên vùng .data
-            let dataStartAddrFound = false;
-            if (programData.memory && Object.keys(programData.memory).length > 0) {
-                const dataAddresses = [];
-                const defaultDataBaseAddr = assembler.dataBaseAddress || 0x10010000;
-                for (const addrStr in programData.memory) {
-                    const addr = parseInt(addrStr);
-                    if (addr >= defaultDataBaseAddr) { dataAddresses.push(addr); }
-                }
-                if (dataAddresses.length > 0) {
-                     dataSegmentStartAddress = Math.min(...dataAddresses);
-                     dataStartAddrFound = true;
-                } else {
-                    const allAddresses = Object.keys(programData.memory).map(Number).filter(addr => !isNaN(addr));
-                    if(allAddresses.length > 0) {
-                        dataSegmentStartAddress = Math.min(...allAddresses);
-                        dataStartAddrFound = true;
-                    }
-                }
-            }
-            if (!dataStartAddrFound) {
-                dataSegmentStartAddress = assembler.dataBaseAddress || 0x10010000;
-            }
-            dataSegmentStartAddress = Math.max(0, Math.floor(dataSegmentStartAddress / bytesPerRow) * bytesPerRow); // Căn chỉnh địa chỉ
-            if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`; // Cập nhật ô input địa chỉ
-
-            updateUIGlobally(); // Cập nhật lại toàn bộ UI sau khi nạp chương trình
-
-            // Tùy chọn: Thực thi lệnh đầu tiên ngay sau khi assemble
-            if (programData.instructions && programData.instructions.length > 0) {
-                try {
-                    simulator.step(); // simulator.step() sẽ tự gọi updateUIGlobally()
-                } catch (stepError) {
-                    console.error("Error during initial step execution:", stepError);
-                    binaryOutput.textContent += `\n\nError during initial step: ${stepError.message}`;
-                    updateUIGlobally(); // Cập nhật UI nếu có lỗi ở bước đầu
-                }
-            }
-
-        } catch (error) { // Bắt lỗi từ quá trình assemble hoặc load
-            console.error("Assembly or Loading Error:", error, error.stack);
-            binaryOutput.textContent = `Error:\n${error.message}\n\n(Check console for details)`;
-            if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Assembly/Loading failed.</td></tr>';
-            
-            // Reset lại cấu trúc và giá trị bảng thanh ghi khi có lỗi nghiêm trọng
-            initializeRegisterTable();
-            initializeFPRegisterTable(); 
-            const pcRow = document.getElementById('reg-pc');
-            if(pcRow && pcRow.cells.length > 1) pcRow.cells[1].textContent = '0x00000000'; // Đảm bảo ô giá trị PC tồn tại
-        }
-    }, 10); // Độ trễ nhỏ để UI kịp cập nhật
-}
-
-// Xử lý sự kiện khi nhấn nút "Run"
-function handleRun() {
-    if (!simulator) return;
-    binaryOutput.textContent += "\n\n--- Running ---"; // Thêm thông báo vào output
-    try {
-        simulator.run(); // Bắt đầu chạy chương trình trong simulator
-    } catch (e) {
-        console.error("Error starting run:", e);
-        alert(`Error starting run: ${e.message}`);
-        updateUIGlobally(); // Cập nhật UI nếu có lỗi khi bắt đầu chạy
-    }
-}
-
-// Xử lý sự kiện khi nhấn nút "Step"
-function handleStep() {
-    if (!simulator) return;
-    try {
-        simulator.step(); // Thực thi một lệnh trong simulator
-    } catch (e) {
-        console.error("Error during step:", e);
-        const currentBinaryOutput = binaryOutput.textContent.split('\n\nStep Error:')[0]; // Tránh lặp lại thông báo lỗi cũ
-        binaryOutput.textContent = currentBinaryOutput + `\n\nStep Error: ${e.message}`;
-        updateUIGlobally(); // Cập nhật UI để phản ánh trạng thái sau lỗi
-    }
-}
-
-// Xử lý sự kiện khi nhấn nút "Reset"
-function handleReset() {
-    if (!simulator || !instructionInput || !binaryOutput || !dataSegmentBody) return;
-
-    simulator.stop();    // Dừng simulator nếu đang chạy
-    simulator.reset();   // Reset trạng thái của simulator (thanh ghi, bộ nhớ, PC)
-
-    // Xóa các ô input và output
-    instructionInput.value = "";
-    binaryOutput.textContent = "";
-    // Đặt lại địa chỉ xem Data Segment
-    dataSegmentStartAddress = assembler.dataBaseAddress || 0x10010000;
-    if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`;
-
-    updateUIGlobally(); // Cập nhật UI để hiển thị trạng thái đã reset
-
-    // Đảm bảo bảng thanh ghi số nguyên được hiển thị mặc định sau khi reset
-    if (registerTable && fpRegisterTable && toggleRegisterViewButton) {
-        registerTable.classList.add('active-table');
-        fpRegisterTable.classList.remove('active-table');
-        toggleRegisterViewButton.textContent = "View Floating-Point Registers";
-        currentRegisterView = 'integer';
-    }
-    console.log("System reset complete.");
-}
-
-
-// --- Gắn các trình xử lý sự kiện khi DOM đã sẵn sàng ---
-document.addEventListener('DOMContentLoaded', () => {
-    console.log("DOM loaded. Initializing UI components...");
-
-    // Khởi tạo cấu trúc ban đầu cho cả hai bảng thanh ghi
-    initializeRegisterTable();
-    initializeFPRegisterTable();
-
-    // Gắn sự kiện cho nút chuyển đổi chế độ xem thanh ghi
-    if (toggleRegisterViewButton && registerTable && fpRegisterTable) {
-        toggleRegisterViewButton.addEventListener('click', () => {
-            if (currentRegisterView === 'integer') {
-                registerTable.classList.remove('active-table'); // Ẩn bảng integer
-                fpRegisterTable.classList.add('active-table');    // Hiện bảng FP
-                toggleRegisterViewButton.textContent = "View Integer Registers";
-                currentRegisterView = 'fp';
-            } else {
-                fpRegisterTable.classList.remove('active-table'); // Ẩn bảng FP
-                registerTable.classList.add('active-table');    // Hiện bảng integer
-                toggleRegisterViewButton.textContent = "View Floating-Point Registers";
-                currentRegisterView = 'integer';
-            }
-        });
-    } else {
-        console.error("Toggle register view button or register tables not found in DOM.");
-    }
-
-    // Gắn sự kiện cho nút chuyển đổi chế độ xem Data Segment (Hex/ASCII)
-    if (toggleDataSegmentModeButton) {
-        toggleDataSegmentModeButton.addEventListener('click', () => {
-            dataSegmentDisplayMode = (dataSegmentDisplayMode === 'hex') ? 'ascii' : 'hex';
-            renderDataSegmentTable(); // Vẽ lại bảng Data Segment với chế độ mới
-        });
-    } else { console.error("Data segment toggle mode button not found."); }
-
-    // Gắn sự kiện cho việc đi đến địa chỉ trong Data Segment
-    if (goToDataSegmentAddressButton && dataSegmentAddressInput) {
-        const goToAddress = () => {
-            const addrStr = dataSegmentAddressInput.value.trim(); // Lấy địa chỉ từ input
-            let newAddr;
-            try {
-                // Parse địa chỉ (hỗ trợ cả hex và decimal)
-                if (addrStr.toLowerCase().startsWith('0x')) {
-                    newAddr = parseInt(addrStr, 16);
-                } else if (addrStr === '') { // Nếu rỗng, giữ nguyên địa chỉ hiện tại
-                    newAddr = dataSegmentStartAddress;
-                } else {
-                    newAddr = parseInt(addrStr, 10);
-                }
-
-                if (!isNaN(newAddr) && newAddr >= 0) { // Nếu địa chỉ hợp lệ
-                    // Căn chỉnh địa chỉ về đầu hàng và vẽ lại bảng
-                    dataSegmentStartAddress = Math.max(0, Math.floor(newAddr / bytesPerRow) * bytesPerRow);
-                    renderDataSegmentTable();
-                    dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`; // Cập nhật lại ô input
-                } else {
-                    alert(`Invalid address format: "${addrStr}"`);
-                    dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`; // Khôi phục giá trị cũ
-                }
-            } catch (e) {
-                alert(`Error parsing address: "${addrStr}"`);
-                dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`; // Khôi phục
-            }
+        return {
+            memory: this.memory,
+            startAddress: Number(startAddress) || 0,
+            instructions: this.binaryCode
         };
-        goToDataSegmentAddressButton.addEventListener('click', goToAddress);
-        dataSegmentAddressInput.addEventListener('keypress', function (e) { // Cho phép nhấn Enter
-            if (e.key === 'Enter') {
-                goToAddress();
+    },
+
+    // Lượt 1: Xây dựng bảng nhãn, tính địa chỉ và kích thước lệnh
+    _pass1(assemblyCode) {
+        const lines = assemblyCode.split('\n');
+        this.currentAddress = this.textBaseAddress;
+        this.inDataSegment = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            const originalLine = lines[i];
+            const lineNumber = i + 1;
+            let line = originalLine.trim();
+
+            const commentIndex = line.indexOf('#');
+            if (commentIndex !== -1) line = line.substring(0, commentIndex).trim();
+            if (line.length === 0) {
+                this.instructionLines.push({ original: originalLine, type: 'empty', lineNumber });
+                continue;
+            }
+
+            let label = null;
+            const labelMatch = line.match(/^([a-zA-Z_][\w]*)\s*:/);
+            if (labelMatch) {
+                label = labelMatch[1];
+                line = line.substring(labelMatch[0].length).trim();
+                if (!/^[a-zA-Z_][\w]*$/.test(label)) throw new Error(`Line ${lineNumber}: Invalid label name "${label}"`);
+                if (this.labels[label] && this.labels[label].address !== undefined) {
+                     if (!(this.labels[label].isGlobal && this.labels[label].address === undefined)) {
+                         throw new Error(`Line ${lineNumber}: Duplicate label "${label}"`);
+                     }
+                }
+                this.labels[label] = { ...this.labels[label], address: this.currentAddress, type: this.inDataSegment ? 'data' : 'instruction' };
+            }
+
+            if (line.length === 0) {
+                if (label) this.instructionLines.push({ original: originalLine, type: 'label-only', label: label, address: this.currentAddress, lineNumber });
+                else this.instructionLines.push({ original: originalLine, type: 'empty', lineNumber });
+                continue;
+            }
+            
+            const parts = line.split(/[\s,]+/);
+            const mnemonic = parts[0].trim().toLowerCase();
+            const operandsString = line.substring(mnemonic.length).trim();
+            const operands = this._parseOperandsSmart(operandsString);
+            const lineInfo = { original: originalLine, mnemonic, operands, label, address: this.currentAddress, type: '', lineNumber, size: 0 };
+
+            if (mnemonic.startsWith('.')) { // Xử lý chỉ thị
+                lineInfo.type = 'directive';
+                const handler = this.directives[mnemonic];
+                if (handler) {
+                    try {
+                        const addrBefore = this.currentAddress;
+                        handler.call(this, operands); // Gọi hàm xử lý chỉ thị
+                        lineInfo.size = this.currentAddress - addrBefore;
+                    } catch (e) {
+                        throw new Error(`Pass 1 (Line ${lineNumber} - "${originalLine.trim()}"): Directive "${mnemonic}": ${e.message}`);
+                    }
+                } else {
+                    throw new Error(`Line ${lineNumber}: Unknown directive "${mnemonic}"`);
+                }
+            } else if (this.opcodes[mnemonic]) { // Xử lý lệnh
+                if (this.inDataSegment && mnemonic !== ".eqv") throw new Error(`Line ${lineNumber}: Instruction "${mnemonic}" in .data section is not allowed.`);
+                const instrOpcodeInfo = this.opcodes[mnemonic];
+                lineInfo.type = instrOpcodeInfo.type === 'Pseudo' ? 'pseudo-instruction' : 'instruction';
+
+                let instrSize = 4; // Mặc định các lệnh RV32 là 4 byte
+                if (lineInfo.type === 'pseudo-instruction') {
+                    instrSize = this._estimatePseudoInstructionSize(mnemonic, operands, lineNumber, true);
+                }
+                lineInfo.size = instrSize;
+                this.currentAddress += instrSize;
+            } else {
+                throw new Error(`Line ${lineNumber}: Unknown mnemonic "${mnemonic}"`);
+            }
+            this.instructionLines.push(lineInfo);
+        }
+    },
+
+    // Lượt 2: Mã hóa lệnh thành mã máy
+    _pass2() {
+        this.binaryCode = [];
+        for (const lineInfo of this.instructionLines) {
+            if (lineInfo.type !== 'instruction' && lineInfo.type !== 'pseudo-instruction') continue;
+            
+            this.currentAddress = lineInfo.address;
+            try {
+                const instrMnemonic = lineInfo.mnemonic.toLowerCase();
+                const instrOpcodeInfo = this.opcodes[instrMnemonic];
+                if (!instrOpcodeInfo) throw new Error(`Internal: Mnemonic "${instrMnemonic}" info missing in Pass 2.`);
+
+                const currentInstrInfo = { ...instrOpcodeInfo, mnemonic: instrMnemonic };
+                let generatedBinaries = [];
+                
+                if (currentInstrInfo.type === 'Pseudo') {
+                    generatedBinaries = this._expandAndEncodePseudo(lineInfo, currentInstrInfo);
+                } else {
+                    const binStr = this._encodeInstruction(currentInstrInfo, lineInfo.operands, lineInfo.address);
+                    if (binStr) generatedBinaries.push(binStr);
+                }
+
+                lineInfo.binary = generatedBinaries;
+                generatedBinaries.forEach((bin, idx) => {
+                    const hex = '0x' + this._binToHex(bin, 8);
+                    const instrAddress = lineInfo.address + (idx * 4);
+                    this.binaryCode.push({ address: instrAddress, binary: bin, hex: hex });
+                    this._writeBinaryToMemory(instrAddress, bin);
+                });
+
+            } catch (e) {
+                throw new Error(`Pass 2 (Line ${lineInfo.lineNumber} - "${lineInfo.original.trim()}"): ${e.message}`);
+            }
+        }
+    },
+
+    // Đặt lại trạng thái của assembler
+    _reset() {
+        this.memory = {}; this.labels = {}; this.equValues = {};
+        this.currentSection = null; this.currentAddress = 0;
+        this.instructionLines = []; this.binaryCode = [];
+        this.inDataSegment = false;
+    },
+
+    // Phân tích chuỗi toán hạng thông minh
+    _parseOperandsSmart(operandsPart) {
+        if (!operandsPart) return [];
+        const operands = []; let currentOperand = ''; let inString = false; let parenLevel = 0;
+        for (let i = 0; i < operandsPart.length; i++) {
+            const char = operandsPart[i];
+            if (char === '"' && (i === 0 || operandsPart[i - 1] !== '\\')) inString = !inString;
+            if (char === '(' && !inString) parenLevel++; 
+            if (char === ')' && !inString) parenLevel--;
+            if (char === ',' && !inString && parenLevel === 0) {
+                if (currentOperand.trim().length > 0) operands.push(currentOperand.trim());
+                currentOperand = '';
+            } else {
+                currentOperand += char;
+            }
+        }
+        if (currentOperand.trim().length > 0) operands.push(currentOperand.trim());
+        return operands.filter(op => op.length > 0);
+    },
+
+    // Chuyển đổi số thập phân sang chuỗi nhị phân bù 2
+    _decToBin(decimal, length) {
+        let binary = (decimal >= 0) ? decimal.toString(2) : (Math.pow(2, length) + decimal).toString(2);
+        if (binary.length > length) binary = binary.slice(-length);
+        return binary.padStart(length, '0');
+    },
+
+    // Chuyển đổi chuỗi nhị phân sang hex
+    _binToHex(binary, nibbles) {
+        let hex = '';
+        for (let i = 0; i < binary.length; i += 4) {
+            hex += parseInt(binary.substring(i, i + 4), 2).toString(16);
+        }
+        return hex.toUpperCase().padStart(nibbles, '0');
+    },
+
+    // Phân tích giá trị immediate (số, nhãn, hằng)
+    _parseImmediate(operand, bits, isRelative = false, isPass1 = false, instructionAddress = 0) {
+        operand = operand.trim();
+        let value = null;
+        
+        if (this.equValues[operand] !== undefined) { value = this.equValues[operand]; }
+        else if (operand.match(/^[+-]?0x[0-9a-fA-F]+$/i)) { value = parseInt(operand, 16); }
+        else if (operand.match(/^[+-]?\d+$/)) { value = parseInt(operand, 10); }
+
+        if (value === null && /^[a-zA-Z_][\w]*$/.test(operand)) {
+            if (this.labels[operand] && this.labels[operand].address !== undefined) {
+                const labelAddress = this.labels[operand].address;
+                value = isRelative ? labelAddress - instructionAddress : labelAddress;
+            } else if (isPass1) { return null; } 
+              else { throw new Error(`Undefined label "${operand}"`); }
+        }
+        if (value === null || isNaN(value)) throw new Error(`Invalid immediate value or undefined symbol: "${operand}"`);
+        
+        return value;
+    },
+
+    // Lấy chỉ số (0-31) của thanh ghi
+    getRegisterIndex(regNameWithXF) {
+        const regName = regNameWithXF.trim().toUpperCase();
+        const mappedName = this.registerMapping[regName] || regName;
+        const match = mappedName.match(/^[XF](\d+)$/);
+        if (match) {
+            const index = parseInt(match[1]);
+            if (index >= 0 && index < 32) return index;
+        }
+        throw new Error(`Invalid register name: "${regNameWithXF}"`);
+    },
+
+    // Phân tích toán hạng dạng bộ nhớ `offset(baseRegister)`
+    _parseMemoryOperand(operand) {
+        const match = operand.match(/^(-?[0-9a-zA-Z_]+)?\s*\(\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\)$/);
+        if (!match) throw new Error(`Invalid memory operand format: "${operand}"`);
+
+        const offsetPart = match[1] || '0';
+        const basePart = match[2];
+
+        const offsetValue = this._parseImmediate(offsetPart, 12, false, false, this.currentAddress);
+        const baseRegIndex = this.getRegisterIndex(basePart);
+        if (offsetValue === null) throw new Error(`Unresolved offset symbol "${offsetPart}"`);
+
+        return { offset: offsetValue, baseRegIndex: baseRegIndex };
+    },
+
+    // Hàm mã hóa một lệnh thành chuỗi nhị phân 32-bit
+    _encodeInstruction(instrInfo, operands, instructionAddress) {
+        const { type, mnemonic } = instrInfo;
+        let rd, rs1, rs2, imm, rd_s, rs1_s, rs2_s, imm_s, binaryInstruction;
+        
+        const encodeReg = (regStr) => this._decToBin(this.getRegisterIndex(regStr), 5);
+        const encodeImm = (immStr, bits, isRelative) => {
+            const immValue = this._parseImmediate(immStr, bits, isRelative, false, instructionAddress);
+            return this._decToBin(immValue, bits);
+        };
+
+        try {
+            switch (type) {
+                case 'R':
+                    rd_s = encodeReg(operands[0]);
+                    rs1_s = encodeReg(operands[1]);
+                    rs2_s = encodeReg(operands[2]);
+                    binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    break;
+                case 'I':
+                case 'I-shamt':
+                    rd_s = encodeReg(operands[0]);
+                    rs1_s = encodeReg(operands[1]);
+                    const immBits = (type === 'I-shamt') ? 5 : 12;
+                    imm_s = encodeImm(operands[2], immBits, false);
+                    const funct7_I = (type === 'I-shamt') ? instrInfo.funct7 : imm_s.substring(0, 7);
+                    binaryInstruction = funct7_I + (type === 'I-shamt' ? imm_s : imm_s.substring(7)) + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    
+                    if (mnemonic === 'jalr' || mnemonic === 'lw' || mnemonic === 'lb' || mnemonic === 'lh' || mnemonic === 'lbu' || mnemonic === 'lhu') {
+                         rd_s = encodeReg(operands[0]);
+                         const memOp = this._parseMemoryOperand(operands[1]);
+                         rs1_s = this._decToBin(memOp.baseRegIndex, 5);
+                         imm_s = this._decToBin(memOp.offset, 12);
+                         binaryInstruction = imm_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    }
+                    break;
+                case 'S':
+                    rs2_s = encodeReg(operands[0]);
+                    const memOpS = this._parseMemoryOperand(operands[1]);
+                    rs1_s = this._decToBin(memOpS.baseRegIndex, 5);
+                    imm_s = this._decToBin(memOpS.offset, 12);
+                    binaryInstruction = imm_s.substring(0, 7) + rs2_s + rs1_s + instrInfo.funct3 + imm_s.substring(7) + instrInfo.opcode;
+                    break;
+                case 'B':
+                    rs1_s = encodeReg(operands[0]);
+                    rs2_s = encodeReg(operands[1]);
+                    imm_s = encodeImm(operands[2], 13, true);
+                    binaryInstruction = imm_s[0] + imm_s.slice(2, 8) + rs2_s + rs1_s + instrInfo.funct3 + imm_s.slice(8, 12) + imm_s[1] + instrInfo.opcode;
+                    break;
+                case 'U':
+                    rd_s = encodeReg(operands[0]);
+                    imm = this._parseImmediate(operands[1], 32, false, false, instructionAddress);
+                    imm_s = this._decToBin(imm, 32);
+                    binaryInstruction = imm_s.substring(0, 20) + rd_s + instrInfo.opcode;
+                    break;
+                case 'J':
+                    rd_s = encodeReg(operands[0]);
+                    imm_s = encodeImm(operands[1], 21, true);
+                    binaryInstruction = imm_s[0] + imm_s.slice(10, 20) + imm_s[9] + imm_s.slice(1, 9) + rd_s + instrInfo.opcode;
+                    break;
+
+                // --- Floating-Point Types ---
+                case 'R-FP':
+                    rd_s = encodeReg(operands[0]);
+                    rs1_s = encodeReg(operands[1]);
+                    rs2_s = encodeReg(operands[2]);
+                    const rm = instrInfo.funct3 || '000'; // Default rounding mode nếu không có
+                    binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + rm + rd_s + instrInfo.opcode;
+                    break;
+                case 'R-FP-CVT':
+                    rd_s = encodeReg(operands[0]);
+                    rs1_s = encodeReg(operands[1]);
+                    rs2_s = instrInfo.rs2_subfield;
+                    binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + (instrInfo.funct3 || '000') + rd_s + instrInfo.opcode;
+                    break;
+                case 'R-FP-CMP':
+                    rd_s = encodeReg(operands[0]);
+                    rs1_s = encodeReg(operands[1]);
+                    rs2_s = encodeReg(operands[2]);
+                    binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    break;
+                case 'I-FP': // FLW
+                    rd_s = encodeReg(operands[0]);
+                    const memOpIFP = this._parseMemoryOperand(operands[1]);
+                    rs1_s = this._decToBin(memOpIFP.baseRegIndex, 5);
+                    imm_s = this._decToBin(memOpIFP.offset, 12);
+                    binaryInstruction = imm_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    break;
+                case 'S-FP': // FSW
+                    rs2_s = encodeReg(operands[0]);
+                    const memOpSFP = this._parseMemoryOperand(operands[1]);
+                    rs1_s = this._decToBin(memOpSFP.baseRegIndex, 5);
+                    imm_s = this._decToBin(memOpSFP.offset, 12);
+                    binaryInstruction = imm_s.substring(0, 7) + rs2_s + rs1_s + instrInfo.funct3 + imm_s.substring(7) + instrInfo.opcode;
+                    break;
+
+                default:
+                    throw new Error(`Unsupported instruction type "${type}" for mnemonic "${mnemonic}"`);
+            }
+        } catch (e) {
+            throw new Error(`Encoding [${mnemonic} ${operands.join(', ')}]: ${e.message}`);
+        }
+
+        if (binaryInstruction.length !== 32) {
+            throw new Error(`Internal Error: Encoded binary for "${mnemonic}" is ${binaryInstruction.length} bits, expected 32.`);
+        }
+        return binaryInstruction;
+    },
+
+    // Ước lượng kích thước của lệnh giả
+    _estimatePseudoInstructionSize(mnemonic, operands, lineNumber, isPass1 = false) {
+        if (mnemonic === 'li') {
+            try {
+                const immValue = this._parseImmediate(operands[1], 32, false, isPass1);
+                if (immValue === null && isPass1) return 8; // Giả định trường hợp tệ nhất
+                return (immValue >= -2048 && immValue <= 2047) ? 4 : 8;
+            } catch (e) { if (isPass1) return 8; throw e; }
+        }
+        if (mnemonic === 'la' || mnemonic === 'call') return 8;
+        return 4; // Mặc định các lệnh giả khác chiếm 4 byte
+    },
+
+    // Mở rộng lệnh giả thành lệnh thật
+    _expandAndEncodePseudo(lineInfo, instrInfo) {
+        const { mnemonic, operands, address } = lineInfo;
+        let expandedInstructions = [];
+
+        switch (mnemonic) {
+            case 'li':
+                const rdLi = operands[0];
+                const immValueLi = this._parseImmediate(operands[1], 32, false, false, address);
+                if (immValueLi >= -2048 && immValueLi <= 2047) {
+                    expandedInstructions.push({ mnemonic: 'addi', operands: [rdLi, 'x0', immValueLi.toString()], address: address });
+                } else {
+                    let imm_hi = immValueLi >>> 12;
+                    const imm_lo = immValueLi & 0xFFF;
+                    if (imm_lo & 0x800) imm_hi = (imm_hi + 1) & 0xFFFFF; // Điều chỉnh làm tròn
+                    const imm_lo_signed = (imm_lo >= 0x800) ? (imm_lo - 0x1000) : imm_lo;
+                    
+                    expandedInstructions.push({ mnemonic: 'lui', operands: [rdLi, imm_hi.toString()], address: address });
+                    if (imm_lo_signed !== 0 || immValueLi === 0) {
+                        expandedInstructions.push({ mnemonic: 'addi', operands: [rdLi, rdLi, imm_lo_signed.toString()], address: address + 4 });
+                    }
+                }
+                break;
+            case 'la':
+                if (operands.length !== 2) throw new Error(`'la' expects rd, symbol. Got ${operands}`);
+                const rdLa = operands[0];
+                const symbolLa = operands[1];
+                
+                // Lấy địa chỉ của nhãn đích
+                const symbolAddress = this._parseImmediate(symbolLa, 32, false, false, address);
+                if (symbolAddress === null) throw new Error(`Unresolved symbol "${symbolLa}" in 'la'.`);
+                
+                // Tính toán offset tương đối so với PC hiện tại
+                const offset = symbolAddress - address;
+
+                // Sử dụng kỹ thuật làm tròn để tính toán 2 phần của offset
+                // Thêm 0x800 (nửa của 12 bit) để làm tròn lên khi bit thứ 11 của offset là 1
+                const hi20 = (offset + 0x800) & 0xFFFFF000;
+                const lo12 = symbolAddress - (address + hi20); // Phần còn lại chính là lo12
+
+                // Chuyển hi20 thành immediate cho AUIPC (dịch phải 12 bit)
+                const auipc_imm = hi20 >> 12;
+
+                expandedInstructions.push({
+                    mnemonic: 'auipc',
+                    operands: [rdLa, auipc_imm.toString()],
+                    address: address
+                });
+                
+                // Chỉ thêm ADDI nếu phần offset thấp khác 0
+                if (lo12 !== 0 || hi20 === 0) {
+                     expandedInstructions.push({
+                        mnemonic: 'addi',
+                        operands: [rdLa, rdLa, lo12.toString()],
+                        address: address + 4
+                    });
+                }
+                break;
+            case 'call':
+                const targetAddressCall = this._parseImmediate(operands[0], 32, false, false, address);
+                const offsetCall = targetAddressCall - address;
+                let hi_call = offsetCall >>> 12;
+                let lo_call = offsetCall & 0xFFF;
+                if (lo_call & 0x800) hi_call++;
+                const lo_call_signed = (lo_call & 0x800) ? (lo_call - 4096) : lo_call;
+                expandedInstructions.push({ mnemonic: 'auipc', operands: ['ra', hi_call.toString()], address: address });
+                expandedInstructions.push({ mnemonic: 'jalr', operands: ['ra', 'ra', lo_call_signed.toString()], address: address + 4 });
+                break;
+            // Các lệnh giả đơn giản
+            case 'nop': expandedInstructions.push({ mnemonic: 'addi', operands: ['x0', 'x0', '0'], address }); break;
+            case 'mv': expandedInstructions.push({ mnemonic: 'addi', operands: [operands[0], operands[1], '0'], address }); break;
+            case 'j': expandedInstructions.push({ mnemonic: 'jal', operands: ['x0', operands[0]], address }); break;
+            case 'jr': expandedInstructions.push({ mnemonic: 'jalr', operands: ['x0', operands[0], '0'], address }); break;
+            case 'ret': expandedInstructions.push({ mnemonic: 'jalr', operands: ['x0', 'ra', '0'], address }); break;
+            case 'bnez': expandedInstructions.push({ mnemonic: 'bne', operands: [operands[0], 'x0', operands[1]], address }); break;
+            case 'beqz': expandedInstructions.push({ mnemonic: 'beq', operands: [operands[0], 'x0', operands[1]], address }); break;
+            case 'fmv.s': expandedInstructions.push({ mnemonic: 'fsgnj.s', operands: [operands[0], operands[1], operands[1]], address }); break;
+            case 'fabs.s': expandedInstructions.push({ mnemonic: 'fsgnjx.s', operands: [operands[0], operands[1], operands[1]], address }); break;
+            case 'fneg.s': expandedInstructions.push({ mnemonic: 'fsgnjn.s', operands: [operands[0], operands[1], operands[1]], address }); break;
+            default: throw new Error(`Expansion for pseudo instruction "${mnemonic}" not implemented.`);
+        }
+
+        return expandedInstructions.map(exp => {
+            const realInstrInfo = { ...this.opcodes[exp.mnemonic], mnemonic: exp.mnemonic };
+            return this._encodeInstruction(realInstrInfo, exp.operands, exp.address);
+        });
+    },
+
+    // Ghi chuỗi nhị phân vào bộ nhớ (little-endian)
+    _writeBinaryToMemory(address, binaryString) {
+        for (let i = 0; i < 4; i++) {
+            this.memory[address + i] = parseInt(binaryString.substring(32 - (i + 1) * 8, 32 - i * 8), 2);
+        }
+    },
+
+    // --- Các hàm xử lý chỉ thị (Directive Handlers) ---
+    _handleTextDirective(operands) {
+        this.inDataSegment = false;
+        this.currentSection = "text";
+        if (operands.length === 1) this.currentAddress = this._parseNumericArg(operands[0], '.text address');
+    },
+    _handleDataDirective(operands) {
+        this.inDataSegment = true;
+        this.currentSection = "data";
+        this.currentAddress = (operands.length === 1) ? this._parseNumericArg(operands[0], '.data address') : this.dataBaseAddress;
+    },
+    _ensureDataSection(directiveName) {
+        if (this.currentSection !== "data") this._handleDataDirective([]);
+    },
+    _alignAddress(alignmentBytes, context) {
+        const remainder = this.currentAddress % alignmentBytes;
+        if (remainder !== 0) this.currentAddress += alignmentBytes - remainder;
+    },
+    _handleAlignDirective(operands) {
+        if (!this.currentSection) throw new Error(".align must be within a section");
+        const exponent = this._parseNumericArg(operands[0], '.align exponent');
+        this._alignAddress(1 << exponent, ".align");
+    },
+    _handleWordDirective(operands) {
+        this._ensureDataSection(".word");
+        this._alignAddress(4, ".word");
+        operands.forEach(arg => this._storeValue(this._resolveSymbolOrValue(arg), 4));
+    },
+    _handleHalfDirective(operands) {
+        this._ensureDataSection(".half");
+        this._alignAddress(2, ".half");
+        operands.forEach(arg => this._storeValue(this._resolveSymbolOrValue(arg), 2));
+    },
+    _handleByteDirective(operands) {
+        this._ensureDataSection(".byte");
+        operands.forEach(arg => {
+            if (arg.startsWith("'") && arg.endsWith("'") && arg.length === 3) {
+                this._storeValue(arg.charCodeAt(1), 1);
+            } else {
+                this._storeValue(this._resolveSymbolOrValue(arg), 1);
             }
         });
-    } else { console.error("Data segment address search elements not found."); }
+    },
+    _handleStringDirective(operands, nullTerminated) {
+        this._ensureDataSection(nullTerminated ? ".asciiz" : ".ascii");
+        const str = this._parseStringLiteral(operands.join(","), nullTerminated ? ".asciiz" : ".ascii");
+        for (let i = 0; i < str.length; i++) this.memory[this.currentAddress++] = str.charCodeAt(i) & 0xFF;
+        if (nullTerminated) this.memory[this.currentAddress++] = 0;
+    },
+    _handleSpaceDirective(operands) {
+        this._ensureDataSection(".space");
+        const bytes = this._parseNumericArg(operands[0], '.space size');
+        for (let i = 0; i < bytes; i++) this.memory[this.currentAddress++] = 0;
+    },
+    _handleFloatDirective(operands) {
+        this._ensureDataSection(".float");
+        this._alignAddress(4, ".float");
+        const buffer = new ArrayBuffer(4);
+        const view = new DataView(buffer);
+        operands.forEach(arg => {
+            const floatValue = parseFloat(arg);
+            if (isNaN(floatValue)) throw new Error(`Invalid floating-point value: "${arg}"`);
+            view.setFloat32(0, floatValue, true); // true for little-endian
+            for (let i = 0; i < 4; i++) this.memory[this.currentAddress++] = view.getUint8(i);
+        });
+    },
+    _handleGlobalDirective(operands) {
+        const label = operands[0];
+        if (!this.labels[label]) this.labels[label] = { address: undefined };
+        this.labels[label].isGlobal = true;
+    },
+    _handleExternDirective(operands) {
+        operands.forEach(label => {
+            if (!this.labels[label]) this.labels[label] = { address: undefined };
+            this.labels[label].isExternal = true;
+        });
+    },
+    _handleEquDirective(operands) {
+        const label = operands[0];
+        if (this.equValues[label] !== undefined) throw new Error(`Symbol "${label}" already defined`);
+        this.equValues[label] = this._resolveSymbolOrValue(operands[1]);
+    },
+    _handleOrgDirective(operands) {
+        this.currentAddress = this._parseNumericArg(operands[0], '.org address');
+    },
 
-    // Khởi tạo simulator và cập nhật UI lần đầu
-    if (typeof simulator !== 'undefined') {
-        simulator.reset(); // Reset trạng thái simulator
-        if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`;
-        updateUIGlobally(); // Cập nhật toàn bộ UI (thanh ghi về 0, data segment trống)
-    } else {
-        console.error("Simulator module not loaded!");
-        if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Error: Simulator not loaded.</td></tr>';
-    }
-
-    // Gắn sự kiện cho các nút điều khiển chính
-    assembleButton?.addEventListener('click', handleAssemble);
-    runButton?.addEventListener('click', handleRun);
-    stepButton?.addEventListener('click', handleStep);
-    resetButton?.addEventListener('click', handleReset);
-
-    console.log("Event listeners attached. UI is ready.");
-});
+    // --- Các hàm phụ trợ cho chỉ thị ---
+    _parseNumericArg(arg, context) {
+        try { return this._resolveSymbolOrValue(arg); }
+        catch (e) { throw new Error(`Invalid numeric/symbolic value for ${context}: "${arg}"`); }
+    },
+    _resolveSymbolOrValue(symbolOrValue) {
+        const trimmed = symbolOrValue.trim();
+        if (/^'.*'$/.test(trimmed) && trimmed.length === 3) return trimmed.charCodeAt(1);
+        if (/^-?0x[0-9a-f]+$/i.test(trimmed)) return parseInt(trimmed, 16);
+        if (/^-?\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+        if (this.equValues[trimmed] !== undefined) return this.equValues[trimmed];
+        if (this.labels[trimmed]?.address !== undefined) return this.labels[trimmed].address;
+        throw new Error(`Undefined symbol or invalid value: "${trimmed}"`);
+    },
+    _storeValue(value, bytes) {
+        for (let i = 0; i < bytes; i++) {
+            this.memory[this.currentAddress + i] = (value >> (i * 8)) & 0xFF;
+        }
+        this.currentAddress += bytes;
+    },
+    _parseStringLiteral(arg, directiveName) {
+        const trimmedArg = arg.trim();
+        if (!trimmedArg.startsWith('"') || !trimmedArg.endsWith('"')) {
+            throw new Error(`Invalid string literal for ${directiveName}. Must be in double quotes.`);
+        }
+        // Xử lý các escape sequence
+        return trimmedArg.slice(1, -1)
+            .replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+            .replace(/\\"/g, '"').replace(/\\'/g, "'")
+            .replace(/\\\\/g, '\\').replace(/\\0/g, '\0');
+    },
+};
