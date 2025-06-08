@@ -1,18 +1,30 @@
+/* style.css */
+
 body {
     font-family: sans-serif, monospace;
+    /* Ưu tiên font sans-serif dễ đọc, dự phòng monospace */
     margin: 20px;
+    /* Khoảng cách lề xung quanh trang */
     background-color: #f8f9fa;
+    /* Màu nền xám nhạt cho toàn trang */
     color: #333;
+    /* Màu chữ mặc định (xám đậm) */
     line-height: 1.5;
+    /* Chiều cao dòng mặc định dễ đọc hơn */
 }
 
 h1,
 h2 {
     text-align: center;
+    /* Căn giữa tiêu đề */
     color: #444;
+    /* Màu chữ tiêu đề đậm hơn chút */
     margin-top: 20px;
+    /* Khoảng cách phía trên tiêu đề */
     margin-bottom: 25px;
+    /* Khoảng cách phía dưới tiêu đề */
     font-weight: 600;
+    /* Tăng độ đậm cho tiêu đề */
 }
 
 /* ================================== */
@@ -21,26 +33,36 @@ h2 {
 
 .container {
     display: flex;
+    /* Sử dụng Flexbox để tạo layout 2 cột */
     gap: 30px;
+    /* Khoảng cách giữa cột trái và cột phải */
     max-width: 1400px;
+    /* Tăng chiều rộng tối đa của container */
     margin: 0 auto 30px auto;
+    /* Căn giữa container và thêm khoảng cách dưới */
 }
 
 .column {
     background-color: #fff;
+    /* Nền trắng cho các cột */
     padding: 20px;
+    /* Khoảng đệm bên trong cột */
     border-radius: 8px;
+    /* Bo góc nhẹ */
     box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+    /* Đổ bóng nhẹ */
 }
 
 .left-column {
-    flex: 3;
+    flex: 3; /* Cột trái chiếm 3 phần */
     display: flex;
     flex-direction: column;
 }
 
 .right-column {
-    flex: 1;
+    flex: 1; /* Cột phải chiếm 1 phần */
+    display: flex; 
+    flex-direction: column; 
 }
 
 /* ================================== */
@@ -48,11 +70,11 @@ h2 {
 /* ================================== */
 
 textarea#instructionInput {
-    width: calc(100% - 22px); /* Chiều rộng 100% trừ padding và border */   
-    height: 350px; /* Giảm chiều cao của textarea */
-    /* min-height: 150px; /* Có thể bỏ min-height nếu đã đặt height cố định */
-    /* flex-grow: 0; /* Ngăn textarea tự động giãn ra nếu không cần */
-    margin-bottom: 15px; /* Giảm khoảng cách dưới một chút */
+    width: calc(100% - 22px); /* Chiều rộng 100% trừ padding và border */
+    height: 350px; /* Chiều cao textarea theo yêu cầu của bạn */
+    /* min-height: 150px; */
+    /* flex-grow: 0; */
+    margin-bottom: 15px;
     font-family: monospace;
     border: 1px solid #ced4da;
     border-radius: 4px;
@@ -64,13 +86,13 @@ textarea#instructionInput {
 
 /* --- Khu vực chứa các nút điều khiển chính --- */
 .controls {
-    display: flex; /* Sắp xếp các nút trên một hàng */
-    flex-direction: row; /* Đảm bảo các nút nằm ngang */
-    justify-content: space-around; /* Căn đều các nút hoặc dùng center/flex-start */
-    align-items: center; /* Căn giữa các nút theo chiều dọc nếu chiều cao khác nhau */
-    flex-wrap: wrap; /* Cho phép xuống dòng nếu không đủ chỗ */
-    gap: 10px; /* Khoảng cách giữa các nút */
-    margin-bottom: 20px; /* Khoảng cách với phần tử Binary Output */
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
 /* Style chung cho các nút điều khiển chính */
@@ -79,14 +101,14 @@ textarea#instructionInput {
 #runButton,
 #stepButton,
 #resetButton {
-    min-width: 90px; /* Có thể điều chỉnh độ rộng tối thiểu */
+    min-width: 90px;
     padding: 10px 15px;
     cursor: pointer;
     background-color: #007bff;
     color: white;
     border: none;
     border-radius: 5px;
-    font-size: 0.95em; /* Có thể giảm nhẹ cỡ chữ nếu cần */
+    font-size: 0.95em;
     font-weight: bold;
     text-align: center;
     transition: background-color 0.2s;
@@ -113,8 +135,8 @@ pre#binaryOutput {
     border-radius: 4px;
     white-space: pre-wrap;
     word-wrap: break-word;
-    min-height: 80px; /* Giảm chiều cao tối thiểu nếu cần */
-    max-height: 250px; 
+    min-height: 80px;
+    max-height: 250px;
     overflow-y: auto;
     font-family: monospace;
     font-size: 0.95em;
@@ -125,38 +147,84 @@ pre#binaryOutput {
 /* == BẢNG THANH GHI (CỘT PHẢI) == */
 /* ================================== */
 
-#registerTable {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9em;
+/* --- Khu vực nút chuyển đổi bảng thanh ghi --- */
+.register-view-toggle {
+    margin-bottom: 15px;
+    text-align: center;
 }
 
-#registerTable th,
-#registerTable td {
+#toggleRegisterViewButton {
+    padding: 8px 15px;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+#toggleRegisterViewButton:hover {
+    background-color: #5a6268;
+}
+
+/* --- Style chung cho các bảng hiển thị thanh ghi --- */
+.register-display-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em; /* Font chung cho nội dung bảng */
+    margin-top: 0;
+    display: none; /* ẨN TẤT CẢ CÁC BẢNG THANH GHI THEO MẶC ĐỊNH */
+}
+
+.register-display-table.active-table {
+    display: table !important; /* CHỈ HIỂN THỊ BẢNG CÓ CLASS 'active-table' */
+}
+
+.register-display-table th,
+.register-display-table td {
     border: 1px solid #dee2e6;
-    padding: 8px 10px;
+    padding: 7px 10px;
     text-align: left;
 }
 
-/* Cột Hex */
-#registerTable td:nth-child(2) { 
-    text-align: right;
-    font-family: monospace;
-}
-
-#registerTable th {
+.register-display-table th {
     background-color: #f1f3f5;
     font-weight: 600;
-    position: sticky;
-    top: 0;
+    position: sticky; /* Giữ header cố định khi cuộn trong .right-column */
+    top: 0; 
     z-index: 1;
 }
 
-#registerTable tr.highlight td {
+/* --- Bảng thanh ghi số nguyên (Integer Registers) --- */
+/* Cột "Value" (Hex - là cột thứ 2 của bảng #registerTable) */
+#registerTable td:nth-child(2) {
+    text-align: right;
+    font-family: monospace;
+    font-size: 1em; /* Font to bằng font body */
+}
+
+/* --- Bảng thanh ghi điểm động (Floating-Point Registers) --- */
+/* #fpRegisterTable sẽ được ẩn/hiện bằng class .active-table */
+
+/* Cột "Float Value" (cột thứ 2 của bảng FP) */
+#fpRegisterTable td:nth-child(2) {
+    text-align: right;      
+    font-family: monospace; 
+}
+
+/* Cột "Hex (Bits)" (cột thứ 3 của bảng FP) */
+#fpRegisterTable td:nth-child(3) {
+    text-align: right;
+    font-family: monospace;
+    font-size: 1em; /* Font to bằng font body */
+}
+
+/* --- Highlight cho thanh ghi thay đổi (áp dụng cho cả 2 bảng) --- */
+.register-display-table tr.highlight td {
     background-color: #fff3cd !important;
     transition: background-color 0.5s ease-out;
 }
-
 
 /* ================================== */
 /* == BẢNG DATA SEGMENT (Ở DƯỚI) == */
