@@ -1,194 +1,108 @@
 // simulator.js
 // Mô phỏng việc thực thi mã máy RISC-V, bao gồm RV32I, RV32M và các lệnh RV32F cơ bản.
 
-export const simulator = {
-    // --- Trạng thái của Simulator ---
-    registers: new Int32Array(32),      // Dàn thanh ghi số nguyên 32-bit (x0-x31)
-    fregisters: new Float32Array(32),   // Dàn thanh ghi điểm động 32-bit (f0-f31) cho RV32F
-    memory: {},                         // Bộ nhớ chính, truy cập theo địa chỉ byte
-    pc: 0,                              // Thanh ghi Program Counter, chỉ địa chỉ lệnh tiếp theo
-    isRunning: false,                   // Cờ cho biết simulator có đang trong chế độ chạy tự động (Run) không
-    instructionCount: 0,                // Bộ đếm số lệnh đã thực thi
-    maxSteps: 1000000,                  // Giới hạn số lệnh thực thi tối đa trong một lần Run để tránh vòng lặp vô tận
+// --- TileLink-UL Bus ---
+class TileLinkBus {
+    constructor() {
+        this.request = null;
+        this.response = null;
+    }
+    tick(cpu, mem) {
+        // Nếu có request từ CPU, chuyển sang MEM
+        if (this.request && !this.response) {
+            mem.receiveRequest(this.request);
+            this.request = null;
+        }
+        // Nếu có response từ MEM, chuyển về CPU
+        if (this.response) {
+            cpu.receiveResponse(this.response);
+            this.response = null;
+        }
+    }
+    sendRequest(req) {
+        this.request = req;
+    }
+    sendResponse(resp) {
+        this.response = resp;
+    }
+}
 
-    // --- Các hàm quản lý trạng thái Simulator ---
-
-    // Đặt lại giá trị tất cả các thanh ghi (integer và FP) và PC về 0
-    resetRegisters() {
-        this.registers.fill(0);         // Đặt tất cả thanh ghi số nguyên về 0
-        this.fregisters.fill(0.0);      // Đặt tất cả thanh ghi điểm động về 0.0
-        this.pc = 0;                    // Đặt Program Counter về 0
-        // console.log("Simulator integer and FP registers reset.");
-    },
-
-    // Xóa toàn bộ nội dung bộ nhớ
-    resetMemory() {
-        this.memory = {}; // Tạo một đối tượng bộ nhớ mới (rỗng)
-        // console.log("Simulator memory reset.");
-    },
-
-    // Đặt lại toàn bộ trạng thái của simulator về giá trị ban đầu
+// --- TileLink-UL Memory ---
+class TileLinkULMemory {
+    constructor() {
+        this.mem = {};
+        this.pendingRequest = null;
+    }
+    receiveRequest(req) {
+        this.pendingRequest = req;
+    }
+    tick(bus) {
+        if (this.pendingRequest) {
+            let data = null;
+            if (this.pendingRequest.type === 'read') {
+                data =
+                    ((this.mem[this.pendingRequest.address + 3] ?? 0) << 24) |
+                    ((this.mem[this.pendingRequest.address + 2] ?? 0) << 16) |
+                    ((this.mem[this.pendingRequest.address + 1] ?? 0) << 8) |
+                    (this.mem[this.pendingRequest.address] ?? 0);
+            } else if (this.pendingRequest.type === 'write') {
+                this.mem[this.pendingRequest.address] = this.pendingRequest.value & 0xFF;
+                this.mem[this.pendingRequest.address + 1] = (this.pendingRequest.value >> 8) & 0xFF;
+                this.mem[this.pendingRequest.address + 2] = (this.pendingRequest.value >> 16) & 0xFF;
+                this.mem[this.pendingRequest.address + 3] = (this.pendingRequest.value >> 24) & 0xFF;
+            } else if (this.pendingRequest.type === 'readByte') {
+                data = this.mem[this.pendingRequest.address] ?? 0;
+            } else if (this.pendingRequest.type === 'writeByte') {
+                this.mem[this.pendingRequest.address] = this.pendingRequest.value & 0xFF;
+            }
+            bus.sendResponse({ ...this.pendingRequest, data });
+            this.pendingRequest = null;
+        }
+    }
+    loadMemoryMap(memoryMap) {
+        this.mem = { ...memoryMap };
+    }
     reset() {
-        this.resetRegisters(); // Gọi hàm reset thanh ghi
-        this.resetMemory();    // Gọi hàm reset bộ nhớ
-        this.isRunning = false; // Dừng trạng thái chạy tự động
-        this.instructionCount = 0; // Đặt lại bộ đếm lệnh
-        // console.log("Simulator state reset completely.");
-    },
+        this.mem = {};
+        this.pendingRequest = null;
+    }
+}
 
-    /**
-     * Nạp chương trình (bao gồm dữ liệu và mã lệnh) vào bộ nhớ của simulator.
-     * @param {object} programData - Đối tượng chứa { memory, startAddress }.
-     * `memory` là một object map địa chỉ sang giá trị byte từ assembler.
-     * `startAddress` là địa chỉ bắt đầu thực thi.
-     */
-    loadProgram(programData) {
-        this.reset(); // Reset hoàn toàn simulator trước khi nạp chương trình mới
-
-        // Nạp toàn bộ bản đồ bộ nhớ (bao gồm cả data và instructions) từ assembler
+// --- TileLink-UL CPU ---
+class TileLinkCPU {
+    constructor() {
+        this.registers = new Int32Array(32);
+        this.fregisters = new Float32Array(32);
+        this.pc = 0;
+        this.isRunning = false;
+        this.instructionCount = 0;
+        this.maxSteps = 1000000;
+        this.pendingResponse = null;
+        this.waitingRequest = null;
+        this.resolve = null;
+    }
+    resetRegisters() {
+        this.registers.fill(0);
+        this.fregisters.fill(0.0);
+        //this.pc = 0;
+    }
+    reset() {
+        this.resetRegisters();
+        this.isRunning = false;
+        this.instructionCount = 0;
+        this.pendingResponse = null;
+        this.waitingRequest = null;
+        this.resolve = null;
+    }
+    loadProgram(programData, memory) {
+        this.reset();
         if (programData.memory) {
-            // console.log("Loading memory map from assembler...");
-            // Sao chép trực tiếp, vì assembler đã chuẩn bị memory map đúng dạng byte
-            this.memory = { ...programData.memory }; // Sử dụng spread syntax để tạo bản sao nông
-            // console.log("Memory map loaded.");
-        } else {
-            console.warn("No memory map provided by assembler to load.");
+            memory.loadMemoryMap(programData.memory);
         }
-
-        // Đặt Program Counter về địa chỉ bắt đầu được cung cấp bởi assembler, hoặc 0 nếu không có
         this.pc = programData.startAddress || 0;
-        // console.log(`Simulator PC set to start address: 0x${this.pc.toString(16).padStart(8, '0')}`);
-        // console.log("Simulator ready to run program.");
-    },
-
-    // --- Các hàm điều khiển thực thi ---
-
-    // Bắt đầu chạy chương trình tự động cho đến khi dừng hoặc gặp giới hạn
-    run() {
-        this.isRunning = true; // Đặt cờ đang chạy
-        this.instructionCount = 0; // Reset bộ đếm lệnh cho lần chạy này
-        // console.log(`Starting simulation run from PC: 0x${this.pc.toString(16).padStart(8, '0')}`);
-
-        // Vòng lặp chạy chính, sử dụng setTimeout để không chặn giao diện người dùng
-        const runLoop = () => {
-            // Dừng nếu cờ isRunning bị tắt
-            if (!this.isRunning) {
-                // console.log("Simulation halted by stop() or error or syscall exit.");
-                if (typeof window !== 'undefined' && window.updateUIGlobally) window.updateUIGlobally();
-                return;
-            }
-
-            // Dừng nếu vượt quá số bước tối đa
-            if (this.instructionCount >= this.maxSteps) {
-                this.isRunning = false;
-                const message = `Simulation stopped: Maximum instruction steps (${this.maxSteps}) reached.`;
-                console.warn(message);
-                alert(message); // Thông báo cho người dùng
-                if (typeof window !== 'undefined' && window.updateUIGlobally) window.updateUIGlobally();
-                return;
-            }
-
-            try {
-                this.step(); // Thực thi một lệnh
-
-                // Nếu vẫn đang chạy, lập lịch cho bước tiếp theo
-                if (this.isRunning) {
-                    setTimeout(runLoop, 0); // Độ trễ 0ms để trình duyệt xử lý các tác vụ khác
-                } else {
-                    // console.log(`Simulation run finished after ${this.instructionCount} instructions. Final PC: 0x${this.pc.toString(16).padStart(8, '0')}`);
-                    if (typeof window !== 'undefined' && window.updateUIGlobally) window.updateUIGlobally();
-                }
-
-            } catch (error) { // Bắt lỗi runtime trong quá trình thực thi
-                this.isRunning = false;
-                console.error("Error during simulation run:", error.message, error.stack);
-                alert(`Runtime Error: ${error.message}`);
-                if (typeof window !== 'undefined' && window.updateUIGlobally) window.updateUIGlobally();
-            }
-        };
-        setTimeout(runLoop, 0); // Bắt đầu vòng lặp chạy
-    },
-
-    // Yêu cầu dừng quá trình chạy tự động (Run)
-    stop() {
-        this.isRunning = false; // Tắt cờ đang chạy
-        // console.log("Simulation run stop requested by user or event.");
-    },
-
-    // Thực thi một chu trình lệnh (Fetch-Decode-Execute)
-    step() {
-        if (this.pc === null || this.pc === undefined) {
-            throw new Error("Cannot execute step: Program Counter (PC) is not set or is invalid.");
-        }
-        const currentPcForStep = this.pc; // Lưu PC hiện tại trước khi nó có thể thay đổi bởi lệnh jump/branch
-
-        // 1. FETCH: Lấy từ lệnh 32-bit từ bộ nhớ tại địa chỉ PC
-        const instructionWord = this.fetch(currentPcForStep);
-        if (instructionWord === undefined) { // Kiểm tra fetch thất bại (ví dụ: truy cập ngoài vùng nhớ)
-            throw new Error(`Failed to fetch instruction at address 0x${currentPcForStep.toString(16).padStart(8, '0')}. Halting.`);
-        }
-
-        // 2. DECODE: Giải mã từ lệnh thành các thành phần có ý nghĩa
-        const decoded = this.decode(instructionWord);
-        if (decoded.opName === 'UNKNOWN') { // Nếu không giải mã được lệnh
-            throw new Error(`Could not decode instruction word: 0x${instructionWord.toString(16).padStart(8, '0')} at PC 0x${currentPcForStep.toString(16).padStart(8, '0')}`);
-        }
-
-        // 3. EXECUTE: Thực thi lệnh đã giải mã
-        const executionResult = this.execute(decoded); // executionResult có thể chứa nextPc cho jump/branch
-
-        // 4. Cập nhật Program Counter (PC)
-        if (executionResult && executionResult.nextPc !== undefined) {
-            this.pc = executionResult.nextPc; // Nếu lệnh là jump/branch và được thực hiện, PC được cập nhật theo kết quả lệnh
-        } else {
-            this.pc = currentPcForStep + 4; // Mặc định, PC trỏ tới lệnh kế tiếp (mỗi lệnh 4 byte)
-        }
-
-        // 5. Write Back (đã được thực hiện bên trong execute nếu lệnh ghi vào thanh ghi)
-        this.registers[0] = 0; // Đảm bảo thanh ghi x0 (zero) luôn là 0 sau mỗi lệnh
-        this.instructionCount++;    // Tăng bộ đếm lệnh đã thực thi
-
-        // 6. Cập nhật Giao diện người dùng (nếu có)
-        if (typeof window !== 'undefined' && window.updateUIGlobally) {
-            window.updateUIGlobally(); // Gọi hàm cập nhật UI toàn cục được định nghĩa trong javascript.js
-        }
-    },
-
-    // --- Các thành phần của lõi CPU mô phỏng ---
-
-    // FETCH: Đọc một từ lệnh 32-bit từ bộ nhớ tại địa chỉ cho trước
-    fetch(address) {
-        const addrInt = parseInt(address); // Chuyển địa chỉ sang số nguyên
-        if (isNaN(addrInt)) { // Kiểm tra nếu địa chỉ không hợp lệ
-            console.error(`Fetch Error: Invalid address format "${address}"`);
-            return undefined;
-        }
-        // RISC-V yêu cầu địa chỉ lệnh phải căn chỉnh.
-        // Đối với RV32I, lệnh dài 4 byte, nên địa chỉ phải chia hết cho 4.
-        // Việc kiểm tra căn chỉnh có thể được thực hiện ở đây hoặc bỏ qua cho simulator đơn giản.
-        // if (addrInt % 4 !== 0) {
-        //     throw new Error(`Instruction access fault: Address 0x${addrInt.toString(16)} is not 4-byte aligned.`);
-        // }
-
-        // Đọc 4 byte từ bộ nhớ (theo thứ tự little-endian)
-        const byte0 = this.memory[addrInt];        // Byte ở địa chỉ thấp nhất (LSB)
-        const byte1 = this.memory[addrInt + 1];
-        const byte2 = this.memory[addrInt + 2];
-        const byte3 = this.memory[addrInt + 3];    // Byte ở địa chỉ cao nhất (MSB)
-
-        // Kiểm tra xem tất cả các byte có tồn tại trong bộ nhớ không
-        if (byte0 === undefined || byte1 === undefined || byte2 === undefined || byte3 === undefined) {
-            console.error(`Fetch Error: Failed to fetch 4 bytes at address 0x${addrInt.toString(16)} (Memory out of bounds or not loaded).`);
-            // console.error(`Bytes found: [${byte0}, ${byte1}, ${byte2}, ${byte3}]`);
-            return undefined; // Trả về undefined nếu không đủ byte
-        }
-
-        // Kết hợp 4 byte thành một số nguyên 32-bit (little-endian: byte3 là MSB, byte0 là LSB)
-        const instruction = ((byte3 | 0) << 24) | ((byte2 | 0) << 16) | ((byte1 | 0) << 8) | (byte0 | 0);
-        return instruction; // Trả về từ lệnh 32-bit
-    },
-
-    // DECODE: Giải mã từ lệnh 32-bit thành các trường và tên lệnh
+    }
+    
+     // DECODE: Giải mã từ lệnh 32-bit thành các trường và tên lệnh
     decode(instructionWord) {
         // Trích xuất các trường bit cơ bản từ từ lệnh
         const opcode = instructionWord & 0x7F;          // 7 bit opcode
@@ -401,10 +315,14 @@ export const simulator = {
         }
         // Trả về đối tượng chứa các thành phần đã giải mã
         return { opName, type, opcode: opcodeBin, rd, rs1, rs2, funct3: funct3Bin, funct7: funct7Bin, imm, rm };
-    },
+    }
 
     // EXECUTE: Thực thi lệnh đã được giải mã
-    execute(decoded) {
+    execute(decoded, bus) {
+            // Đảm bảo this.memory luôn trỏ đến simulator.mem.mem
+        if (typeof simulator !== "undefined" && simulator.mem && simulator.mem.mem) {
+            this.memory = simulator.mem.mem;
+        }
         // Trích xuất các thành phần từ đối tượng decoded
         const { opName, type, rd, rs1, rs2, funct3, funct7, imm, rm } = decoded;
 
@@ -489,12 +407,33 @@ export const simulator = {
                 memoryValue = (lh_b1 << 8) | lh_b0; // Little-endian
                 result_int = (memoryValue & 0x8000) ? (memoryValue | 0xFFFF0000) : (memoryValue & 0xFFFF); // Sign-extend
                 break;
+            // case 'LW':
+            //     memoryAddress = (val1_int + imm) | 0;
+            //     const lw_b0 = this.memory[memoryAddress], lw_b1 = this.memory[memoryAddress + 1];
+            //     const lw_b2 = this.memory[memoryAddress + 2], lw_b3 = this.memory[memoryAddress + 3];
+            //     if (lw_b0 === undefined || lw_b1 === undefined || lw_b2 === undefined || lw_b3 === undefined) throw new Error(`Memory read error at 0x${memoryAddress.toString(16)}`);
+            //     result_int = (lw_b3 << 24) | (lw_b2 << 16) | (lw_b1 << 8) | lw_b0; // Little-endian
+            //     break;
             case 'LW':
                 memoryAddress = (val1_int + imm) | 0;
-                const lw_b0 = this.memory[memoryAddress], lw_b1 = this.memory[memoryAddress + 1];
-                const lw_b2 = this.memory[memoryAddress + 2], lw_b3 = this.memory[memoryAddress + 3];
-                if (lw_b0 === undefined || lw_b1 === undefined || lw_b2 === undefined || lw_b3 === undefined) throw new Error(`Memory read error at 0x${memoryAddress.toString(16)}`);
-                result_int = (lw_b3 << 24) | (lw_b2 << 16) | (lw_b1 << 8) | lw_b0; // Little-endian
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    // Gửi request đọc word qua bus
+                    this.readWordAsync(memoryAddress, bus);
+                    // Đợi response, không tăng PC, không thực hiện gì thêm
+                    return { nextPc: this.pc };
+                }  
+                if (this.pendingResponse) {
+                    result_int = this.pendingResponse.data;
+                    this.waitingRequest = null;
+                    this.pendingResponse = null;
+                    // GHI GIÁ TRỊ VÀO THANH GHI ĐÍCH Ở ĐÂY
+                    if (rd !== 0) this.registers[rd] = result_int | 0;
+                    console.log(`[CPU] LW response: PC=0x${this.pc.toString(16)}, rd=x${rd}, value=${result_int|0}`);
+                    return {}; // Đã xử lý xong, tick sẽ tự tăng PC
+                } else {
+                    // Chưa có response, tiếp tục đợi
+                    return { nextPc: this.pc };
+                }
                 break;
             case 'LBU':
                 memoryAddress = (val1_int + imm) | 0; memoryValue = this.memory[memoryAddress];
@@ -515,10 +454,29 @@ export const simulator = {
                 memoryAddress = (val1_int + imm) | 0;
                 this.memory[memoryAddress] = val2_int & 0xFF; this.memory[memoryAddress + 1] = (val2_int >> 8) & 0xFF;
                 break;
+            // case 'SW':
+            //     memoryAddress = (val1_int + imm) | 0;
+            //     this.memory[memoryAddress] = val2_int & 0xFF; this.memory[memoryAddress + 1] = (val2_int >> 8) & 0xFF;
+            //     this.memory[memoryAddress + 2] = (val2_int >> 16) & 0xFF; this.memory[memoryAddress + 3] = (val2_int >> 24) & 0xFF;
+            //     break;
             case 'SW':
                 memoryAddress = (val1_int + imm) | 0;
-                this.memory[memoryAddress] = val2_int & 0xFF; this.memory[memoryAddress + 1] = (val2_int >> 8) & 0xFF;
-                this.memory[memoryAddress + 2] = (val2_int >> 16) & 0xFF; this.memory[memoryAddress + 3] = (val2_int >> 24) & 0xFF;
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    // Gửi request ghi word qua bus
+                    this.writeWordAsync(memoryAddress, val2_int, bus);
+                    // Đợi response, không tăng PC, không thực hiện gì thêm
+                    return { nextPc: this.pc };
+                }
+                if (this.pendingResponse) {
+                   // Đã ghi xong
+                    this.waitingRequest = null;
+                    this.pendingResponse = null;
+                    console.log(`[CPU] SW response: PC=0x${this.pc.toString(16)}`);
+                    return {};
+                } else {
+                    // Chưa có response, tiếp tục đợi
+                    return { nextPc: this.pc };
+                }
                 break;
             case 'LUI': result_int = imm; break;
             case 'AUIPC': result_int = (pc + imm) | 0; break;
@@ -654,7 +612,7 @@ export const simulator = {
         }
         // console.log("--- End Execute ---");
         return { nextPc }; // Trả về đối tượng chứa nextPc (có thể là undefined nếu không phải jump/branch)
-    },
+    }
 
     // Xử lý các System Call (ECALL)
     handleSyscall() {
@@ -725,4 +683,103 @@ export const simulator = {
                 // this.registers[10] = -38; // Mã lỗi ENOSYS
         }
     }
+
+    tick(bus) {
+            // Nếu vẫn đang chờ response thì không thực thi lệnh mới
+        if (this.waitingRequest && !this.pendingResponse) {
+            return;
+        }
+        // Lưu lại PC cũ để so sánh
+        const oldPc = this.pc;
+
+        // Thực thi lệnh nếu không chờ bus
+
+        const mem = (typeof simulator !== "undefined" && simulator.mem && simulator.mem.mem)
+        ? simulator.mem.mem: this.memory;
+        const pc = this.pc;
+        const inst =
+            ((mem[pc + 3] ?? 0) << 24) |
+            ((mem[pc + 2] ?? 0) << 16) |
+            ((mem[pc + 1] ?? 0) << 8) |
+            (mem[pc] ?? 0);
+
+        // Giải mã và thực thi lệnh
+        const decoded = this.decode(inst);
+        const { nextPc } = this.execute(decoded, bus);
+
+        // Cập nhật PC
+        if (nextPc !== undefined) {
+            this.pc = nextPc;
+        } else {
+            this.pc += 4;
+        }
+        // GHI LOG mỗi lần tick thực sự tăng PC
+        if (this.pc !== oldPc) {
+        console.log(`[CPU] PC: 0x${oldPc.toString(16)} -> 0x${this.pc.toString(16)}, Executed: ${decoded.opName}`);
+        }
+    }
+
+    receiveResponse(resp) {
+    this.pendingResponse = resp;
+}
+
+    // Gửi request đọc word
+    readWordAsync(address, bus) {
+        this.waitingRequest = { type: 'read', address: address | 0 };
+        bus.sendRequest(this.waitingRequest);
+    }
+
+    // Gửi request đọc byte
+    readByteAsync(address, bus) {
+        this.waitingRequest = { type: 'readByte', address: address | 0 };
+        bus.sendRequest(this.waitingRequest);
+    }
+
+    // Gửi request ghi word
+    writeWordAsync(address, value, bus) {
+        this.waitingRequest = { type: 'write', address: address | 0, value };
+        bus.sendRequest(this.waitingRequest);
+    }
+
+    // Gửi request ghi byte
+    writeByteAsync(address, value, bus) {
+        this.waitingRequest = { type: 'writeByte', address: address | 0, value };
+        bus.sendRequest(this.waitingRequest);
+    }
+}
+
+// --- Simulator ---
+export const simulator = {
+    cpu: null,
+    bus: null,
+    mem: null,
+    tilelinkMem: null, // Để tương thích với code cũ
+    cycleCount: 0,
+
+    reset() {
+        this.cpu = new TileLinkCPU();
+        this.bus = new TileLinkBus();
+        this.mem = new TileLinkULMemory();
+        this.tilelinkMem = this.mem; // Cho phép code cũ truy cập simulator.tilelinkMem
+        this.cycleCount = 0;
+    },
+    loadProgram(programData) {
+        this.cpu.loadProgram(programData, this.mem);
+        this.cpu.isRunning = true;
+    },
+    tick() {
+        if (this.cpu.isRunning === false) {
+            console.log("Simulation halted.");
+            return;
+        }
+        this.cpu.tick(this.bus);
+        console.log(`[Cycle ${this.cycleCount + 1}] BUS request:`, this.bus.request, "BUS response:", this.bus.response);
+        this.bus.tick(this.cpu, this.mem);
+        console.log(`[Cycle ${this.cycleCount + 1}] MEM pendingRequest:`, this.mem.pendingRequest);
+        this.mem.tick(this.bus);
+        console.log(`[Cycle ${this.cycleCount + 1}] CPU waitingRequest:`, this.cpu.waitingRequest, "CPU pendingResponse:", this.cpu.pendingResponse);
+        this.cycleCount++;
+    }
 };
+
+simulator.reset();
