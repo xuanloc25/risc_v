@@ -25,6 +25,10 @@
 
             <h2>Binary Output:</h2>
             <pre id="binaryOutput"></pre>
+            <div class="debug-tools">
+                <label for="breakpointInput">Breakpoint PC:</label>
+                <input type="text" id="breakpointInput" placeholder="e.g., 0x10000004">
+            </div>
         </div>
 
         <div class="column right-column">
@@ -35,19 +39,23 @@
             <table id="registerTable" class="register-display-table active-table">
                 <thead>
                     <tr>
-                        <th>Name</th>  <th>Value</th> </tr>
+                        <th>Name</th>
+                        <th>Hex</th>
+                        <th>Dec</th>
+                    </tr>
                 </thead>
-                <tbody id="registerTableBody">
-                    </tbody>
+                <tbody id="registerTableBody"></tbody>
             </table>
 
             <table id="fpRegisterTable" class="register-display-table">
                 <thead>
                     <tr>
-                        <th>Register</th>    <th>Float Value</th> <th>Hex (Bits)</th>  </tr>
+                        <th>Register</th>
+                        <th>Float Value</th>
+                        <th>Hex (Bits)</th>
+                    </tr>
                 </thead>
-                <tbody id="fpRegisterTableBody">
-                    </tbody>
+                <tbody id="fpRegisterTableBody"></tbody>
             </table>
         </div>
     </div>
@@ -75,8 +83,7 @@
                         <th>Value (+1c)</th>
                     </tr>
                 </thead>
-                <tbody id="dataSegmentBody">
-                    </tbody>
+                <tbody id="dataSegmentBody"></tbody>
             </table>
         </div>
     </div>
@@ -85,4 +92,5 @@
     <script src="js/assembler.js" type="module"></script>
     <script src="js/simulator.js" type="module"></script>
 </body>
+
 </html>
