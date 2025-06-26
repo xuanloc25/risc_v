@@ -5,37 +5,32 @@ import { assembler } from './assembler.js';
 import { simulator } from './simulator.js';
 
 // --- Tham chiếu đến các phần tử DOM ---
-const instructionInput = document.getElementById('instructionInput');         // Ô nhập liệu mã assembly
-const binaryOutput = document.getElementById('binaryOutput');               // Khu vực hiển thị mã nhị phân
-const registerTable = document.getElementById('registerTable');             // Bảng thanh ghi số nguyên
-const registerTableBody = registerTable?.querySelector('tbody');            // Phần thân của bảng thanh ghi số nguyên
-const fpRegisterTable = document.getElementById('fpRegisterTable');         // Bảng thanh ghi điểm động
-const fpRegisterTableBody = fpRegisterTable?.querySelector('tbody');        // Phần thân của bảng thanh ghi điểm động
-const toggleRegisterViewButton = document.getElementById('toggleRegisterViewButton'); // Nút chuyển đổi giữa các bảng thanh ghi
+const instructionInput = document.getElementById('instructionInput');
+const binaryOutput = document.getElementById('binaryOutput');
+const registerTable = document.getElementById('registerTable');
+const registerTableBody = registerTable?.querySelector('tbody');
+const fpRegisterTable = document.getElementById('fpRegisterTable');
+const fpRegisterTableBody = fpRegisterTable?.querySelector('tbody');
+const toggleRegisterViewButton = document.getElementById('toggleRegisterViewButton');
 
-// Nút điều khiển chính
 const assembleButton = document.getElementById('assembleButton');
 const runButton = document.getElementById('runButton');
 const stepButton = document.getElementById('stepButton');
 const resetButton = document.getElementById('resetButton');
 
-// Phần tử DOM cho Data Segment View                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
 const dataSegmentAddressInput = document.getElementById('dataSegmentAddressInput');
 const goToDataSegmentAddressButton = document.getElementById('goToDataSegmentAddress');
 const toggleDataSegmentModeButton = document.getElementById('toggleDataSegmentMode');
 const dataSegmentBody = document.getElementById('dataSegmentBody');
 
-// --- Biến trạng thái cho các thành phần giao diện ---
-let dataSegmentStartAddress = 0x10010000; // Địa chỉ bắt đầu mặc định cho Data Segment View
-let dataSegmentDisplayMode = 'hex';        // Chế độ hiển thị cho Data Segment ('hex' hoặc 'ascii')
-const dataSegmentRows = 8;                 // Số hàng hiển thị trong Data Segment View
-const bytesPerRow = 32;                    // Số byte trên mỗi hàng của Data Segment View (8 words)
-const wordsPerRow = 8;                     // Số word (cột giá trị) trên mỗi hàng của Data Segment View
+let dataSegmentStartAddress = 0x10010000;
+let dataSegmentDisplayMode = 'hex';
+const dataSegmentRows = 8;
+const bytesPerRow = 32;
+const wordsPerRow = 8;
 
-let currentRegisterView = 'integer';       // Theo dõi bảng thanh ghi nào đang được hiển thị ('integer' hoặc 'fp')
+let currentRegisterView = 'integer';
 
-// --- Khởi tạo bảng thanh ghi ---
-// Tên ABI cho các thanh ghi số nguyên (x0-x31)
 const abiNames = [
     'zero', 'ra', 'sp', 'gp', 'tp', 't0', 't1', 't2',
     's0/fp', 's1', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5',
@@ -43,7 +38,6 @@ const abiNames = [
     's8', 's9', 's10', 's11', 't3', 't4', 't5', 't6'
 ];
 
-// Tên ABI cho các thanh ghi điểm động (f0-f31) - cần kiểm tra và hoàn thiện danh sách này
 const fpAbiNames = [
     'ft0', 'ft1', 'ft2', 'ft3', 'ft4', 'ft5', 'ft6', 'ft7', 
     'fs0', 'fs1', 'fa0', 'fa1', 'fa2', 'fa3', 'fa4', 'fa5',
@@ -51,44 +45,36 @@ const fpAbiNames = [
     'fs8', 'fs9', 'fs10', 'fs11', 'ft8', 'ft9', 'ft10', 'ft11'
 ];
 
-// Tạo cấu trúc ban đầu cho bảng thanh ghi số nguyên
 function initializeRegisterTable() {
-    if (!registerTableBody) {
-        console.error("DOM element for integer register table body not found!");
-        return;
-    }
-    registerTableBody.innerHTML = ''; // Xóa nội dung cũ nếu có
+    if (!registerTableBody) return;
+    registerTableBody.innerHTML = '';
 
-    // Tạo 32 hàng cho thanh ghi x0-x31
     for (let i = 0; i < 32; i++) {
         const row = registerTableBody.insertRow();
-        row.id = `reg-${i}`; // Đặt ID cho mỗi hàng để dễ cập nhật
-        row.insertCell().textContent = `x${i} (${abiNames[i]})`; // Cột "Name"
-        row.insertCell().textContent = '0x00000000';          // Cột "Value" (Hex)
+        row.id = `reg-${i}`;
+        row.insertCell().textContent = `x${i} (${abiNames[i]})`;
+        row.insertCell().textContent = '0x00000000';
+        row.insertCell().textContent = '0';
     }
-    // Tạo hàng cho Program Counter (PC)
     const pcRow = registerTableBody.insertRow();
     pcRow.id = 'reg-pc';
     pcRow.insertCell().textContent = 'PC';
     pcRow.insertCell().textContent = '0x00000000';
+    pcRow.insertCell().textContent = '0';
+    registerTable.querySelector('thead').innerHTML = '<tr><th>Name</th><th>Hex</th><th>Dec</th></tr>';
 }
 
-// Tạo cấu trúc ban đầu cho bảng thanh ghi điểm động
 function initializeFPRegisterTable() {
-    if (!fpRegisterTableBody) {
-        console.error("DOM element for floating-point register table body not found!");
-        return;
-    }
-    fpRegisterTableBody.innerHTML = ''; // Xóa nội dung cũ nếu có
-
-    // Tạo 32 hàng cho thanh ghi f0-f31
+    if (!fpRegisterTableBody) return;
+    fpRegisterTableBody.innerHTML = '';
     for (let i = 0; i < 32; i++) {
         const row = fpRegisterTableBody.insertRow();
-        row.id = `freg-${i}`; // Đặt ID cho mỗi hàng
-        row.insertCell().textContent = `f${i} (${fpAbiNames[i] || '?'})`; // Cột "Register"
-        row.insertCell().textContent = '0.0';                            // Cột "Float Value"
-        row.insertCell().textContent = '0x00000000';                    // Cột "Hex (Bits)"
+        row.id = `freg-${i}`;
+        row.insertCell().textContent = `f${i} (${fpAbiNames[i] || '?'})`;
+        row.insertCell().textContent = '0.0';
+        row.insertCell().textContent = '0x00000000';
     }
+    fpRegisterTable.querySelector('thead').innerHTML = '<tr><th>Register</th><th>Float Value</th><th>Hex (Bits)</th></tr>';
 }
 
 // Hiển thị nội dung của vùng nhớ Data Segment
@@ -117,7 +103,13 @@ function renderDataSegmentTable() {
             // Đọc 4 byte cho mỗi word (little-endian)
             for (let k = 0; k < 4; k++) {
                 const byteAddr = wordStartAddress + k;
-                const byte = simulator.memory[byteAddr] ?? null; // Lấy byte từ memory, nếu không có thì là null
+                //const byte = simulator.tilelinkMem.readByte[byteAddr] ?? null; // Lấy byte từ memory, nếu không có thì là null
+                let byte;
+                try {
+                    byte = simulator.tilelinkMem.mem[byteAddr] ?? null;
+                } catch {
+                    byte = null;    
+                }
                 bytes.push(byte);
                 if (byte !== null) {
                     allBytesNull = false;
@@ -147,86 +139,81 @@ function renderDataSegmentTable() {
         }
     }
 }
-
 // Cập nhật toàn bộ giao diện người dùng với trạng thái hiện tại của simulator
 function updateUIGlobally() {
-    const currentSimulator = simulator; // Tham chiếu đến đối tượng simulator
+    const currentSimulator = simulator;
 
-    // Cập nhật bảng thanh ghi số nguyên (x0-x31 và PC)
     if (registerTableBody) {
-        for (let i = 0; i < 32; i++) { // Cập nhật x0-x31
+        for (let i = 0; i < 32; i++) {
             const row = document.getElementById(`reg-${i}`);
-            if (row && row.cells.length >= 2) { // Đảm bảo hàng và ô tồn tại
-                const value = currentSimulator.registers[i]; // Lấy giá trị từ simulator
-                const cells = row.cells;
-                const oldValueHex = cells[1].textContent; // Giá trị Hex cũ trong ô
-                const newValueHex = `0x${(value >>> 0).toString(16).padStart(8, '0')}`; // Giá trị Hex mới
+            const value = currentSimulator.cpu.registers[i];
+            if (row && row.cells.length >= 3) {
+                const hex = `0x${(value >>> 0).toString(16).padStart(8, '0')}`;
+                const dec = value.toString();
+                const oldHex = row.cells[1].textContent;
 
-                // Highlight nếu giá trị thay đổi
-                if (newValueHex !== oldValueHex && document.body.contains(row)) {
+                if (hex !== oldHex && document.body.contains(row)) {
                     row.classList.add('highlight');
-                } else if (document.body.contains(row)) {
+                } else {
                     row.classList.remove('highlight');
                 }
-                cells[1].textContent = newValueHex; // Cập nhật ô "Value" (Hex)
+
+                row.cells[1].textContent = hex;
+                row.cells[2].textContent = dec;
             }
         }
-        const pcRowElement = document.getElementById('reg-pc'); // Cập nhật PC
-        if (pcRowElement && pcRowElement.cells.length >= 2) {
-            const pcValue = currentSimulator.pc;
-            const cells = pcRowElement.cells;
-            const oldPcHex = cells[1].textContent;
-            const newPcHex = `0x${(pcValue >>> 0).toString(16).padStart(8, '0')}`;
 
-            if (newPcHex !== oldPcHex && document.body.contains(pcRowElement)) {
-                pcRowElement.classList.add('highlight');
-            } else if (document.body.contains(pcRowElement)) {
-                pcRowElement.classList.remove('highlight');
+        const pcRow = document.getElementById('reg-pc');
+        if (pcRow && pcRow.cells.length >= 3) {
+            const pc = currentSimulator.cpu.pc;
+            const hex = `0x${(pc >>> 0).toString(16).padStart(8, '0')}`;
+            const dec = pc.toString();
+            const oldHex = pcRow.cells[1].textContent;
+
+            if (hex !== oldHex && document.body.contains(pcRow)) {
+                pcRow.classList.add('highlight');
+            } else {
+                pcRow.classList.remove('highlight');
             }
-            cells[1].textContent = newPcHex;
+
+            pcRow.cells[1].textContent = hex;
+            pcRow.cells[2].textContent = dec;
         }
     }
 
-    // Cập nhật bảng thanh ghi điểm động (f0-f31)
-    if (fpRegisterTableBody && currentSimulator.fregisters) {
+    if (fpRegisterTableBody && currentSimulator.cpu?.fregisters) {
         for (let i = 0; i < 32; i++) {
             const row = document.getElementById(`freg-${i}`);
-            if (row && row.cells.length >= 3) { // Bảng FP có 3 cột
-                const floatValue = currentSimulator.fregisters[i]; // Giá trị float từ simulator
-                const cells = row.cells;
+            const value = currentSimulator.cpu.fregisters[i];
+            const buffer = new ArrayBuffer(4);
+            const view = new DataView(buffer);
+            view.setFloat32(0, value, true);
+            const bits = view.getInt32(0, true);
+            const hex = `0x${(bits >>> 0).toString(16).padStart(8, '0')}`;
+            const floatStr = value.toPrecision(7);
 
-                // Chuyển đổi bit pattern của floatValue sang dạng hex
-                const buffer = new ArrayBuffer(4);        // Tạo buffer 4 byte
-                const view = new DataView(buffer);
-                view.setFloat32(0, floatValue, true);     // Ghi giá trị float vào buffer (little-endian)
-                const hexBits = `0x${(view.getInt32(0, true) >>> 0).toString(16).padStart(8, '0')}`; // Đọc lại bits dạng Int32, rồi chuyển sang hex không dấu
-
-                const oldFloatDisplay = cells[1].textContent; // Giá trị float hiển thị cũ
-                const newFloatDisplay = floatValue.toPrecision(7); // Định dạng giá trị float để hiển thị
-
-                // Highlight nếu giá trị hiển thị thay đổi
-                if (newFloatDisplay !== oldFloatDisplay && document.body.contains(row)) {
+            if (row && row.cells.length >= 3) {
+                const oldFloat = row.cells[1].textContent;
+                if (floatStr !== oldFloat && document.body.contains(row)) {
                     row.classList.add('highlight');
-                } else if (document.body.contains(row)) {
+                } else {
                     row.classList.remove('highlight');
                 }
 
-                cells[1].textContent = newFloatDisplay;  // Cập nhật ô "Float Value"
-                cells[2].textContent = hexBits;          // Cập nhật ô "Hex (Bits)"
+                row.cells[1].textContent = floatStr;
+                row.cells[2].textContent = hex;
             }
         }
     }
 
-    // Cập nhật hiển thị Data Segment
     renderDataSegmentTable();
 
-    // Xóa hiệu ứng highlight sau một khoảng thời gian ngắn
     setTimeout(() => {
-        registerTableBody?.querySelectorAll('tr.highlight').forEach(r => r.classList.remove('highlight'));
-        document.getElementById('reg-pc')?.classList.remove('highlight');
-        fpRegisterTableBody?.querySelectorAll('tr.highlight').forEach(r => r.classList.remove('highlight'));
+        document.querySelectorAll('tr.highlight').forEach(row => row.classList.remove('highlight'));
     }, 500);
 }
+
+
 // Đưa hàm updateUIGlobally ra phạm vi toàn cục để simulator có thể gọi khi cần (ví dụ sau khi chạy bất đồng bộ)
 window.updateUIGlobally = updateUIGlobally;
 
@@ -238,13 +225,14 @@ function handleAssemble() {
     if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Resetting simulator...</td></tr>';
 
     simulator.reset();      // Reset trạng thái simulator (bao gồm cả thanh ghi FP nếu có)
-    updateUIGlobally();     // Cập nhật UI để hiển thị trạng thái đã reset (các thanh ghi về 0)
+    //updateUIGlobally();     // Cập nhật UI để hiển thị trạng thái đã reset (các thanh ghi về 0)
 
     // Dùng setTimeout để UI có thời gian cập nhật trước khi thực hiện tác vụ nặng (assemble)
     setTimeout(() => {
         try {
             const assemblyCode = instructionInput.value; // Lấy mã assembly từ ô nhập liệu
             const programData = assembler.assemble(assemblyCode); // Gọi hàm assemble từ assembler.js
+            console.log(programData.startAddress);
 
             // Hiển thị mã nhị phân (và hex) đã biên dịch
             const binaryHexStrings = programData.instructions.map(instr => `${instr.hex}  (${instr.binary})`);
@@ -268,20 +256,18 @@ function handleAssemble() {
             if (programData.memory && Object.keys(programData.memory).length > 0) {
                 const dataAddresses = [];
                 const defaultDataBaseAddr = assembler.dataBaseAddress || 0x10010000;
+                
                 for (const addrStr in programData.memory) {
                     const addr = parseInt(addrStr);
-                    if (addr >= defaultDataBaseAddr) { dataAddresses.push(addr); }
-                }
-                if (dataAddresses.length > 0) {
-                     dataSegmentStartAddress = Math.min(...dataAddresses);
-                     dataStartAddrFound = true;
-                } else {
-                    const allAddresses = Object.keys(programData.memory).map(Number).filter(addr => !isNaN(addr));
-                    if(allAddresses.length > 0) {
-                        dataSegmentStartAddress = Math.min(...allAddresses);
-                        dataStartAddrFound = true;
+                    if (addr >= defaultDataBaseAddr) { 
+                        dataAddresses.push(addr); 
                     }
                 }
+                
+                if (dataAddresses.length > 0) {
+                    dataSegmentStartAddress = Math.min(...dataAddresses);
+                    dataStartAddrFound = true;
+                } 
             }
             if (!dataStartAddrFound) {
                 dataSegmentStartAddress = assembler.dataBaseAddress || 0x10010000;
@@ -294,12 +280,16 @@ function handleAssemble() {
             // Tùy chọn: Thực thi lệnh đầu tiên ngay sau khi assemble
             if (programData.instructions && programData.instructions.length > 0) {
                 try {
-                    simulator.step(); // simulator.step() sẽ tự gọi updateUIGlobally()
+                    simulator.tick();
+                    updateUIGlobally();
                 } catch (stepError) {
                     console.error("Error during initial step execution:", stepError);
                     binaryOutput.textContent += `\n\nError during initial step: ${stepError.message}`;
                     updateUIGlobally(); // Cập nhật UI nếu có lỗi ở bước đầu
                 }
+            }else {
+                // Nếu không có lệnh nào, chỉ cập nhật UI về 0
+                updateUIGlobally();
             }
 
         } catch (error) { // Bắt lỗi từ quá trình assemble hoặc load
@@ -312,6 +302,7 @@ function handleAssemble() {
             initializeFPRegisterTable(); 
             const pcRow = document.getElementById('reg-pc');
             if(pcRow && pcRow.cells.length > 1) pcRow.cells[1].textContent = '0x00000000'; // Đảm bảo ô giá trị PC tồn tại
+            updateUIGlobally(); // <-- Thêm dòng này để UI luôn đồng bộ sau khi bắt lỗi
         }
     }, 10); // Độ trễ nhỏ để UI kịp cập nhật
 }
@@ -319,21 +310,58 @@ function handleAssemble() {
 // Xử lý sự kiện khi nhấn nút "Run"
 function handleRun() {
     if (!simulator) return;
-    binaryOutput.textContent += "\n\n--- Running ---"; // Thêm thông báo vào output
-    try {
-        simulator.run(); // Bắt đầu chạy chương trình trong simulator
-    } catch (e) {
-        console.error("Error starting run:", e);
-        alert(`Error starting run: ${e.message}`);
-        updateUIGlobally(); // Cập nhật UI nếu có lỗi khi bắt đầu chạy
+    binaryOutput.textContent += "\n\n--- Running ---";
+
+    let running = true;
+
+    // 🧠 Đọc giá trị Breakpoint từ input
+    let breakpointPC = null;
+    const bpInput = document.getElementById('breakpointInput');
+    if (bpInput && bpInput.value.trim()) {
+        const val = bpInput.value.trim();
+        breakpointPC = val.startsWith('0x') ? parseInt(val, 16) : parseInt(val, 10);
+        if (isNaN(breakpointPC)) {
+            binaryOutput.textContent += `\n⚠ Invalid breakpoint address: "${val}"`;
+            breakpointPC = null;
+        }
     }
+
+    function runLoop() {
+        if (!running) return;
+
+        try {
+            // 🛑 Dừng nếu PC đang ở breakpoint (trước khi tick)
+            if (breakpointPC !== null && simulator.cpu.pc === breakpointPC) {
+                running = false;
+                binaryOutput.textContent += `\n🔴 Breakpoint hit at PC = 0x${breakpointPC.toString(16)}`;
+                updateUIGlobally();
+                return;
+            }
+
+            simulator.tick(); // chỉ chạy nếu không phải breakpoint
+            updateUIGlobally();
+
+            setTimeout(runLoop, 0); // tiếp tục loop
+
+        } catch (e) {
+            running = false;
+            console.error("Error during run:", e);
+            binaryOutput.textContent += `\n\nRun Error: ${e.message}`;
+            updateUIGlobally();
+        }
+    }
+
+    runLoop();
 }
+
+
 
 // Xử lý sự kiện khi nhấn nút "Step"
 function handleStep() {
     if (!simulator) return;
     try {
-        simulator.step(); // Thực thi một lệnh trong simulator
+        simulator.tick();
+        updateUIGlobally();
     } catch (e) {
         console.error("Error during step:", e);
         const currentBinaryOutput = binaryOutput.textContent.split('\n\nStep Error:')[0]; // Tránh lặp lại thông báo lỗi cũ
@@ -346,7 +374,6 @@ function handleStep() {
 function handleReset() {
     if (!simulator || !instructionInput || !binaryOutput || !dataSegmentBody) return;
 
-    simulator.stop();    // Dừng simulator nếu đang chạy
     simulator.reset();   // Reset trạng thái của simulator (thanh ghi, bộ nhớ, PC)
 
     // Xóa các ô input và output
