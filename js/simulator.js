@@ -616,73 +616,98 @@ class TileLinkCPU {
 
     // Xử lý các System Call (ECALL)
     handleSyscall() {
+        // ✅ Kiểm tra xem đang chạy trên trình duyệt hay Node.js
+        const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+
         const syscallId = this.registers[17]; // Thanh ghi a7 (x17) chứa mã syscall
         const arg0 = this.registers[10];      // Thanh ghi a0 (x10) chứa tham số thứ nhất
         const arg1 = this.registers[11];      // Thanh ghi a1 (x11) chứa tham số thứ hai
         const arg2 = this.registers[12];      // Thanh ghi a2 (x12) chứa tham số thứ ba
-        // console.log(`Syscall requested: ID = ${syscallId} (a7), Arg0 = ${arg0} (a0), Arg1 = ${arg1} (a1), Arg2 = ${arg2} (a2)`);
 
         switch (syscallId) {
             case 93: // exit (theo quy ước Linux RISC-V)
-                // console.log(`>>> Syscall exit(${arg0}) called. Halting simulation.`);
                 this.isRunning = false; // Dừng vòng lặp run của simulator
-                alert(`Program exited with code: ${arg0}`);
-                if (this.registers[10] !== undefined) this.registers[10] = arg0; // Chuẩn là a0 chứa exit code
+                if (isBrowser) {
+                    alert(`Program exited with code: ${arg0}`);
+                } else {
+                    // In ra console cho kịch bản kiểm thử
+                    console.log(`\n[Syscall] Program exited with code: ${arg0}`);
+                }
+                // Giữ lại giá trị trả về trong thanh ghi a0
+                if (this.registers[10] !== undefined) this.registers[10] = arg0;
                 break;
+
             case 1: // print_int (theo quy ước RARS/SPIM)
-                // console.log(`>>> Syscall print_int: ${arg0}`);
-                alert(`Print Int: ${arg0}`);
+                if (isBrowser) {
+                    alert(`Print Int: ${arg0}`);
+                } else {
+                    console.log(`\n[Syscall] Print Int: ${arg0}`);
+                }
                 break;
+
             case 4: // print_string (theo quy ước RARS/SPIM, a0 là địa chỉ chuỗi)
                 let str = "";
                 let addr = arg0;
                 let charByte;
-                // console.log(`>>> Syscall print_string at address 0x${addr.toString(16)}`);
                 while (true) {
-                    charByte = this.memory[addr]; // Đọc từng byte từ bộ nhớ
-                    if (charByte === undefined || charByte === 0) break; // Kết thúc chuỗi (null-terminated) hoặc lỗi đọc
-                    str += String.fromCharCode(charByte); // Ghép ký tự
+                    charByte = this.memory[addr];
+                    if (charByte === undefined || charByte === 0) break;
+                    str += String.fromCharCode(charByte);
                     addr++;
-                    if (str.length > 1000) { // Giới hạn độ dài chuỗi để tránh treo
-                        // console.warn("Syscall print_string: String too long, truncated.");
+                    if (str.length > 1000) { // Giới hạn để tránh treo
                         str += "... (truncated)";
                         break;
                     }
                 }
-                // console.log(`String content: "${str}"`);
-                alert(`Print String:\n${str}`);
+                if (isBrowser) {
+                    alert(`Print String:\n${str}`);
+                } else {
+                    console.log(`\n[Syscall] Print String: ${str}`);
+                }
                 break;
+
             case 64: // write (theo quy ước Linux RISC-V: a0=fd, a1=buf_addr, a2=count)
                 const fd_write = arg0;
                 const bufAddr_write = arg1;
                 const count_write = arg2;
                 if (fd_write === 1) { // fd 1 là stdout
                     let outputStr = "";
-                    // console.log(`>>> Syscall write(fd=1, buf=0x${bufAddr_write.toString(16)}, count=${count_write})`);
                     for (let i = 0; i < count_write; i++) {
                         const byte = this.memory[bufAddr_write + i];
                         if (byte === undefined) {
-                            // console.warn(`Syscall write: Read undefined byte at 0x${(bufAddr_write + i).toString(16)}`);
-                            this.registers[10] = i; // Trả về số byte đã ghi thành công vào a0
+                            this.registers[10] = i; // Trả về số byte đã ghi thành công
                             return;
                         }
                         outputStr += String.fromCharCode(byte);
                     }
-                    // console.log(`Stdout content: "${outputStr}"`);
-                    alert(`Write to stdout:\n${outputStr}`);
-                    this.registers[10] = outputStr.length; // Trả về số byte đã ghi vào a0
+                    if (isBrowser) {
+                        alert(`Write to stdout:\n${outputStr}`);
+                    } else {
+                        console.log(`\n[Syscall] Write to stdout: ${outputStr}`);
+                    }
+                    this.registers[10] = outputStr.length; // Trả về số byte đã ghi
                 } else {
-                    // console.warn(`Syscall write: Unsupported file descriptor ${fd_write}`);
-                    this.registers[10] = -1; // Trả về lỗi trong a0 (ví dụ -EBADF)
+                    // Xử lý cho các file descriptor không được hỗ trợ
+                    const errorMsg = `Syscall write: Unsupported file descriptor ${fd_write}`;
+                    if (isBrowser) {
+                        alert(errorMsg);
+                    } else {
+                        console.warn(`\n[Syscall] ${errorMsg}`);
+                    }
+                    this.registers[10] = -1; // Trả về lỗi
                 }
                 break;
-            // Có thể thêm các syscall khác như read_int, sbrk, etc.
+
             default:
-                console.warn(`Unsupported syscall ID: ${syscallId}`);
-                // Theo quy ước, có thể trả về mã lỗi trong a0, ví dụ -ENOSYS (Function not implemented)
-                // this.registers[10] = -38; // Mã lỗi ENOSYS
+                const errorMsg = `Unsupported syscall ID: ${syscallId}`;
+                if (isBrowser) {
+                    alert(errorMsg);
+                } else {
+                    console.warn(`\n[Syscall] ${errorMsg}`);
+                }
         }
     }
+
 
     tick(bus) {
             // Nếu vẫn đang chờ response thì không thực thi lệnh mới
