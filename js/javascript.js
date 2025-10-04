@@ -623,7 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Khởi tạo simulator và UI lần đầu
+    // Khởi tạo simulator và UI cho lần đầu
     if (typeof simulator !== 'undefined') {
         simulator.reset();
         if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`;
@@ -633,7 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Error: Simulator not loaded.</td></tr>';
     }
 
-    // Gắn sự kiện cho các nút điều khiển chính
+    // Gắn sự kiện cho các nút điều khiển chính 
     assembleButton?.addEventListener('click', handleAssemble);
     runButton?.addEventListener('click', handleRun);
     stepButton?.addEventListener('click', handleStep);
