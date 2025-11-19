@@ -89,61 +89,61 @@ export const assembler = {
     // Bảng định nghĩa các lệnh và thông tin mã hóa của chúng
     opcodes: {
         // ----- RV32I Base Integer Instructions -----
-        'lb':    { opcode: '0000011', funct3: '000', type: 'I' }, 'lh': { opcode: '0000011', funct3: '001', type: 'I' },
-        'lw':    { opcode: '0000011', funct3: '010', type: 'I' }, 'lbu': { opcode: '0000011', funct3: '100', type: 'I' },
-        'lhu':   { opcode: '0000011', funct3: '101', type: 'I' }, 'sb': { opcode: '0100011', funct3: '000', type: 'S' },
-        'sh':    { opcode: '0100011', funct3: '001', type: 'S' }, 'sw': { opcode: '0100011', funct3: '010', type: 'S' },
-        'addi':  { opcode: '0010011', funct3: '000', type: 'I' }, 'slti': { opcode: '0010011', funct3: '010', type: 'I' },
+        'lb': { opcode: '0000011', funct3: '000', type: 'I' }, 'lh': { opcode: '0000011', funct3: '001', type: 'I' },
+        'lw': { opcode: '0000011', funct3: '010', type: 'I' }, 'lbu': { opcode: '0000011', funct3: '100', type: 'I' },
+        'lhu': { opcode: '0000011', funct3: '101', type: 'I' }, 'sb': { opcode: '0100011', funct3: '000', type: 'S' },
+        'sh': { opcode: '0100011', funct3: '001', type: 'S' }, 'sw': { opcode: '0100011', funct3: '010', type: 'S' },
+        'addi': { opcode: '0010011', funct3: '000', type: 'I' }, 'slti': { opcode: '0010011', funct3: '010', type: 'I' },
         'sltiu': { opcode: '0010011', funct3: '011', type: 'I' }, 'xori': { opcode: '0010011', funct3: '100', type: 'I' },
-        'ori':   { opcode: '0010011', funct3: '110', type: 'I' }, 'andi': { opcode: '0010011', funct3: '111', type: 'I' },
-        'slli':  { opcode: '0010011', funct3: '001', funct7: '0000000', type: 'I-shamt' },
-        'srli':  { opcode: '0010011', funct3: '101', funct7: '0000000', type: 'I-shamt' },
-        'srai':  { opcode: '0010011', funct3: '101', funct7: '0100000', type: 'I-shamt' },
-        'add':   { opcode: '0110011', funct3: '000', funct7: '0000000', type: 'R' },
-        'sub':   { opcode: '0110011', funct3: '000', funct7: '0100000', type: 'R' },
-        'sll':   { opcode: '0110011', funct3: '001', funct7: '0000000', type: 'R' },
-        'slt':   { opcode: '0110011', funct3: '010', funct7: '0000000', type: 'R' },
-        'sltu':  { opcode: '0110011', funct3: '011', funct7: '0000000', type: 'R' },
-        'xor':   { opcode: '0110011', funct3: '100', funct7: '0000000', type: 'R' },
-        'srl':   { opcode: '0110011', funct3: '101', funct7: '0000000', type: 'R' },
-        'sra':   { opcode: '0110011', funct3: '101', funct7: '0100000', type: 'R' },
-        'or':    { opcode: '0110011', funct3: '110', funct7: '0000000', type: 'R' },
-        'and':   { opcode: '0110011', funct3: '111', funct7: '0000000', type: 'R' },
-        'lui':   { opcode: '0110111', type: 'U' }, 'auipc': { opcode: '0010111', type: 'U' },
-        'jal':   { opcode: '1101111', type: 'J' }, 'jalr': { opcode: '1100111', funct3: '000', type: 'I' },
-        'beq':   { opcode: '1100011', funct3: '000', type: 'B' }, 'bne': { opcode: '1100011', funct3: '001', type: 'B' },
-        'blt':   { opcode: '1100011', funct3: '100', type: 'B' }, 'bge': { opcode: '1100011', funct3: '101', type: 'B' },
-        'bltu':  { opcode: '1100011', funct3: '110', type: 'B' }, 'bgeu': { opcode: '1100011', funct3: '111', type: 'B' },
+        'ori': { opcode: '0010011', funct3: '110', type: 'I' }, 'andi': { opcode: '0010011', funct3: '111', type: 'I' },
+        'slli': { opcode: '0010011', funct3: '001', funct7: '0000000', type: 'I-shamt' },
+        'srli': { opcode: '0010011', funct3: '101', funct7: '0000000', type: 'I-shamt' },
+        'srai': { opcode: '0010011', funct3: '101', funct7: '0100000', type: 'I-shamt' },
+        'add': { opcode: '0110011', funct3: '000', funct7: '0000000', type: 'R' },
+        'sub': { opcode: '0110011', funct3: '000', funct7: '0100000', type: 'R' },
+        'sll': { opcode: '0110011', funct3: '001', funct7: '0000000', type: 'R' },
+        'slt': { opcode: '0110011', funct3: '010', funct7: '0000000', type: 'R' },
+        'sltu': { opcode: '0110011', funct3: '011', funct7: '0000000', type: 'R' },
+        'xor': { opcode: '0110011', funct3: '100', funct7: '0000000', type: 'R' },
+        'srl': { opcode: '0110011', funct3: '101', funct7: '0000000', type: 'R' },
+        'sra': { opcode: '0110011', funct3: '101', funct7: '0100000', type: 'R' },
+        'or': { opcode: '0110011', funct3: '110', funct7: '0000000', type: 'R' },
+        'and': { opcode: '0110011', funct3: '111', funct7: '0000000', type: 'R' },
+        'lui': { opcode: '0110111', type: 'U' }, 'auipc': { opcode: '0010111', type: 'U' },
+        'jal': { opcode: '1101111', type: 'J' }, 'jalr': { opcode: '1100111', funct3: '000', type: 'I' },
+        'beq': { opcode: '1100011', funct3: '000', type: 'B' }, 'bne': { opcode: '1100011', funct3: '001', type: 'B' },
+        'blt': { opcode: '1100011', funct3: '100', type: 'B' }, 'bge': { opcode: '1100011', funct3: '101', type: 'B' },
+        'bltu': { opcode: '1100011', funct3: '110', type: 'B' }, 'bgeu': { opcode: '1100011', funct3: '111', type: 'B' },
         'ecall': { opcode: '1110011', funct3: '000', funct7: '0000000', type: 'I' },
-        'ebreak':{ opcode: '1110011', funct3: '000', funct7: '0000001', type: 'I' },
+        'ebreak': { opcode: '1110011', funct3: '000', funct7: '0000001', type: 'I' },
         'fence': { opcode: '0001111', funct3: '000', type: 'I' },
 
         // ----- RV32M Standard Extension (Multiply/Divide) -----
-        'mul':    { opcode: '0110011', funct3: '000', funct7: '0000001', type: 'R' },
-        'mulh':   { opcode: '0110011', funct3: '001', funct7: '0000001', type: 'R' },
+        'mul': { opcode: '0110011', funct3: '000', funct7: '0000001', type: 'R' },
+        'mulh': { opcode: '0110011', funct3: '001', funct7: '0000001', type: 'R' },
         'mulhsu': { opcode: '0110011', funct3: '010', funct7: '0000001', type: 'R' },
-        'mulhu':  { opcode: '0110011', funct3: '011', funct7: '0000001', type: 'R' },
-        'div':    { opcode: '0110011', funct3: '100', funct7: '0000001', type: 'R' },
-        'divu':   { opcode: '0110011', funct3: '101', funct7: '0000001', type: 'R' },
-        'rem':    { opcode: '0110011', funct3: '110', funct7: '0000001', type: 'R' },
-        'remu':   { opcode: '0110011', funct3: '111', funct7: '0000001', type: 'R' },
+        'mulhu': { opcode: '0110011', funct3: '011', funct7: '0000001', type: 'R' },
+        'div': { opcode: '0110011', funct3: '100', funct7: '0000001', type: 'R' },
+        'divu': { opcode: '0110011', funct3: '101', funct7: '0000001', type: 'R' },
+        'rem': { opcode: '0110011', funct3: '110', funct7: '0000001', type: 'R' },
+        'remu': { opcode: '0110011', funct3: '111', funct7: '0000001', type: 'R' },
 
         // ----- RV32F Standard Extension (Single-Precision Floating-Point) -----
         'flw': { opcode: '0000111', funct3: '010', type: 'I-FP' },
         'fsw': { opcode: '0100111', funct3: '010', type: 'S-FP' },
 
-        'fadd.s':  { opcode: '1010011', funct7: '0000000', type: 'R-FP' },
-        'fsub.s':  { opcode: '1010011', funct7: '0000100', type: 'R-FP' },
-        'fmul.s':  { opcode: '1010011', funct7: '0001000', type: 'R-FP' },
-        'fdiv.s':  { opcode: '1010011', funct7: '0001100', type: 'R-FP' },
-        
-        'fsgnj.s':  { opcode: '1010011', funct3: '000', funct7: '0010000', type: 'R-FP' },
+        'fadd.s': { opcode: '1010011', funct7: '0000000', type: 'R-FP' },
+        'fsub.s': { opcode: '1010011', funct7: '0000100', type: 'R-FP' },
+        'fmul.s': { opcode: '1010011', funct7: '0001000', type: 'R-FP' },
+        'fdiv.s': { opcode: '1010011', funct7: '0001100', type: 'R-FP' },
+
+        'fsgnj.s': { opcode: '1010011', funct3: '000', funct7: '0010000', type: 'R-FP' },
         'fsgnjn.s': { opcode: '1010011', funct3: '001', funct7: '0010000', type: 'R-FP' },
         'fsgnjx.s': { opcode: '1010011', funct3: '010', funct7: '0010000', type: 'R-FP' },
 
-        'fcvt.w.s':  { opcode: '1010011', funct7: '1100000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
+        'fcvt.w.s': { opcode: '1010011', funct7: '1100000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
         'fcvt.wu.s': { opcode: '1010011', funct7: '1100000', rs2_subfield: '00001', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
-        'fcvt.s.w':  { opcode: '1010011', funct7: '1101000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
+        'fcvt.s.w': { opcode: '1010011', funct7: '1101000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
         'fcvt.s.wu': { opcode: '1010011', funct7: '1101000', rs2_subfield: '00001', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
 
         'feq.s': { opcode: '1010011', funct3: '010', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
@@ -154,19 +154,19 @@ export const assembler = {
         'fmv.w.x': { opcode: '1010011', funct3: '000', funct7: '1111000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
 
         // ----- Pseudo Instructions -----
-        'nop':  { type: 'Pseudo', expandsTo: 'addi', args: ['x0', 'x0', '0'] },
-        'li':   { type: 'Pseudo' },
-        'mv':   { type: 'Pseudo', expandsTo: 'addi', args: [null, null, '0'] },
-        'j':    { type: 'Pseudo', expandsTo: 'jal', args: ['x0', null] },
-        'jr':   { type: 'Pseudo', expandsTo: 'jalr', args: ['x0', null, '0'] },
-        'ret':  { type: 'Pseudo', expandsTo: 'jalr', args: ['x0', 'x1', '0'] },
+        'nop': { type: 'Pseudo', expandsTo: 'addi', args: ['x0', 'x0', '0'] },
+        'li': { type: 'Pseudo' },
+        'mv': { type: 'Pseudo', expandsTo: 'addi', args: [null, null, '0'] },
+        'j': { type: 'Pseudo', expandsTo: 'jal', args: ['x0', null] },
+        'jr': { type: 'Pseudo', expandsTo: 'jalr', args: ['x0', null, '0'] },
+        'ret': { type: 'Pseudo', expandsTo: 'jalr', args: ['x0', 'x1', '0'] },
         'call': { type: 'Pseudo' },
         'bnez': { type: 'Pseudo', expandsTo: 'bne', args: [null, 'x0', null] },
         'beqz': { type: 'Pseudo', expandsTo: 'beq', args: [null, 'x0', null] },
-        'la':   { type: 'Pseudo' },
+        'la': { type: 'Pseudo' },
         'fmv.s': { type: 'Pseudo', expandsTo: 'fsgnj.s', args: [null, null, null] },
-        'fabs.s':{ type: 'Pseudo', expandsTo: 'fsgnjx.s', args: [null, null, null] },
-        'fneg.s':{ type: 'Pseudo', expandsTo: 'fsgnjn.s', args: [null, null, null] },
+        'fabs.s': { type: 'Pseudo', expandsTo: 'fsgnjx.s', args: [null, null, null] },
+        'fneg.s': { type: 'Pseudo', expandsTo: 'fsgnjn.s', args: [null, null, null] },
     },
 
     // Hàm chính, điều phối quá trình biên dịch
@@ -180,20 +180,20 @@ export const assembler = {
 
         // Ưu tiên nhãn _start nếu có, và nằm trong vùng .text
         if (
-          this.labels["_start"]?.type === "instruction" &&
-          this.labels["_start"].address >= this.textBaseAddress
+            this.labels["_start"]?.type === "instruction" &&
+            this.labels["_start"].address >= this.textBaseAddress
         ) {
-          startAddress = this.labels["_start"].address;
+            startAddress = this.labels["_start"].address;
         } else {
-          // Nếu không có _start hợp lệ, tìm dòng mã đầu tiên trong .text
-          const firstTextInstr = this.instructionLines.find(
-            (l) =>
-              (l.type === "instruction" || l.type === "pseudo-instruction") &&
-              l.address >= this.textBaseAddress
-          );
-          startAddress = firstTextInstr
-            ? firstTextInstr.address
-            : this.textBaseAddress;
+            // Nếu không có _start hợp lệ, tìm dòng mã đầu tiên trong .text
+            const firstTextInstr = this.instructionLines.find(
+                (l) =>
+                    (l.type === "instruction" || l.type === "pseudo-instruction") &&
+                    l.address >= this.textBaseAddress
+            );
+            startAddress = firstTextInstr
+                ? firstTextInstr.address
+                : this.textBaseAddress;
         }
 
         // Nếu có nhãn _start, đặt startAddress theo nhãn đó
@@ -233,9 +233,9 @@ export const assembler = {
                 line = line.substring(labelMatch[0].length).trim();
                 if (!/^[a-zA-Z_][\w]*$/.test(label)) throw new Error(`Line ${lineNumber}: Invalid label name "${label}"`);
                 if (this.labels[label] && this.labels[label].address !== undefined) {
-                     if (!(this.labels[label].isGlobal && this.labels[label].address === undefined)) {
-                         throw new Error(`Line ${lineNumber}: Duplicate label "${label}"`);
-                     }
+                    if (!(this.labels[label].isGlobal && this.labels[label].address === undefined)) {
+                        throw new Error(`Line ${lineNumber}: Duplicate label "${label}"`);
+                    }
                 }
                 this.labels[label] = { ...this.labels[label], address: this.currentAddress, type: this.inDataSegment ? 'data' : 'instruction' };
             }
@@ -245,7 +245,7 @@ export const assembler = {
                 else this.instructionLines.push({ original: originalLine, type: 'empty', lineNumber });
                 continue;
             }
-            
+
             const parts = line.split(/[\s,]+/);
             const mnemonic = parts[0].trim().toLowerCase();
             const operandsString = line.substring(mnemonic.length).trim();
@@ -289,7 +289,7 @@ export const assembler = {
         this.binaryCode = [];
         for (const lineInfo of this.instructionLines) {
             if (lineInfo.type !== 'instruction' && lineInfo.type !== 'pseudo-instruction') continue;
-            
+
             this.currentAddress = lineInfo.address;
             try {
                 const instrMnemonic = lineInfo.mnemonic.toLowerCase();
@@ -298,7 +298,7 @@ export const assembler = {
 
                 const currentInstrInfo = { ...instrOpcodeInfo, mnemonic: instrMnemonic };
                 let generatedBinaries = [];
-                
+
                 if (currentInstrInfo.type === 'Pseudo') {
                     generatedBinaries = this._expandAndEncodePseudo(lineInfo, currentInstrInfo);
                 } else {
@@ -335,7 +335,7 @@ export const assembler = {
         for (let i = 0; i < operandsPart.length; i++) {
             const char = operandsPart[i];
             if (char === '"' && (i === 0 || operandsPart[i - 1] !== '\\')) inString = !inString;
-            if (char === '(' && !inString) parenLevel++; 
+            if (char === '(' && !inString) parenLevel++;
             if (char === ')' && !inString) parenLevel--;
             if (char === ',' && !inString && parenLevel === 0) {
                 if (currentOperand.trim().length > 0) operands.push(currentOperand.trim());
@@ -368,7 +368,7 @@ export const assembler = {
     _parseImmediate(operand, bits, isRelative = false, isPass1 = false, instructionAddress = 0) {
         operand = operand.trim();
         let value = null;
-        
+
         if (this.equValues[operand] !== undefined) { value = this.equValues[operand]; }
         else if (operand.match(/^[+-]?0x[0-9a-fA-F]+$/i)) { value = parseInt(operand, 16); }
         else if (operand.match(/^[+-]?\d+$/)) { value = parseInt(operand, 10); }
@@ -377,11 +377,11 @@ export const assembler = {
             if (this.labels[operand] && this.labels[operand].address !== undefined) {
                 const labelAddress = this.labels[operand].address;
                 value = isRelative ? labelAddress - instructionAddress : labelAddress;
-            } else if (isPass1) { return null; } 
-              else { throw new Error(`Undefined label "${operand}"`); }
+            } else if (isPass1) { return null; }
+            else { throw new Error(`Undefined label "${operand}"`); }
         }
         if (value === null || isNaN(value)) throw new Error(`Invalid immediate value or undefined symbol: "${operand}"`);
-        
+
         return value;
     },
 
@@ -412,182 +412,182 @@ export const assembler = {
         return { offset: offsetValue, baseRegIndex: baseRegIndex };
     },
 
-/**
- * Mã hóa một lệnh assembly đã được phân tích thành chuỗi nhị phân 32-bit.
- * @param {object} instrInfo - Thông tin về lệnh từ bảng opcodes.
- * @param {string[]} operands - Mảng các toán hạng của lệnh.
- * @param {number} instructionAddress - Địa chỉ của lệnh hiện tại.
- * @returns {string} - Chuỗi nhị phân 32-bit của lệnh đã mã hóa.
- */
-_encodeInstruction(instrInfo, operands, instructionAddress) {
-    const { type, mnemonic } = instrInfo;
-    let rd_s, rs1_s, rs2_s, imm_s, binaryInstruction;
+    /**
+     * Mã hóa một lệnh assembly đã được phân tích thành chuỗi nhị phân 32-bit.
+     * @param {object} instrInfo - Thông tin về lệnh từ bảng opcodes.
+     * @param {string[]} operands - Mảng các toán hạng của lệnh.
+     * @param {number} instructionAddress - Địa chỉ của lệnh hiện tại.
+     * @returns {string} - Chuỗi nhị phân 32-bit của lệnh đã mã hóa.
+     */
+    _encodeInstruction(instrInfo, operands, instructionAddress) {
+        const { type, mnemonic } = instrInfo;
+        let rd_s, rs1_s, rs2_s, imm_s, binaryInstruction;
 
-    // --- Hàm trợ giúp nội bộ ---
-    const encodeReg = (regStr) => this._decToBin(this.getRegisterIndex(regStr), 5);
-    const encodeImm = (immStr, bits, isRelative) => {
-        const immValue = this._parseImmediate(immStr, bits, isRelative, false, instructionAddress);
-        return this._decToBin(immValue, bits);
-    };
+        // --- Hàm trợ giúp nội bộ ---
+        const encodeReg = (regStr) => this._decToBin(this.getRegisterIndex(regStr), 5);
+        const encodeImm = (immStr, bits, isRelative) => {
+            const immValue = this._parseImmediate(immStr, bits, isRelative, false, instructionAddress);
+            return this._decToBin(immValue, bits);
+        };
 
-    try {
-        switch (type) {
-            // ===================
-            // == Lệnh loại R (Register-Register)
-            // ===================
-            case 'R':
-                rd_s = encodeReg(operands[0]);
-                rs1_s = encodeReg(operands[1]);
-                rs2_s = encodeReg(operands[2]);
-                binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
-                break;
-
-            // ===================
-            // == Lệnh loại I (Register-Immediate)
-            // ===================
-            case 'I':
-            case 'I-shamt':
-                // Xử lý các lệnh đặc biệt không có toán hạng
-                if (mnemonic === 'ecall') {
-                    binaryInstruction = '00000000000000000000000001110011'; // imm=0,rs1=0,rd=0
-                    break;
-                }
-                if (mnemonic === 'ebreak') {
-                    binaryInstruction = '00000000000100000000000001110011'; // imm=1,rs1=0,rd=0
-                    break;
-                }
-                
-                rd_s = encodeReg(operands[0]);
-                
-                // Xử lý các lệnh load và jalr có định dạng `offset(base)`
-                if (['lw', 'lh', 'lb', 'lbu', 'lhu', 'jalr'].includes(mnemonic)) {
-                    const memOp = this._parseMemoryOperand(operands[1]);
-                    rs1_s = this._decToBin(memOp.baseRegIndex, 5);
-                    imm_s = this._decToBin(memOp.offset, 12);
-                    binaryInstruction = imm_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
-                } 
-                // Xử lý các lệnh dịch bit (shift)
-                else if (type === 'I-shamt') {
+        try {
+            switch (type) {
+                // ===================
+                // == Lệnh loại R (Register-Register)
+                // ===================
+                case 'R':
+                    rd_s = encodeReg(operands[0]);
                     rs1_s = encodeReg(operands[1]);
-                    const shamt = encodeImm(operands[2], 5, false); // shamt là 5 bit
-                    binaryInstruction = instrInfo.funct7 + shamt + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
-                }
-                // Các lệnh loại I còn lại (addi, xori, ...)
-                else {
+                    rs2_s = encodeReg(operands[2]);
+                    binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    break;
+
+                // ===================
+                // == Lệnh loại I (Register-Immediate)
+                // ===================
+                case 'I':
+                case 'I-shamt':
+                    // Xử lý các lệnh đặc biệt không có toán hạng
+                    if (mnemonic === 'ecall') {
+                        binaryInstruction = '00000000000000000000000001110011'; // imm=0,rs1=0,rd=0
+                        break;
+                    }
+                    if (mnemonic === 'ebreak') {
+                        binaryInstruction = '00000000000100000000000001110011'; // imm=1,rs1=0,rd=0
+                        break;
+                    }
+
+                    rd_s = encodeReg(operands[0]);
+
+                    // Xử lý các lệnh load và jalr có định dạng `offset(base)`
+                    if (['lw', 'lh', 'lb', 'lbu', 'lhu', 'jalr'].includes(mnemonic)) {
+                        const memOp = this._parseMemoryOperand(operands[1]);
+                        rs1_s = this._decToBin(memOp.baseRegIndex, 5);
+                        imm_s = this._decToBin(memOp.offset, 12);
+                        binaryInstruction = imm_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    }
+                    // Xử lý các lệnh dịch bit (shift)
+                    else if (type === 'I-shamt') {
+                        rs1_s = encodeReg(operands[1]);
+                        const shamt = encodeImm(operands[2], 5, false); // shamt là 5 bit
+                        binaryInstruction = instrInfo.funct7 + shamt + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    }
+                    // Các lệnh loại I còn lại (addi, xori, ...)
+                    else {
+                        rs1_s = encodeReg(operands[1]);
+                        imm_s = encodeImm(operands[2], 12, false); // immediate là 12 bit
+                        binaryInstruction = imm_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    }
+                    break;
+
+                // ===================
+                // == Lệnh loại S (Store)
+                // ===================
+                case 'S':
+                    rs2_s = encodeReg(operands[0]); // Thanh ghi nguồn nằm ở toán hạng đầu
+                    const memOpS = this._parseMemoryOperand(operands[1]);
+                    rs1_s = this._decToBin(memOpS.baseRegIndex, 5);
+                    imm_s = encodeImm(String(memOpS.offset), 12, false);
+                    // Ghép 2 phần của immediate
+                    binaryInstruction = imm_s.substring(0, 7) + rs2_s + rs1_s + instrInfo.funct3 + imm_s.substring(7) + instrInfo.opcode;
+                    break;
+
+                // ===================
+                // == Lệnh loại B (Branch)
+                // ===================
+                case 'B':
+                    rs1_s = encodeReg(operands[0]);
+                    rs2_s = encodeReg(operands[1]);
+                    imm_s = encodeImm(operands[2], 13, true); // Immediate 13 bit, tương đối
+                    // Ghép các bit của immediate theo đúng thứ tự
+                    const imm12 = imm_s[0];
+                    const imm11 = imm_s[1];
+                    const imm10_5 = imm_s.slice(2, 8);
+                    const imm4_1 = imm_s.slice(8, 12);
+                    binaryInstruction = imm12 + imm10_5 + rs2_s + rs1_s + instrInfo.funct3 + imm4_1 + imm11 + instrInfo.opcode;
+                    break;
+
+                // ===================
+                // == Lệnh loại U (Upper Immediate)
+                // ===================
+                case 'U':
+                    rd_s = encodeReg(operands[0]);
+                    let immValue = this._parseImmediate(operands[1], 32, false, false, instructionAddress);
+                    // Lấy 20 bit cao của immediate (immValue << 12), sau đó lấy 32 bit nhị phân và cắt 20 bit đầu
+                    let imm20U = this._decToBin(immValue << 12, 32).substring(0, 20);
+                    binaryInstruction = imm20U + rd_s + instrInfo.opcode;
+                    break;
+                // ===================
+                // == Lệnh loại J (Jump)
+                // ===================
+                case 'J':
+                    rd_s = encodeReg(operands[0]);
+                    imm_s = encodeImm(operands[1], 21, true); // Immediate 21 bit, tương đối
+                    // Ghép các bit của immediate theo đúng thứ tự
+                    const imm20 = imm_s[0];
+                    const imm19_12 = imm_s.slice(1, 9);
+                    const imm11_j = imm_s[9];
+                    const imm10_1 = imm_s.slice(10, 20);
+                    binaryInstruction = imm20 + imm10_1 + imm11_j + imm19_12 + rd_s + instrInfo.opcode;
+                    break;
+
+                // ===================================
+                // == CÁC LỆNH DẤU PHẨY ĐỘNG (FLOAT)
+                // ===================================
+                case 'R-FP':
+                    rd_s = encodeReg(operands[0]);
                     rs1_s = encodeReg(operands[1]);
-                    imm_s = encodeImm(operands[2], 12, false); // immediate là 12 bit
+                    rs2_s = encodeReg(operands[2]);
+                    const rm = instrInfo.funct3 || '000'; // Chế độ làm tròn mặc định
+                    binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + rm + rd_s + instrInfo.opcode;
+                    break;
+
+                case 'R-FP-CVT': // Lệnh chuyển đổi
+                    rd_s = encodeReg(operands[0]);
+                    rs1_s = encodeReg(operands[1]);
+                    rs2_s = instrInfo.rs2_subfield; // rs2 không phải là thanh ghi mà là một giá trị cố định
+                    const rm_cvt = instrInfo.funct3 || '000';
+                    binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + rm_cvt + rd_s + instrInfo.opcode;
+                    break;
+
+                case 'R-FP-CMP': // Lệnh so sánh
+                    rd_s = encodeReg(operands[0]); // Thanh ghi đích là thanh ghi số nguyên
+                    rs1_s = encodeReg(operands[1]);
+                    rs2_s = encodeReg(operands[2]);
+                    binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    break;
+
+                case 'I-FP': // FLW
+                    rd_s = encodeReg(operands[0]);
+                    const memOpIFP = this._parseMemoryOperand(operands[1]);
+                    rs1_s = this._decToBin(memOpIFP.baseRegIndex, 5);
+                    imm_s = this._decToBin(memOpIFP.offset, 12);
                     binaryInstruction = imm_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
-                }
-                break;
+                    break;
 
-            // ===================
-            // == Lệnh loại S (Store)
-            // ===================
-            case 'S':
-                rs2_s = encodeReg(operands[0]); // Thanh ghi nguồn nằm ở toán hạng đầu
-                const memOpS = this._parseMemoryOperand(operands[1]);
-                rs1_s = this._decToBin(memOpS.baseRegIndex, 5);
-                imm_s = encodeImm(String(memOpS.offset), 12, false);
-                // Ghép 2 phần của immediate
-                binaryInstruction = imm_s.substring(0, 7) + rs2_s + rs1_s + instrInfo.funct3 + imm_s.substring(7) + instrInfo.opcode;
-                break;
+                case 'S-FP': // FSW
+                    rs2_s = encodeReg(operands[0]);
+                    const memOpSFP = this._parseMemoryOperand(operands[1]);
+                    rs1_s = this._decToBin(memOpSFP.baseRegIndex, 5);
+                    imm_s = this._decToBin(memOpSFP.offset, 12);
+                    binaryInstruction = imm_s.substring(0, 7) + rs2_s + rs1_s + instrInfo.funct3 + imm_s.substring(7) + instrInfo.opcode;
+                    break;
 
-            // ===================
-            // == Lệnh loại B (Branch)
-            // ===================
-            case 'B':
-                rs1_s = encodeReg(operands[0]);
-                rs2_s = encodeReg(operands[1]);
-                imm_s = encodeImm(operands[2], 13, true); // Immediate 13 bit, tương đối
-                // Ghép các bit của immediate theo đúng thứ tự
-                const imm12 = imm_s[0];
-                const imm11 = imm_s[1];
-                const imm10_5 = imm_s.slice(2, 8);
-                const imm4_1 = imm_s.slice(8, 12);
-                binaryInstruction = imm12 + imm10_5 + rs2_s + rs1_s + instrInfo.funct3 + imm4_1 + imm11 + instrInfo.opcode;
-                break;
-
-            // ===================
-            // == Lệnh loại U (Upper Immediate)
-            // ===================
-            case 'U':
-                rd_s = encodeReg(operands[0]);
-                let immValue = this._parseImmediate(operands[1], 32, false, false, instructionAddress);
-                // Lấy 20 bit cao của immediate (immValue << 12), sau đó lấy 32 bit nhị phân và cắt 20 bit đầu
-                let imm20U = this._decToBin(immValue << 12, 32).substring(0, 20);
-                binaryInstruction = imm20U + rd_s + instrInfo.opcode;
-            break;
-            // ===================
-            // == Lệnh loại J (Jump)
-            // ===================
-            case 'J':
-                rd_s = encodeReg(operands[0]);
-                imm_s = encodeImm(operands[1], 21, true); // Immediate 21 bit, tương đối
-                // Ghép các bit của immediate theo đúng thứ tự
-                const imm20 = imm_s[0];
-                const imm19_12 = imm_s.slice(1, 9);
-                const imm11_j = imm_s[9];
-                const imm10_1 = imm_s.slice(10, 20);
-                binaryInstruction = imm20 + imm10_1 + imm11_j + imm19_12 + rd_s + instrInfo.opcode;
-                break;
-            
-            // ===================================
-            // == CÁC LỆNH DẤU PHẨY ĐỘNG (FLOAT)
-            // ===================================
-            case 'R-FP':
-                rd_s = encodeReg(operands[0]);
-                rs1_s = encodeReg(operands[1]);
-                rs2_s = encodeReg(operands[2]);
-                const rm = instrInfo.funct3 || '000'; // Chế độ làm tròn mặc định
-                binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + rm + rd_s + instrInfo.opcode;
-                break;
-            
-            case 'R-FP-CVT': // Lệnh chuyển đổi
-                rd_s = encodeReg(operands[0]);
-                rs1_s = encodeReg(operands[1]);
-                rs2_s = instrInfo.rs2_subfield; // rs2 không phải là thanh ghi mà là một giá trị cố định
-                const rm_cvt = instrInfo.funct3 || '000';
-                binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + rm_cvt + rd_s + instrInfo.opcode;
-                break;
-                
-            case 'R-FP-CMP': // Lệnh so sánh
-                rd_s = encodeReg(operands[0]); // Thanh ghi đích là thanh ghi số nguyên
-                rs1_s = encodeReg(operands[1]);
-                rs2_s = encodeReg(operands[2]);
-                binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
-                break;
-
-            case 'I-FP': // FLW
-                rd_s = encodeReg(operands[0]);
-                const memOpIFP = this._parseMemoryOperand(operands[1]);
-                rs1_s = this._decToBin(memOpIFP.baseRegIndex, 5);
-                imm_s = this._decToBin(memOpIFP.offset, 12);
-                binaryInstruction = imm_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
-                break;
-
-            case 'S-FP': // FSW
-                rs2_s = encodeReg(operands[0]);
-                const memOpSFP = this._parseMemoryOperand(operands[1]);
-                rs1_s = this._decToBin(memOpSFP.baseRegIndex, 5);
-                imm_s = this._decToBin(memOpSFP.offset, 12);
-                binaryInstruction = imm_s.substring(0, 7) + rs2_s + rs1_s + instrInfo.funct3 + imm_s.substring(7) + instrInfo.opcode;
-                break;
-
-            default:
-                throw new Error(`Unsupported instruction type "${type}" for mnemonic "${mnemonic}"`);
+                default:
+                    throw new Error(`Unsupported instruction type "${type}" for mnemonic "${mnemonic}"`);
+            }
+        } catch (e) {
+            // Thêm thông tin chi tiết vào thông báo lỗi để dễ dàng gỡ lỗi
+            throw new Error(`Encoding [${mnemonic} ${operands.join(', ')}]: ${e.message}`);
         }
-    } catch (e) {
-        // Thêm thông tin chi tiết vào thông báo lỗi để dễ dàng gỡ lỗi
-        throw new Error(`Encoding [${mnemonic} ${operands.join(', ')}]: ${e.message}`);
-    }
 
-    // Kiểm tra cuối cùng để đảm bảo mọi lệnh đều được mã hóa thành 32 bit
-    if (binaryInstruction.length !== 32) {
-        throw new Error(`Internal Error: Encoded binary for "${mnemonic}" is ${binaryInstruction.length} bits, expected 32.`);
-    }
+        // Kiểm tra cuối cùng để đảm bảo mọi lệnh đều được mã hóa thành 32 bit
+        if (binaryInstruction.length !== 32) {
+            throw new Error(`Internal Error: Encoded binary for "${mnemonic}" is ${binaryInstruction.length} bits, expected 32.`);
+        }
 
-    return binaryInstruction;
-},
+        return binaryInstruction;
+    },
 
     // Ước lượng kích thước của lệnh giả
     _estimatePseudoInstructionSize(mnemonic, operands, lineNumber, isPass1 = false) {
@@ -595,10 +595,21 @@ _encodeInstruction(instrInfo, operands, instructionAddress) {
             try {
                 const immValue = this._parseImmediate(operands[1], 32, false, isPass1);
                 if (immValue === null && isPass1) return 8; // Giả định trường hợp tệ nhất
-                return (immValue >= -2048 && immValue <= 2047) ? 4 : 8;
+                if (immValue >= -2048 && immValue <= 2047) {
+                    return 4; // chỉ addi
+                } else {
+                    // Áp dụng cùng logic như _expandAndEncodePseudo
+                    const upper = (immValue + 0x800) >> 12;
+                    let lower = immValue - (upper << 12);
+                    if (lower < -2048) lower += 4096;
+                    if (lower > 2047) lower -= 4096;
+                    // Chỉ tạo addi nếu lower !== 0
+                    return (lower !== 0) ? 8 : 4; // lui + addi hoặc chỉ lui
+                }
             } catch (e) { if (isPass1) return 8; throw e; }
         }
-        if (mnemonic === 'la' || mnemonic === 'call') return 8;
+        if (mnemonic === 'la') return 8; // auipc + addi luôn cần 8 bytes
+        if (mnemonic === 'call') return 8;
         return 4; // Mặc định các lệnh giả khác chiếm 4 byte
     },
 
@@ -621,7 +632,7 @@ _encodeInstruction(instrInfo, operands, instructionAddress) {
                     if (lower < -2048) lower += 4096;
                     if (lower > 2047) lower -= 4096;
                     expandedInstructions.push({ mnemonic: 'lui', operands: [rdLi, upper.toString()], address: address });
-                    if (lower !== 0 || immValueLi === 0) {
+                    if (lower !== 0) {
                         expandedInstructions.push({ mnemonic: 'addi', operands: [rdLi, rdLi, lower.toString()], address: address + 4 });
                     }
                 }
@@ -698,6 +709,13 @@ _encodeInstruction(instrInfo, operands, instructionAddress) {
         }
     },
 
+    // Ghi chuỗi nhị phân vào bộ nhớ (little-endian)
+    _writeBinaryToMemory(address, binaryString) {
+        for (let i = 0; i < 4; i++) {
+            this.memory[address + i] = parseInt(binaryString.substring(32 - (i + 1) * 8, 32 - i * 8), 2);
+        }
+    },
+
     // --- Các hàm xử lý chỉ thị (Directive Handlers) ---
     _handleTextDirective(operands) {
         this.inDataSegment = false;
@@ -713,9 +731,9 @@ _encodeInstruction(instrInfo, operands, instructionAddress) {
         if (operands.length === 0) {
             throw new Error('.section directive requires a section name');
         }
-        
+
         const sectionName = operands[0].trim();
-        
+
         // Hỗ trợ các section phổ biến trong riscv-arch-test và RISC-V assembly
         if (sectionName === ".text.init" || sectionName === ".text") {
             this.inDataSegment = false;
@@ -744,7 +762,7 @@ _encodeInstruction(instrInfo, operands, instructionAddress) {
             // Bỏ qua không lỗi, nhưng không đổi section
             return;
         }
-        
+
         // Nếu có địa chỉ được chỉ định trong operands[1]
         if (operands.length >= 2) {
             try {

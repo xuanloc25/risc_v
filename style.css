@@ -439,7 +439,6 @@ textarea#instructionInput {
 
 /* --- BẢNG MÀU MÔ PHỎNG THEO RARS (CHO NỀN TRẮNG) --- */
 /* Áp dụng cho theme "default" của CodeMirror */
-
 .cm-s-default .cm-comment { color: #008000; }  /* Chú thích: Xanh lá */
 .cm-s-default .cm-string { color: #008000; }   /* Chuỗi: Xanh lá */
 .cm-s-default .cm-tag { color: #000000; }      /* Nhãn: Đen */
@@ -447,3 +446,9 @@ textarea#instructionInput {
 .cm-s-default .cm-keyword { color: #FF00FF; }  /* Chỉ thị: Hồng */
 .cm-s-default .cm-variable-2 { color: #FF0000; } /* Thanh ghi: Đỏ */
 .cm-s-default .cm-number { color: #993300; }   /* Số: Nâu/Cam đất */
+
+/* Chỉ hiển thị 1 bảng thanh ghi tại một thời điểm (ẩn wrapper MDC) */
+#registerTable:not(.active-table),
+#fpRegisterTable:not(.active-table) {
+  display: none !important;
+}

@@ -23,6 +23,17 @@ const registerTable = document.getElementById('registerTable');
 const registerTableBody = registerTable?.querySelector('tbody');
 const fpRegisterTable = document.getElementById('fpRegisterTable');
 const fpRegisterTableBody = fpRegisterTable?.querySelector('tbody');
+// Thêm: bắt container của mỗi bảng (ưu tiên id container nếu có, fallback sang wrapper MDC hoặc parent)
+const registerTableContainer =
+    document.getElementById('registerTableContainer') ||
+    registerTable?.closest('.mdc-data-table') ||
+    registerTable?.parentElement;
+
+const fpRegisterTableContainer =
+    document.getElementById('fpRegisterTableContainer') ||
+    fpRegisterTable?.closest('.mdc-data-table') ||
+    fpRegisterTable?.parentElement;
+
 const toggleRegisterViewButton = document.getElementById('toggleRegisterViewButton');
 
 const assembleButton = document.getElementById('assembleButton');
@@ -36,6 +47,9 @@ const toggleDataSegmentModeButton = document.getElementById('toggleDataSegmentMo
 const dataSegmentBody = document.getElementById('dataSegmentBody');
 const instructionViewBody = document.getElementById('instructionViewBody');
 
+const dataAddressFieldRoot = document.getElementById('data-segment-search-field');
+let dataAddressField; // MDC TextField instance
+
 
 // --- Các biến trạng thái của giao diện ---
 let dataSegmentStartAddress = 0x10010000;
@@ -46,6 +60,31 @@ const wordsPerRow = 8;
 let currentRegisterView = 'integer';
 let activeBreakpoints = new Set(); // Set để lưu các số dòng đang có breakpoint
 
+/* Hàm đặt chế độ hiển thị bảng thanh ghi (integer|fp) */
+function setRegisterView(view) {
+    const isInteger = view === 'integer';
+
+    // Ẩn/hiện đúng container để tránh MDC ghi đè
+    const show = (el, active) => {
+        if (!el) return;
+        el.style.display = active ? '' : 'none';          // quan trọng: ẩn wrapper
+        el.setAttribute('aria-hidden', active ? 'false' : 'true');
+        el.classList.toggle('active-table', active);
+    };
+
+    // Ưu tiên ẩn/hiện container; nếu không có, fallback về chính table
+    show(registerTableContainer || registerTable, isInteger);
+    show(fpRegisterTableContainer || fpRegisterTable, !isInteger);
+
+    // Cập nhật nhãn nút (MDC button có .mdc-button__label)
+    if (toggleRegisterViewButton) {
+        const labelEl = toggleRegisterViewButton.querySelector('.mdc-button__label') || toggleRegisterViewButton;
+        labelEl.textContent = isInteger ? "View Floating-Point Registers" : "View Integer Registers";
+    }
+
+    currentRegisterView = isInteger ? 'integer' : 'fp';
+}
+
 // --- Logic Breakpoint MỚI sử dụng CodeMirror ---
 // Tạo một marker (dấu chấm đỏ) cho breakpoint
 function makeBreakpointMarker() {
@@ -53,6 +92,18 @@ function makeBreakpointMarker() {
     marker.style.color = "#e52d2d";
     marker.innerHTML = "●";
     return marker;
+}
+
+/**
+ * Cập nhật giá trị cho ô nhập địa chỉ Data Segment bằng API của MDC.
+ * @param {string} value - Giá trị địa chỉ mới (ví dụ: "0x10010000").
+ */
+function setDataAddressValue(value) {
+    if (dataAddressField) { // dataAddressField là biến instance của MDCTextField
+        dataAddressField.value = value;
+    } else if (dataSegmentAddressInput) { // Fallback nếu MDC chưa khởi tạo
+        dataSegmentAddressInput.value = value;
+    }
 }
 
 // --- Các hằng số ---
@@ -412,8 +463,7 @@ function handleAssemble() {
                 dataSegmentStartAddress = assembler.dataBaseAddress || 0x10010000;
             }
             dataSegmentStartAddress = Math.max(0, Math.floor(dataSegmentStartAddress / bytesPerRow) * bytesPerRow);
-            if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`;
-
+            setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`);
             updateUIGlobally();
 
         } catch (error) {
@@ -505,27 +555,18 @@ function handleReset() {
 
     simulator.reset();
 
-    // instructionInput.value = "";
     instructionInput.setValue("");
-    // Xóa toàn bộ marker breakpoint trong CodeMirror
     try { instructionInput.clearGutter("breakpoints"); } catch {}
-
     binaryOutput.textContent = "";
-
     activeBreakpoints.clear();
-    // updateLineNumbers();
 
     dataSegmentStartAddress = assembler.dataBaseAddress || 0x10010000;
-    if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`;
+    setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`); // dùng API MDC
 
     updateUIGlobally();
 
-    if (registerTable && fpRegisterTable && toggleRegisterViewButton) {
-        registerTable.classList.add('active-table');
-        fpRegisterTable.classList.remove('active-table');
-        toggleRegisterViewButton.textContent = "View Floating-Point Registers";
-        currentRegisterView = 'integer';
-    }
+    // Dùng API chuẩn hóa để hiển thị đúng một bảng
+    setRegisterView('integer');
     console.log("System reset complete.");
 }
 
@@ -533,64 +574,45 @@ function handleReset() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOM loaded. Initializing UI components...");
 
+    // 1. Khởi tạo các bảng thanh ghi
     initializeRegisterTable();
     initializeFPRegisterTable();
 
-    // --- Khởi tạo CodeMirror Editor ---
+    // 2. Khởi tạo CodeMirror Editor và logic breakpoint
     instructionInput = CodeMirror.fromTextArea(document.getElementById('instructionInput'), {
-        lineNumbers: true,         // Bật tính năng số dòng
-        mode: "riscv",             // Sử dụng mode "riscv" vừa định nghĩa
-        theme: "default",  // Theme cho đẹp (tùy chọn)
-        gutters: ["CodeMirror-linenumbers", "breakpoints"] // Thêm một rãnh cho breakpoint
+        lineNumbers: true,
+        mode: "riscv",
+        theme: "default", // Sử dụng theme nền trắng mặc định
+        gutters: ["CodeMirror-linenumbers", "breakpoints"] // Thêm rãnh cho số dòng và breakpoint
     });
 
-    // --- Logic Breakpoint MỚI sử dụng CodeMirror ---
-    // Lắng nghe sự kiện click vào rãnh (gutter)
+    // Lắng nghe sự kiện click vào rãnh để đặt/xóa breakpoint
     instructionInput.on("gutterClick", function(cm, n) {
         const info = cm.lineInfo(n);
-        const lineNumber = n + 1; // CodeMirror dùng index 0, chúng ta dùng index 1
+        const lineNumber = n + 1;
 
-        // Bật/tắt breakpoint
-        if (info.gutterMarkers) {
+        if (info.gutterMarkers) { // Nếu đã có breakpoint -> xóa đi
             cm.setGutterMarker(n, "breakpoints", null);
             activeBreakpoints.delete(lineNumber);
-        } else {
+        } else { // Nếu chưa có -> thêm vào
             cm.setGutterMarker(n, "breakpoints", makeBreakpointMarker());
             activeBreakpoints.add(lineNumber);
         }
-        updateBreakpointUI(); // Cập nhật checkbox trong bảng instruction view
+        updateBreakpointUI(); // Cập nhật lại các checkbox trong bảng Instruction View
     });
 
-    // // Khởi tạo trình soạn thảo code (cũ) + xử lý số dòng & Tab
-    // if (instructionInput) {
-    //     // Cập nhật số dòng khi nhập liệu hoặc cuộn
-    //     instructionInput.addEventListener('input', updateLineNumbers);
-    //     instructionInput.addEventListener('scroll', updateLineNumbers);
-    //     updateLineNumbers(); // Cập nhật lần đầu
-    //
-    //     // ✅ Bổ sung xử lý phím Tab để thụt lề
-    //     instructionInput.addEventListener('keydown', function(e) {
-    //         if (e.key === 'Tab') {
-    //             e.preventDefault();
-    //             const start = this.selectionStart;
-    //             const end = this.selectionEnd;
-    //             const tabCharacter = '    ';
-    //             this.value = this.value.substring(0, start) +
-    //                 tabCharacter +
-    //                 this.value.substring(end);
-    //             this.selectionStart = this.selectionEnd = start + tabCharacter.length;
-    //         }
-    //     });
-    // }
+    // 3. Khởi tạo các component của Material Design (MDC)
+    mdc.autoInit();
+    document.querySelectorAll('.mdc-button').forEach(button => new mdc.ripple.MDCRipple(button));
+    // Khởi tạo riêng TextField để control giá trị bằng API
+    if (dataAddressFieldRoot) {
+        dataAddressField = new mdc.textField.MDCTextField(dataAddressFieldRoot);
+    }
 
+    // 4. Gắn các sự kiện cho các nút điều khiển giao diện khác
     // Gắn sự kiện cho nút chuyển đổi bảng thanh ghi
     toggleRegisterViewButton?.addEventListener('click', () => {
-        currentRegisterView = (currentRegisterView === 'integer') ? 'fp' : 'integer';
-        registerTable.classList.toggle('active-table');
-        fpRegisterTable.classList.toggle('active-table');
-        toggleRegisterViewButton.textContent = (currentRegisterView === 'integer')
-            ? "View Floating-Point Registers"
-            : "View Integer Registers";
+        setRegisterView(currentRegisterView === 'integer' ? 'fp' : 'integer');
     });
 
     // Gắn sự kiện cho nút chuyển đổi chế độ xem Data Segment
@@ -609,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!isNaN(newAddr) && newAddr >= 0) {
                     dataSegmentStartAddress = Math.max(0, Math.floor(newAddr / bytesPerRow) * bytesPerRow);
                     renderDataSegmentTable();
-                    dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`;
+                    setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`);
                 } else {
                     alert(`Invalid address format: "${addrStr}"`);
                 }
@@ -623,21 +645,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Khởi tạo simulator và UI cho lần đầu
+    // 5. Gắn sự kiện cho các nút điều khiển chính của simulator
+    assembleButton?.addEventListener('click', handleAssemble);
+    runButton?.addEventListener('click', handleRun);
+    stepButton?.addEventListener('click', handleStep);
+    resetButton?.addEventListener('click', handleReset);
+    
+    // 6. Khởi tạo simulator và UI lần đầu
     if (typeof simulator !== 'undefined') {
         simulator.reset();
-        if (dataSegmentAddressInput) dataSegmentAddressInput.value = `0x${dataSegmentStartAddress.toString(16)}`;
+        setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`); // dùng API của MDC để label nổi
+        setRegisterView('integer'); // đảm bảo chỉ 1 bảng hiển thị
         updateUIGlobally();
     } else {
         console.error("Simulator module not loaded!");
         if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Error: Simulator not loaded.</td></tr>';
     }
 
-    // Gắn sự kiện cho các nút điều khiển chính 
-    assembleButton?.addEventListener('click', handleAssemble);
-    runButton?.addEventListener('click', handleRun);
-    stepButton?.addEventListener('click', handleStep);
-    resetButton?.addEventListener('click', handleReset);
-
-    console.log("Event listeners attached. UI is ready.");
+    // ...existing code...
 });
+
+//# sourceMappingURL=javascript.js.map
