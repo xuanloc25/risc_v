@@ -1,5 +1,7 @@
 // javascript.js
 // File này điều khiển giao diện người dùng, tương tác với assembler và simulator.
+
+// --- Cấu hình cú pháp RISC-V cho CodeMirror ---
 CodeMirror.defineSimpleMode("riscv", {
     start: [
         { regex: /#.*/, token: "comment" },
@@ -15,78 +17,73 @@ CodeMirror.defineSimpleMode("riscv", {
 import { assembler } from './assembler.js';
 import { simulator } from './simulator.js';
 
-// --- Tham chiếu đến các phần tử DOM ---
-// const instructionInput = document.getElementById('instructionInput');
-let instructionInput; // Will be initialized as a CodeMirror editor on DOMContentLoaded
+// --- THAM CHIẾU DOM ---
+let instructionInput; // Sẽ được khởi tạo bởi CodeMirror
 const binaryOutput = document.getElementById('binaryOutput');
+
+// Bảng Registers (Integer)
 const registerTable = document.getElementById('registerTable');
 const registerTableBody = registerTable?.querySelector('tbody');
+const registerTableContainer = document.getElementById('registerTableContainer');
+
+// Bảng Floating Point
 const fpRegisterTable = document.getElementById('fpRegisterTable');
 const fpRegisterTableBody = fpRegisterTable?.querySelector('tbody');
-// Thêm: bắt container của mỗi bảng (ưu tiên id container nếu có, fallback sang wrapper MDC hoặc parent)
-const registerTableContainer =
-    document.getElementById('registerTableContainer') ||
-    registerTable?.closest('.mdc-data-table') ||
-    registerTable?.parentElement;
+const fpRegisterTableContainer = document.getElementById('fpRegisterTableContainer');
 
-const fpRegisterTableContainer =
-    document.getElementById('fpRegisterTableContainer') ||
-    fpRegisterTable?.closest('.mdc-data-table') ||
-    fpRegisterTable?.parentElement;
+// Tabs chuyển đổi Registers
+const tabInteger = document.getElementById('tab-integer');
+const tabFp = document.getElementById('tab-fp');
 
-const toggleRegisterViewButton = document.getElementById('toggleRegisterViewButton');
-
+// Nút điều khiển Toolbar
 const assembleButton = document.getElementById('assembleButton');
 const runButton = document.getElementById('runButton');
 const stepButton = document.getElementById('stepButton');
 const resetButton = document.getElementById('resetButton');
 
+// Thanh điều khiển tốc độ
+const speedSlider = document.getElementById('speedSlider');
+const speedValueLabel = document.getElementById('speedValue');
+const clockRateDisplay = document.getElementById('clockRateDisplay');
+// Data Segment Controls
 const dataSegmentAddressInput = document.getElementById('dataSegmentAddressInput');
 const goToDataSegmentAddressButton = document.getElementById('goToDataSegmentAddress');
 const toggleDataSegmentModeButton = document.getElementById('toggleDataSegmentMode');
 const dataSegmentBody = document.getElementById('dataSegmentBody');
 const instructionViewBody = document.getElementById('instructionViewBody');
 
-const dataAddressFieldRoot = document.getElementById('data-segment-search-field');
-let dataAddressField; // MDC TextField instance
-
-
-// --- Các biến trạng thái của giao diện ---
+// --- BIẾN TRẠNG THÁI ---
 let dataSegmentStartAddress = 0x10010000;
 let dataSegmentDisplayMode = 'hex';
 const dataSegmentRows = 8;
 const bytesPerRow = 32;
 const wordsPerRow = 8;
 let currentRegisterView = 'integer';
-let activeBreakpoints = new Set(); // Set để lưu các số dòng đang có breakpoint
+let activeBreakpoints = new Set();
 
-/* Hàm đặt chế độ hiển thị bảng thanh ghi (integer|fp) */
+// --- HÀM QUẢN LÝ VIEW ---
+
+/* Hàm chuyển đổi hiển thị bảng thanh ghi (Tabs Logic) */
 function setRegisterView(view) {
     const isInteger = view === 'integer';
+    currentRegisterView = view;
 
-    // Ẩn/hiện đúng container để tránh MDC ghi đè
-    const show = (el, active) => {
-        if (!el) return;
-        el.style.display = active ? '' : 'none';          // quan trọng: ẩn wrapper
-        el.setAttribute('aria-hidden', active ? 'false' : 'true');
-        el.classList.toggle('active-table', active);
-    };
+    // 1. Ẩn/Hiện Container của bảng
+    if (registerTableContainer) registerTableContainer.style.display = isInteger ? 'block' : 'none';
+    if (fpRegisterTableContainer) fpRegisterTableContainer.style.display = isInteger ? 'none' : 'block';
 
-    // Ưu tiên ẩn/hiện container; nếu không có, fallback về chính table
-    show(registerTableContainer || registerTable, isInteger);
-    show(fpRegisterTableContainer || fpRegisterTable, !isInteger);
-
-    // Cập nhật nhãn nút (MDC button có .mdc-button__label)
-    if (toggleRegisterViewButton) {
-        const labelEl = toggleRegisterViewButton.querySelector('.mdc-button__label') || toggleRegisterViewButton;
-        labelEl.textContent = isInteger ? "View Floating-Point Registers" : "View Integer Registers";
+    // 2. Cập nhật trạng thái Active cho Tab
+    if (tabInteger) {
+        if (isInteger) tabInteger.classList.add('active');
+        else tabInteger.classList.remove('active');
     }
-
-    currentRegisterView = isInteger ? 'integer' : 'fp';
+    if (tabFp) {
+        if (!isInteger) tabFp.classList.add('active');
+        else tabFp.classList.remove('active');
+    }
 }
 
-// --- Logic Breakpoint MỚI sử dụng CodeMirror ---
-// Tạo một marker (dấu chấm đỏ) cho breakpoint
+/* Tạo marker breakpoint (dấu chấm đỏ) */
 function makeBreakpointMarker() {
     const marker = document.createElement("div");
     marker.style.color = "#e52d2d";
@@ -94,19 +91,14 @@ function makeBreakpointMarker() {
     return marker;
 }
 
-/**
- * Cập nhật giá trị cho ô nhập địa chỉ Data Segment bằng API của MDC.
- * @param {string} value - Giá trị địa chỉ mới (ví dụ: "0x10010000").
- */
+/* Cập nhật input địa chỉ data */
 function setDataAddressValue(value) {
-    if (dataAddressField) { // dataAddressField là biến instance của MDCTextField
-        dataAddressField.value = value;
-    } else if (dataSegmentAddressInput) { // Fallback nếu MDC chưa khởi tạo
+    if (dataSegmentAddressInput) {
         dataSegmentAddressInput.value = value;
     }
 }
 
-// --- Các hằng số ---
+// --- HẰNG SỐ TÊN THANH GHI ---
 const abiNames = [
     'zero', 'ra', 'sp', 'gp', 'tp', 't0', 't1', 't2',
     's0/fp', 's1', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5',
@@ -121,57 +113,15 @@ const fpAbiNames = [
     'fs8', 'fs9', 'fs10', 'fs11', 'ft8', 'ft9', 'ft10', 'ft11'
 ];
 
+// --- HÀM UI CƠ BẢN ---
 
-// --- Các hàm quản lý Breakpoint và Editor ---
-
-/**
- * Hàm tổng để bật/tắt breakpoint cho một dòng và cập nhật toàn bộ UI.
- * @param {number} lineNumber - Số dòng cần thay đổi trạng thái breakpoint.
- */
-// function toggleBreakpoint(lineNumber) {
-//     if (activeBreakpoints.has(lineNumber)) {
-//         activeBreakpoints.delete(lineNumber);
-//     } else {
-//         activeBreakpoints.add(lineNumber);
-//     }
-//     updateBreakpointUI();
-// }
-
-/**
- * Đồng bộ hóa trạng thái breakpoint trên toàn bộ giao diện (gutter và bảng lệnh).
- */
 function updateBreakpointUI() {
-    // Chỉ đồng bộ các checkbox trong Instruction View
     const checkboxes = document.querySelectorAll('#instructionViewTable input[type="checkbox"]');
     checkboxes.forEach(cb => {
         const lineNum = parseInt(cb.dataset.lineNumber);
         cb.checked = activeBreakpoints.has(lineNum);
     });
 }
-
-/**
- * Cập nhật các số dòng trong lề của trình soạn thảo.
- */
-// function updateLineNumbers() {
-//     const lineNumberGutter = document.getElementById('lineNumberGutter');
-//     if (!instructionInput || !lineNumberGutter) return;
-//
-//     lineNumberGutter.scrollTop = instructionInput.scrollTop; // Đồng bộ cuộn
-//     const lineCount = instructionInput.value.split('\n').length;
-//     lineNumberGutter.innerHTML = ''; // Xóa số dòng cũ
-//
-//     for (let i = 1; i <= lineCount; i++) {
-//         const lineEl = document.createElement('div');
-//         lineEl.className = 'line-number';
-//         lineEl.textContent = i;
-//         lineEl.dataset.lineNumber = i;
-//         lineEl.addEventListener('click', () => toggleBreakpoint(i));
-//         lineNumberGutter.appendChild(lineEl);
-//     }
-//     updateBreakpointUI(); // Đảm bảo các breakpoint được tô màu đúng
-// }
-
-// --- Các hàm khởi tạo và cập nhật giao diện (UI) ---
 
 function initializeRegisterTable() {
     if (!registerTableBody) return;
@@ -188,7 +138,6 @@ function initializeRegisterTable() {
     pcRow.insertCell().textContent = 'PC';
     pcRow.insertCell().textContent = '0x00000000';
     pcRow.insertCell().textContent = '0';
-    registerTable.querySelector('thead').innerHTML = '<tr><th>Name</th><th>Hex</th><th>Dec</th></tr>';
 }
 
 function initializeFPRegisterTable() {
@@ -201,14 +150,8 @@ function initializeFPRegisterTable() {
         row.insertCell().textContent = '0.0';
         row.insertCell().textContent = '0x00000000';
     }
-    fpRegisterTable.querySelector('thead').innerHTML = '<tr><th>Register</th><th>Float Value</th><th>Hex (Bits)</th></tr>';
 }
 
-/**
- * Dịch ngược một từ mã máy 32-bit thành chuỗi lệnh assembly cơ bản.
- * @param {number} instructionWord - Từ mã máy 32-bit.
- * @returns {string} - Chuỗi lệnh assembly cơ bản.
- */
 function disassembleInstruction(instructionWord) {
     if (!simulator) return "Simulator not ready";
     try {
@@ -240,9 +183,6 @@ function disassembleInstruction(instructionWord) {
     }
 }
 
-/**
- * Hiển thị bảng Instruction Memory View.
- */
 function renderInstructionView() {
     if (!instructionViewBody || !assembler.binaryCode) {
         if (instructionViewBody) instructionViewBody.innerHTML = '';
@@ -288,18 +228,15 @@ function renderInstructionView() {
             checkbox.dataset.lineNumber = sourceLine.lineNumber;
             checkbox.checked = activeBreakpoints.has(sourceLine.lineNumber);
 
-            // Đồng bộ toggle từ bảng Instruction View -> CodeMirror markers
             checkbox.addEventListener('click', (e) => {
                 const lineNum = parseInt(e.currentTarget.dataset.lineNumber, 10);
                 const cmLine = lineNum - 1;
-                const info = instructionInput?.lineInfo?.(cmLine);
-                if (!instructionInput || !info) return;
-
+                
                 if (activeBreakpoints.has(lineNum)) {
-                    instructionInput.setGutterMarker(cmLine, "breakpoints", null);
+                    if(instructionInput) instructionInput.setGutterMarker(cmLine, "breakpoints", null);
                     activeBreakpoints.delete(lineNum);
                 } else {
-                    instructionInput.setGutterMarker(cmLine, "breakpoints", makeBreakpointMarker());
+                    if(instructionInput) instructionInput.setGutterMarker(cmLine, "breakpoints", makeBreakpointMarker());
                     activeBreakpoints.add(lineNum);
                 }
                 updateBreakpointUI();
@@ -309,13 +246,11 @@ function renderInstructionView() {
         }
         bkptCell.appendChild(checkbox);
 
-        // Cột 2: Address
+        // Cột 2: Address, Code, ...
         row.insertCell().textContent = `0x${instr.address.toString(16).padStart(8, '0')}`;
-        // Cột 3: Code (Hex)
         row.insertCell().textContent = instr.hex;
-        // Cột 4: Basic (Lệnh dịch ngược)
         row.insertCell().textContent = disassembleInstruction(parseInt(instr.hex, 16));
-        // Cột 5: Source (Code gốc)
+        
         const sourceCell = row.insertCell();
         if (sourceLine && sourceLine.lineNumber !== lastSourceLineNum) {
             sourceCell.textContent = `${sourceLine.lineNumber}: ${sourceLine.original.trim()}`;
@@ -326,7 +261,7 @@ function renderInstructionView() {
 
 function renderDataSegmentTable() {
     if (!dataSegmentBody || !simulator) {
-        if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Simulator not ready or no data loaded.</td></tr>';
+        if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Simulator not ready.</td></tr>';
         return;
     }
     dataSegmentBody.innerHTML = '';
@@ -361,13 +296,9 @@ function renderDataSegmentTable() {
     }
 }
 
-/**
- * Cập nhật toàn bộ giao diện người dùng (thanh ghi, bộ nhớ, PC highlight).
- */
 function updateUIGlobally() {
     const currentSimulator = simulator;
 
-    // Cập nhật bảng thanh ghi số nguyên
     if (registerTableBody) {
         for (let i = 0; i < 32; i++) {
             const row = document.getElementById(`reg-${i}`);
@@ -391,7 +322,6 @@ function updateUIGlobally() {
         }
     }
 
-    // Cập nhật bảng thanh ghi dấu phẩy động
     if (fpRegisterTableBody && currentSimulator.cpu?.fregisters) {
         for (let i = 0; i < 32; i++) {
             const row = document.getElementById(`freg-${i}`);
@@ -410,11 +340,9 @@ function updateUIGlobally() {
         }
     }
 
-    // Vẽ lại các bảng bộ nhớ
     renderDataSegmentTable();
     renderInstructionView();
 
-    // Xóa hiệu ứng highlight sau một khoảng thời gian ngắn
     setTimeout(() => {
         document.querySelectorAll('tr.highlight').forEach(row => row.classList.remove('highlight'));
     }, 500);
@@ -422,21 +350,18 @@ function updateUIGlobally() {
 
 window.updateUIGlobally = updateUIGlobally;
 
-// --- Các hàm xử lý sự kiện cho nút điều khiển ---
+// --- EVENT HANDLERS (Nút điều khiển) ---
 
 function handleAssemble() {
     if (!assembler || !simulator || !binaryOutput || !instructionInput) return;
     binaryOutput.textContent = "Assembling...";
-    if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Resetting simulator...</td></tr>';
+    
     if (instructionViewBody) instructionViewBody.innerHTML = '';
-
     simulator.reset();
 
     setTimeout(() => {
         try {
-            // const assemblyCode = instructionInput.value;
             const assemblyCode = instructionInput.getValue();
-
             const programData = assembler.assemble(assemblyCode);
 
             const binaryHexStrings = programData.instructions.map(instr => `${instr.hex}  (${instr.binary})`);
@@ -446,7 +371,6 @@ function handleAssemble() {
             }
 
             simulator.loadProgram(programData);
-
 
             let dataStartAddrFound = false;
             if (programData.memory && Object.keys(programData.memory).length > 0) {
@@ -464,76 +388,118 @@ function handleAssemble() {
             }
             dataSegmentStartAddress = Math.max(0, Math.floor(dataSegmentStartAddress / bytesPerRow) * bytesPerRow);
             setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`);
+            
             updateUIGlobally();
 
         } catch (error) {
-            console.error("Assembly or Loading Error:", error, error.stack);
-            binaryOutput.textContent = `Error:\n${error.message}\n\n(Check console for details)`;
-            if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Assembly/Loading failed.</td></tr>';
-            initializeRegisterTable();
-            initializeFPRegisterTable();
+            console.error("Assembly Error:", error);
+            binaryOutput.textContent = `Error:\n${error.message}`;
+            assembler._reset(); 
             updateUIGlobally();
         }
     }, 10);
 }
 
+// --- [CẬP NHẬT] HÀM RUN MỚI HỖ TRỢ TỐC ĐỘ ---
 function handleRun() {
     if (!simulator) return;
     binaryOutput.textContent += "\n\n--- Running ---";
 
+    // 1. Logic Breakpoint (Giữ nguyên)
     let breakpointAddress = null;
     if (activeBreakpoints.size > 0) {
         const firstBreakpointLine = Math.min(...activeBreakpoints);
         const instructionLineInfo = assembler.instructionLines.find(
-            line => line.lineNumber === firstBreakpointLine && (line.type === 'instruction' || line.type === 'pseudo-instruction')
+            line => line.lineNumber === firstBreakpointLine && 
+            (line.type === 'instruction' || line.type === 'pseudo-instruction')
         );
-
         if (instructionLineInfo) {
             breakpointAddress = instructionLineInfo.address;
-            binaryOutput.textContent += `\n(Running until breakpoint at Line ${firstBreakpointLine} - Addr 0x${breakpointAddress.toString(16)})`;
-        } else {
-            binaryOutput.textContent += `\n⚠ Warning: No executable instruction found on breakpoint line ${firstBreakpointLine}.`;
+            binaryOutput.textContent += `\n(Running until breakpoint at Line ${firstBreakpointLine})`;
         }
     }
 
     let running = true;
-    const maxCycles = 50000;
+    const maxCycles = 500000; 
     let cycle = 0;
 
+    // [MỚI] Biến dùng để đo tốc độ
+    let lastTime = performance.now();
+    let cyclesInLastSecond = 0;
+
     function runLoop() {
-        if (!running || !simulator.cpu.isRunning || cycle++ > maxCycles) {
-            if (cycle > maxCycles) {
-                binaryOutput.textContent += `\n\n⚠ Halted: Exceeded maximum cycle limit.`;
-            }
-
-            // THÊM ĐOẠN NÀY: Tick simulator cho đến khi DMA hoàn thành
-            while (simulator.dma && simulator.dma.isBusy) {
-                simulator.tick();
-            }
-
+        // Kiểm tra dừng
+        if (!running || !simulator.cpu.isRunning || cycle > maxCycles) {
+            if (cycle > maxCycles) binaryOutput.textContent += `\n\n⚠ Halted: Exceeded max cycles.`;
+            while (simulator.dma && simulator.dma.isBusy) simulator.tick();
             updateUIGlobally();
             return;
         }
 
-        if (breakpointAddress !== null && simulator.cpu.pc === breakpointAddress) {
-            running = false;
-            binaryOutput.textContent += `\n🔴 Breakpoint hit at PC = 0x${breakpointAddress.toString(16)}`;
-            updateUIGlobally();
-            return;
+        // Lấy tốc độ từ Slider
+        let cyclesPerFrame = 1;
+        if (speedSlider) {
+            cyclesPerFrame = parseInt(speedSlider.value, 10);
+            if (cyclesPerFrame === 100) cyclesPerFrame = 1000; // Tăng tốc cực đại lên 1000
         }
 
-        try {
-            simulator.tick();
+        // Vòng lặp thực thi
+        let executedThisFrame = 0;
+        for (let i = 0; i < cyclesPerFrame; i++) {
+            if (breakpointAddress !== null && simulator.cpu.pc === breakpointAddress) {
+                running = false;
+                binaryOutput.textContent += `\n🔴 Breakpoint hit at PC = 0x${breakpointAddress.toString(16)}`;
+                break; 
+            }
+            if (!simulator.cpu.isRunning) {
+                running = false;
+                break;
+            }
+
+            try {
+                simulator.tick(); 
+                cycle++;
+                executedThisFrame++; // Đếm số lệnh chạy được trong frame này
+                
+                if (cycle > maxCycles) {
+                    running = false;
+                    break;
+                }
+            } catch (e) {
+                running = false;
+                console.error("Run Error:", e);
+                binaryOutput.textContent += `\n\nRun Error: ${e.message}`;
+                break;
+            }
+        }
+
+        // [MỚI] Tính toán tốc độ Hz (Instructions Per Second)
+        cyclesInLastSecond += executedThisFrame;
+        const now = performance.now();
+        const elapsed = now - lastTime;
+
+        // Cập nhật mỗi 500ms (nửa giây) để số nhảy cho mượt
+        if (elapsed >= 500) {
+            // Công thức: (Số lệnh / Số mili giây) * 1000 = Số lệnh/giây
+            const hz = Math.round((cyclesInLastSecond / elapsed) * 1000);
+            
+            if (clockRateDisplay) {
+                // Định dạng số có dấu phẩy (ví dụ: 1,200 Hz)
+                clockRateDisplay.textContent = hz.toLocaleString() + " Hz";
+            }
+            
+            // Reset bộ đếm
+            cyclesInLastSecond = 0;
+            lastTime = now;
+        }
+
+        updateUIGlobally();
+
+        if (running && simulator.cpu.isRunning) {
             requestAnimationFrame(runLoop);
-        } catch (e) {
-            running = false;
-            console.error("Error during run:", e);
-            binaryOutput.textContent += `\n\nRun Error: ${e.message}`;
-            updateUIGlobally();
         }
     }
 
-    updateUIGlobally();
     requestAnimationFrame(runLoop);
 }
 
@@ -543,17 +509,20 @@ function handleStep() {
         simulator.tick();
         updateUIGlobally();
     } catch (e) {
-        console.error("Error during step:", e);
-        const currentBinaryOutput = binaryOutput.textContent.split('\n\nStep Error:')[0];
-        binaryOutput.textContent = currentBinaryOutput + `\n\nStep Error: ${e.message}`;
+        console.error("Step Error:", e);
+        binaryOutput.textContent += `\n\nStep Error: ${e.message}`;
         updateUIGlobally();
     }
 }
 
 function handleReset() {
-    if (!simulator || !instructionInput || !binaryOutput || !dataSegmentBody) return;
+    if (!simulator || !instructionInput) return;
 
     simulator.reset();
+
+    if (assembler && typeof assembler._reset === 'function') {
+        assembler._reset();
+    }
 
     instructionInput.setValue("");
     try { instructionInput.clearGutter("breakpoints"); } catch {}
@@ -561,71 +530,54 @@ function handleReset() {
     activeBreakpoints.clear();
 
     dataSegmentStartAddress = assembler.dataBaseAddress || 0x10010000;
-    setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`); // dùng API MDC
+    setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`);
 
     updateUIGlobally();
-
-    // Dùng API chuẩn hóa để hiển thị đúng một bảng
     setRegisterView('integer');
-    console.log("System reset complete.");
+    console.log("System reset.");
 }
 
-// --- Khởi tạo và gắn các trình xử lý sự kiện khi DOM đã sẵn sàng ---
+// --- KHỞI TẠO KHI DOM LOADED ---
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("DOM loaded. Initializing UI components...");
+    console.log("Initializing App...");
 
-    // 1. Khởi tạo các bảng thanh ghi
     initializeRegisterTable();
     initializeFPRegisterTable();
 
-    // 2. Khởi tạo CodeMirror Editor và logic breakpoint
     instructionInput = CodeMirror.fromTextArea(document.getElementById('instructionInput'), {
         lineNumbers: true,
         mode: "riscv",
-        theme: "default", // Sử dụng theme nền trắng mặc định
-        gutters: ["CodeMirror-linenumbers", "breakpoints"] // Thêm rãnh cho số dòng và breakpoint
+        theme: "default",
+        gutters: ["CodeMirror-linenumbers", "breakpoints"]
     });
 
-    // Lắng nghe sự kiện click vào rãnh để đặt/xóa breakpoint
     instructionInput.on("gutterClick", function(cm, n) {
-        const info = cm.lineInfo(n);
         const lineNumber = n + 1;
-
-        if (info.gutterMarkers) { // Nếu đã có breakpoint -> xóa đi
+        const info = cm.lineInfo(n);
+        if (info.gutterMarkers) {
             cm.setGutterMarker(n, "breakpoints", null);
             activeBreakpoints.delete(lineNumber);
-        } else { // Nếu chưa có -> thêm vào
+        } else {
             cm.setGutterMarker(n, "breakpoints", makeBreakpointMarker());
             activeBreakpoints.add(lineNumber);
         }
-        updateBreakpointUI(); // Cập nhật lại các checkbox trong bảng Instruction View
+        updateBreakpointUI();
     });
 
-    // 3. Khởi tạo các component của Material Design (MDC)
-    mdc.autoInit();
-    document.querySelectorAll('.mdc-button').forEach(button => new mdc.ripple.MDCRipple(button));
-    // Khởi tạo riêng TextField để control giá trị bằng API
-    if (dataAddressFieldRoot) {
-        dataAddressField = new mdc.textField.MDCTextField(dataAddressFieldRoot);
+    if (tabInteger && tabFp) {
+        tabInteger.addEventListener('click', () => setRegisterView('integer'));
+        tabFp.addEventListener('click', () => setRegisterView('fp'));
     }
 
-    // 4. Gắn các sự kiện cho các nút điều khiển giao diện khác
-    // Gắn sự kiện cho nút chuyển đổi bảng thanh ghi
-    toggleRegisterViewButton?.addEventListener('click', () => {
-        setRegisterView(currentRegisterView === 'integer' ? 'fp' : 'integer');
-    });
-
-    // Gắn sự kiện cho nút chuyển đổi chế độ xem Data Segment
     toggleDataSegmentModeButton?.addEventListener('click', () => {
         dataSegmentDisplayMode = (dataSegmentDisplayMode === 'hex') ? 'ascii' : 'hex';
         renderDataSegmentTable();
     });
 
-    // Gắn sự kiện cho việc đi đến địa chỉ trong Data Segment
     if (goToDataSegmentAddressButton && dataSegmentAddressInput) {
         const goToAddress = () => {
             const addrStr = dataSegmentAddressInput.value.trim();
-            if (addrStr === '') return;
+            if (!addrStr) return;
             try {
                 const newAddr = addrStr.toLowerCase().startsWith('0x') ? parseInt(addrStr, 16) : parseInt(addrStr, 10);
                 if (!isNaN(newAddr) && newAddr >= 0) {
@@ -633,11 +585,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderDataSegmentTable();
                     setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`);
                 } else {
-                    alert(`Invalid address format: "${addrStr}"`);
+                    alert("Invalid address");
                 }
-            } catch (e) {
-                alert(`Error parsing address: "${addrStr}"`);
-            }
+            } catch (e) { alert("Error parsing address"); }
         };
         goToDataSegmentAddressButton.addEventListener('click', goToAddress);
         dataSegmentAddressInput.addEventListener('keypress', (e) => {
@@ -645,24 +595,52 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 5. Gắn sự kiện cho các nút điều khiển chính của simulator
     assembleButton?.addEventListener('click', handleAssemble);
     runButton?.addEventListener('click', handleRun);
     stepButton?.addEventListener('click', handleStep);
     resetButton?.addEventListener('click', handleReset);
-    
-    // 6. Khởi tạo simulator và UI lần đầu
-    if (typeof simulator !== 'undefined') {
-        simulator.reset();
-        setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`); // dùng API của MDC để label nổi
-        setRegisterView('integer'); // đảm bảo chỉ 1 bảng hiển thị
-        updateUIGlobally();
-    } else {
-        console.error("Simulator module not loaded!");
-        if (dataSegmentBody) dataSegmentBody.innerHTML = '<tr><td colspan="9">Error: Simulator not loaded.</td></tr>';
+
+    // [MỚI] Sự kiện thanh trượt tốc độ
+    if (speedSlider && speedValueLabel) {
+        speedSlider.addEventListener('input', () => {
+            let val = speedSlider.value;
+            if (val == 100) speedValueLabel.textContent = "Max";
+            else speedValueLabel.textContent = val + "x";
+        });
     }
 
-    // ...existing code...
-});
+    if (typeof mdc !== 'undefined') {
+        mdc.autoInit();
+        document.querySelectorAll('.mdc-button').forEach(btn => new mdc.ripple.MDCRipple(btn));
+    }
 
-//# sourceMappingURL=javascript.js.map
+    if (typeof simulator !== 'undefined') {
+        simulator.reset();
+        setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`);
+        setRegisterView('integer');
+        updateUIGlobally();
+    }
+
+    const sidebarItems = document.querySelectorAll('.sidebar-item');
+    const viewSections = document.querySelectorAll('.view-section');
+
+    sidebarItems.forEach(item => {
+        item.addEventListener('click', () => {
+            sidebarItems.forEach(i => i.classList.remove('active'));
+            viewSections.forEach(v => v.classList.remove('active'));
+
+            item.classList.add('active');
+            const targetId = item.getAttribute('data-target');
+            const targetSection = document.getElementById(targetId);
+            if (targetSection) {
+                targetSection.classList.add('active');
+            }
+
+            if (targetId === 'view-editor' && instructionInput) {
+                setTimeout(() => {
+                    instructionInput.refresh();
+                }, 10);
+            }
+        });
+    });
+});

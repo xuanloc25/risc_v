@@ -1,454 +1,526 @@
-/* style.css */
+/* style.css - RISC-V SoC Simulator (Ripes-like Layout) */
 
-body {
-    font-family: sans-serif, monospace;
-    /* Ưu tiên font sans-serif dễ đọc, dự phòng monospace */
-    margin: 20px;
-    /* Khoảng cách lề xung quanh trang */
-    background-color: #f8f9fa;
-    /* Màu nền xám nhạt cho toàn trang */
+/* --- RESET & BASE STYLES --- */
+:root {
+    --sidebar-width: 80px;
+    --sidebar-bg: #2d3436;
+    --sidebar-text: #b2bec3;
+    --sidebar-active-bg: #0984e3;
+    --sidebar-active-text: #ffffff;
+    
+    --header-height: 60px;
+    --border-color: #dfe6e9;
+    --bg-light: #f5f6fa;
+    --bg-white: #ffffff;
+    
+    --primary-color: #6200ee;
+    --accent-color: #018786;
+    --error-color: #b00020;
+}
+
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    font-family: 'Roboto', sans-serif;
+    background-color: var(--bg-light);
     color: #333;
-    /* Màu chữ mặc định (xám đậm) */
-    line-height: 1.5;
-    /* Chiều cao dòng mặc định dễ đọc hơn */
+    overflow: hidden; /* Ngăn cuộn trang chính */
 }
 
-h1,
-h2 {
-    text-align: center;
-    /* Căn giữa tiêu đề */
-    color: #444;
-    /* Màu chữ tiêu đề đậm hơn chút */
-    margin-top: 20px;
-    /* Khoảng cách phía trên tiêu đề */
-    margin-bottom: 25px;
-    /* Khoảng cách phía dưới tiêu đề */
-    font-weight: 600;
-    /* Tăng độ đậm cho tiêu đề */
-}
-
-/* ================================== */
-/* == BỐ CỤC CHÍNH (2 CỘT) == */
-/* ================================== */
-
-.container {
+/* --- MAIN LAYOUT CONTAINER --- */
+.app-container {
     display: flex;
-    /* Sử dụng Flexbox để tạo layout 2 cột */
-    gap: 30px;
-    /* Khoảng cách giữa cột trái và cột phải */
-    max-width: 1400px;
-    /* Tăng chiều rộng tối đa của container */
-    margin: 0 auto 30px auto;
-    /* Căn giữa container và thêm khoảng cách dưới */
+    height: 100vh;
+    width: 100vw;
 }
 
-.column {
-    background-color: #fff;
-    /* Nền trắng cho các cột */
-    padding: 20px;
-    /* Khoảng đệm bên trong cột */
-    border-radius: 8px;
-    /* Bo góc nhẹ */
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
-    /* Đổ bóng nhẹ */
-}
-
-.left-column {
-    flex: 3; /* Cột trái chiếm 3 phần */
+/* --- 1. SIDEBAR STYLES --- */
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: var(--sidebar-bg);
     display: flex;
     flex-direction: column;
-}
-
-.right-column {
-    flex: 1; /* Cột phải chiếm 1 phần */
-    display: flex; 
-    flex-direction: column; 
-}
-
-/* ================================== */
-/* == CÁC THÀNH PHẦN TRONG CỘT TRÁI == */
-/* ================================== */
-
-textarea#instructionInput {
-    width: calc(100% - 22px); /* Chiều rộng 100% trừ padding và border */
-    height: 350px; /* Chiều cao textarea theo yêu cầu của bạn */
-    /* min-height: 150px; */
-    /* flex-grow: 0; */
-    margin-bottom: 15px;
-    font-family: monospace;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    padding: 10px;
-    font-size: 1em;
-    line-height: 1.5;
-    resize: vertical;
-}
-
-/* --- Khu vực chứa các nút điều khiển chính --- */
-.controls {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-around;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 20px;
+    padding-top: 10px;
+    z-index: 100;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    flex-shrink: 0;
 }
 
-/* Style chung cho các nút điều khiển chính */
-/* Bỏ các margin inline trong HTML của button nếu đã có gap ở .controls */
-#assembleButton,
-#runButton,
-#stepButton,
-#resetButton {
-    min-width: 90px;
-    padding: 10px 15px;
+.sidebar-item {
+    width: 100%;
+    height: 70px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--sidebar-text);
     cursor: pointer;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    font-size: 0.95em;
-    font-weight: bold;
-    text-align: center;
-    transition: background-color 0.2s;
+    transition: all 0.2s ease;
+    font-size: 0.75rem;
+    border-left: 4px solid transparent;
 }
 
-#assembleButton:hover,
-#runButton:hover,
-#stepButton:hover,
-#resetButton:hover {
-    background-color: #0056b3;
+.sidebar-item i {
+    font-size: 28px;
+    margin-bottom: 4px;
 }
 
-#assembleButton:active,
-#runButton:active,
-#stepButton:active,
-#resetButton:active {
-    background-color: #004085;
+.sidebar-item:hover {
+    background-color: rgba(255,255,255,0.05);
+    color: #fff;
 }
 
-pre#binaryOutput {
-    background-color: #e9ecef;
+.sidebar-item.active {
+    color: var(--sidebar-active-text);
+    background-color: rgba(9, 132, 227, 0.1);
+    border-left-color: var(--sidebar-active-bg);
+}
+
+/* --- 2. MAIN CONTENT AREA --- */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-light);
+    overflow: hidden;
+    position: relative;
+}
+
+/* --- TOOLBAR --- */
+.toolbar {
+    height: var(--header-height);
+    background-color: var(--bg-white);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    flex-shrink: 0;
+}
+
+.toolbar-group {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.separator {
+    width: 1px;
+    height: 32px;
+    background-color: #e0e0e0;
+    margin: 0 8px;
+}
+
+.success-btn {
+    background-color: #00b894 !important;
+    color: white !important;
+}
+
+/* [MỚI] Style cho thanh tốc độ */
+.speed-control {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-left: 10px;
+    font-size: 0.8rem;
+    color: #636e72;
+    width: 120px;
+}
+
+.speed-control input[type=range] {
+    width: 100%;
+    cursor: pointer;
+    height: 4px;
+    background: #dfe6e9;
+    border-radius: 2px;
+    appearance: none; /* Xóa style mặc định của trình duyệt */
+}
+
+.speed-control input[type=range]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: pointer;
+    transition: background .15s ease-in-out;
+}
+
+.speed-control input[type=range]::-webkit-slider-thumb:hover {
+    background: var(--sidebar-active-bg);
+}
+
+/* --- VIEW SECTIONS (Tab Content) --- */
+.view-section {
+    display: none; /* Ẩn mặc định */
+    flex: 1;
     padding: 15px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    min-height: 80px;
-    max-height: 250px;
-    overflow-y: auto;
-    font-family: monospace;
-    font-size: 0.95em;
-    line-height: 1.6;
+    overflow: hidden;
+    height: calc(100vh - var(--header-height));
 }
 
-/* ================================== */
-/* == BẢNG THANH GHI (CỘT PHẢI) == */
-/* ================================== */
+.view-section.active {
+    display: block;
+    animation: fadeIn 0.2s ease-in-out;
+}
 
-/* --- Khu vực nút chuyển đổi bảng thanh ghi --- */
-.register-view-toggle {
-    margin-bottom: 15px;
+@keyframes fadeIn {
+    from { opacity: 0.95; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- EDITOR VIEW LAYOUT --- */
+.editor-layout {
+    display: flex;
+    height: 100%;
+    gap: 15px;
+}
+
+.editor-left {
+    flex: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    min-width: 400px;
+}
+
+.editor-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    min-width: 320px;
+    max-width: 450px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    overflow: hidden;
+}
+
+/* Code Area & CodeMirror Overrides */
+.code-area {
+    flex: 2;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.CodeMirror {
+    height: 100% !important;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.CodeMirror-gutters {
+    background-color: #f7f9fa;
+    border-right: 1px solid #dfe6e9;
+    white-space: nowrap;
+}
+
+/* Tăng khoảng cách cột breakpoint */
+.breakpoints {
+    width: 25px;
     text-align: center;
 }
 
-#toggleRegisterViewButton {
-    padding: 8px 15px;
-    background-color: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 5px;
+.CodeMirror-guttermarker-subtle {
+    color: #e52d2d;
+    font-size: 1.4em;
+    line-height: 1.1;
     cursor: pointer;
-    font-size: 0.9em;
-    transition: background-color 0.2s;
 }
 
-#toggleRegisterViewButton:hover {
-    background-color: #5a6268;
+/* Console Area */
+.console-area {
+    flex: 1;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    overflow: hidden;
 }
 
-/* --- Style chung cho các bảng hiển thị thanh ghi --- */
-.register-display-table {
+/* === TAB STYLE (NEW) === */
+.register-tabs {
+    display: flex;
+    background-color: #f1f2f6;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.tab-item {
+    flex: 1;
+    text-align: center;
+    padding: 12px 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #636e72;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border-bottom: 3px solid transparent;
+}
+
+.tab-item:hover {
+    background-color: rgba(0,0,0,0.03);
+    color: #2d3436;
+}
+
+.tab-item.active {
+    background-color: #fff;
+    color: var(--sidebar-active-bg);
+    border-bottom-color: var(--sidebar-active-bg);
+    font-weight: 600;
+}
+
+.panel-header {
+    background-color: #f1f2f6;
+    padding: 10px 15px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #2d3436;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+#binaryOutput {
+    margin: 0;
+    padding: 12px;
+    flex: 1;
+    overflow: auto;
+    font-family: 'Consolas', monospace;
+    font-size: 0.85rem;
+    background-color: #fff;
+    color: #2d3436;
+    white-space: pre-wrap;
+    border: none;
+}
+
+/* --- REGISTER TABLE --- */
+.register-container {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+}
+
+/* --- MEMORY VIEW LAYOUT --- */
+.memory-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    height: 100%;
+}
+
+.memory-panel {
+    flex: 1;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.memory-panel h3 {
+    margin: 0;
+    padding: 12px 15px;
+    background-color: #f1f2f6;
+    font-size: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    color: #2d3436;
+}
+
+.memory-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: #fff;
+    border-bottom: 1px solid #eee;
+}
+
+.control-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.control-group input {
+    padding: 6px 10px;
+    border: 1px solid #dfe6e9;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+.control-group button {
+    padding: 6px 12px;
+    background-color: #f1f2f6;
+    border: 1px solid #dfe6e9;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+}
+
+.control-group button:hover {
+    background-color: #e1e2e6;
+}
+
+/* --- COMMON TABLE STYLES --- */
+.table-scroll-container {
+    flex: 1;
+    overflow: auto;
+}
+
+.simple-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.9em; /* Font chung cho nội dung bảng */
-    margin-top: 0;
-    display: none; /* ẨN TẤT CẢ CÁC BẢNG THANH GHI THEO MẶC ĐỊNH */
+    font-size: 0.85rem;
+    font-family: 'Consolas', monospace;
 }
 
-.register-display-table.active-table {
-    display: table !important; /* CHỈ HIỂN THỊ BẢNG CÓ CLASS 'active-table' */
-}
-
-.register-display-table th,
-.register-display-table td {
-    border: 1px solid #dee2e6;
-    padding: 7px 10px;
+.simple-table th {
+    background-color: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 5;
     text-align: left;
-}
-
-.register-display-table th {
-    background-color: #f1f3f5;
+    padding: 10px 12px;
+    border-bottom: 2px solid #dfe6e9;
+    border-right: 1px solid #eee;
+    color: #636e72;
     font-weight: 600;
-    position: sticky; /* Giữ header cố định khi cuộn trong .right-column */
-    top: 0; 
-    z-index: 1;
+    box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1);
 }
 
-/* --- Bảng thanh ghi số nguyên (Integer Registers) --- */
-/* Cột "Value" (Hex - là cột thứ 2 của bảng #registerTable) */
-#registerTable td:nth-child(2) {
-    text-align: right;
-    font-family: monospace;
-    font-size: 1em; /* Font to bằng font body */
+.simple-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f1f2f6;
+    border-right: 1px solid #f5f6fa;
+    color: #2d3436;
 }
 
-/* --- Bảng thanh ghi điểm động (Floating-Point Registers) --- */
-/* #fpRegisterTable sẽ được ẩn/hiện bằng class .active-table */
-
-/* Cột "Float Value" (cột thứ 2 của bảng FP) */
-#fpRegisterTable td:nth-child(2) {
-    text-align: right;      
-    font-family: monospace; 
+.simple-table tr:hover td {
+    background-color: #f5f6fa;
 }
 
-/* Cột "Hex (Bits)" (cột thứ 3 của bảng FP) */
-#fpRegisterTable td:nth-child(3) {
-    text-align: right;
-    font-family: monospace;
-    font-size: 1em; /* Font to bằng font body */
+/* Highlights */
+.pc-highlight td {
+    background-color: #dff9fb !important;
+    color: #000;
 }
 
-/* --- Highlight cho thanh ghi thay đổi (áp dụng cho cả 2 bảng) --- */
-.register-display-table tr.highlight td {
-    background-color: #fff3cd !important;
-    transition: background-color 0.5s ease-out;
+.highlight td {
+    background-color: #ffeaa7 !important;
+    transition: background-color 0.5s ease;
 }
 
-/* ================================== */
-/* == BẢNG DATA SEGMENT (Ở DƯỚI) == */
-/* ================================== */
-/* (Phần CSS cho Data Segment không thay đổi) */
-.data-segment-container {
-    margin-top: 30px;
-    padding: 20px;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
-    max-width: 1400px;
-    margin-left: auto;
-    margin-right: auto;
-    margin-bottom: 30px;
-}
-
-.address-search {
-    margin-bottom: 15px;
+/* --- I/O STYLES (LED Matrix) --- */
+.io-container {
     display: flex;
     flex-wrap: wrap;
+    gap: 20px;
+    padding: 20px;
+    justify-content: center;
+    align-items: flex-start;
+    overflow: auto;
+    height: 100%;
+}
+
+.io-device-card {
+    background: #fff;
+    border: 1px solid #dfe6e9;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    width: 340px; /* Vừa đủ cho canvas 320px + padding */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s;
+}
+
+.io-device-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.io-header {
+    background-color: #2d3436;
+    color: #fff;
+    padding: 12px 15px;
+    font-weight: bold;
+    display: flex;
     align-items: center;
     gap: 10px;
+    font-size: 0.95rem;
 }
 
-.address-search label {
-    font-weight: bold;
-    margin-right: 5px;
+.io-body {
+    padding: 10px;
+    background-color: #636e72; /* Nền xám đậm làm nổi bật LED */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 340px;
 }
 
-.address-search input[type="text"] {
-    padding: 6px 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-family: monospace;
-    width: 200px;
+.led-matrix-body canvas {
+    background-color: #000;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    cursor: crosshair;
+    border-radius: 2px;
 }
 
-.address-search button,
-#toggleDataSegmentMode {
-    padding: 6px 12px;
-    cursor: pointer;
-    background-color: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.9em;
-    transition: background-color 0.2s;
-}
-
-.address-search button:hover,
-#toggleDataSegmentMode:hover {
-    background-color: #5a6268;
-}
-
-.table-wrapper {
-    overflow-x: auto;
-}
-
-#dataSegmentTable {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85em;
-    font-family: monospace;
-    white-space: pre;
-    margin-top: 10px;
-}
-
-#dataSegmentTable th,
-#dataSegmentTable td {
-    border: 1px solid #dee2e6;
-    padding: 5px 8px;
+.io-footer {
+    padding: 10px 15px;
+    background-color: #f1f2f6;
+    border-top: 1px solid #dfe6e9;
+    font-size: 0.85rem;
+    color: #636e72;
     text-align: center;
-    min-width: 75px;
 }
 
-#dataSegmentTable th {
-    background-color: #f1f3f5;
-    font-weight: 600;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
-
-#dataSegmentTable td:first-child {
-    text-align: left;
-    font-weight: bold;
-    background-color: #f8f9fa;
-    min-width: 110px;
-    position: sticky;
-    left: 0;
-    z-index: 2;
-}
-
-#dataSegmentTable th:first-child {
-    z-index: 3;
-}
-
-/* ================================== */
-/* == ẨN DEBUG TOOLS == */
-/* ================================== */
-.debug-tools {
-    display: none;
-}
-
-/* ================================== */
-/* == TRÌNH SOẠN THẢO CODE CẢI TIẾN == */
-/* ================================== */
-
-/* Ghi đè lên textarea cũ */
-textarea#instructionInput {
-    width: 100%;
+/* --- PLACEHOLDER VIEWS --- */
+.placeholder-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     height: 100%;
-    flex-grow: 1; /* Lấp đầy không gian còn lại */
-    margin-bottom: 0;
-    border: none; /* Bỏ border vì đã có ở container */
-    border-radius: 0;
-    resize: none; /* Tắt tính năng resize */
-    padding-left: 10px;
-    line-height: 1.5; /* Phải giống với line-height của gutter */
-    font-family: monospace;
-    background-color: transparent; /* Nền trong suốt để không che gutter khi cuộn ngang */
-    outline: none;
-}
-
-/* ================================== */
-/* == INSTRUCTION MEMORY VIEW      == */
-/* ================================== */
-
-.instruction-view-container {
-    margin-top: 30px;
-    padding: 20px;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
-    max-width: 1400px;
-    margin-left: auto;
-    margin-right: auto;
-    margin-bottom: 30px;
-}
-
-#instructionViewTable {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: monospace;
-    font-size: 0.9em;
-    white-space: pre; /* Giữ khoảng trắng */
-}
-
-#instructionViewTable th,
-#instructionViewTable td {
-    border: 1px solid #dee2e6;
-    padding: 7px 10px;
-    text-align: left;
-}
-
-#instructionViewTable th {
-    background-color: #f1f3f5;
-    font-weight: 600;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
-
-/* Căn chỉnh cho các cột cụ thể */
-#instructionViewTable td:nth-child(1) { /* Cột Bkpt */
+    color: #b2bec3;
     text-align: center;
 }
-#instructionViewTable td:nth-child(2), /* Cột Address */
-#instructionViewTable td:nth-child(3) { /* Cột Code */
-    font-family: monospace;
+
+.placeholder-view i {
+    font-size: 80px;
+    margin-bottom: 20px;
+    opacity: 0.5;
 }
 
-/* Style cho hàng được highlight khi PC trỏ tới */
-#instructionViewTable tr.pc-highlight td {
-    background-color: #cce5ff !important; /* Màu xanh nhạt */
+.placeholder-view h2 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    color: #636e72;
 }
 
-/* --- STYLE CHO CODEMIRROR EDITOR (THEO PHONG CÁCH RARS) --- */
-
-/* Container chính của editor */
-.CodeMirror {
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    height: 400px;
-    font-size: 1em;
-    font-family: monospace;
-}
-
-/* Rãnh (gutter) cho breakpoint */
-.CodeMirror-gutters {
-    border-right: 1px solid #ddd;
-    background-color: #f7f7f7;
-}
-
-.breakpoints {
-  width: 1.2em;
-  text-align: center;
-}
-
-/* Dấu chấm tròn cho breakpoint */
-.CodeMirror-guttermarker-subtle {
-    font-size: 1.2em;
-    line-height: 0.9;
-    cursor: pointer;
-    color: #dc3545; /* Màu đỏ cho breakpoint */
-}
-
-/* ======================================================= */
-/* == BẢNG MÀU MÔ PHỎNG THEO RARS (GHI ĐÈ LÊN THEME)      == */
-/* ======================================================= */
-
-/* --- BẢNG MÀU MÔ PHỎNG THEO RARS (CHO NỀN TRẮNG) --- */
-/* Áp dụng cho theme "default" của CodeMirror */
-.cm-s-default .cm-comment { color: #008000; }  /* Chú thích: Xanh lá */
-.cm-s-default .cm-string { color: #008000; }   /* Chuỗi: Xanh lá */
-.cm-s-default .cm-tag { color: #000000; }      /* Nhãn: Đen */
-.cm-s-default .cm-variable { color: #0000FF; }  /* Lệnh: Xanh dương */
-.cm-s-default .cm-keyword { color: #FF00FF; }  /* Chỉ thị: Hồng */
-.cm-s-default .cm-variable-2 { color: #FF0000; } /* Thanh ghi: Đỏ */
-.cm-s-default .cm-number { color: #993300; }   /* Số: Nâu/Cam đất */
-
-/* Chỉ hiển thị 1 bảng thanh ghi tại một thời điểm (ẩn wrapper MDC) */
-#registerTable:not(.active-table),
-#fpRegisterTable:not(.active-table) {
-  display: none !important;
+/* --- MDC OVERRIDES --- */
+.mdc-button {
+    height: 36px;
+    font-size: 0.8rem;
 }

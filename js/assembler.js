@@ -840,6 +840,21 @@ export const assembler = {
         });
     },
     _handleEquDirective(operands) {
+        // [FIX] Hỗ trợ cú pháp không dấu phẩy (VD: .eqv A 10)
+        // Nếu parser chỉ tìm thấy 1 operand dài, ta thử tách nó bằng khoảng trắng
+        if (operands.length === 1) {
+            const parts = operands[0].trim().split(/\s+/);
+            if (parts.length >= 2) {
+                // Cập nhật lại mảng operands
+                operands = [parts[0], parts.slice(1).join('')]; 
+            }
+        }
+
+        // Kiểm tra lại số lượng tham số
+        if (operands.length < 2) {
+             throw new Error("Directive .eqv requires 2 arguments: symbol, value");
+        }
+
         const label = operands[0];
         if (this.equValues[label] !== undefined) throw new Error(`Symbol "${label}" already defined`);
         this.equValues[label] = this._resolveSymbolOrValue(operands[1]);

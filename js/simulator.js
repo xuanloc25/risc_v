@@ -1,3 +1,4 @@
+import { LEDMatrix } from './led_matrix.js';
 // simulator.js
 // Mô phỏng việc thực thi mã máy RISC-V, bao gồm RV32I, RV32M và các lệnh RV32F cơ bản.
 
@@ -32,6 +33,11 @@ class TileLinkULMemory {
     constructor() {
         this.mem = {};
         this.pendingRequest = null;
+        // [BỔ SUNG] Khởi tạo LED Matrix
+        // Kiểm tra document tồn tại để tránh lỗi nếu chạy môi trường nodejs
+        if (typeof document !== 'undefined') {
+             this.ledMatrix = new LEDMatrix('ledMatrixCanvas', 32, 32, 0xFF000000);
+        }
     }
     receiveRequest(req) {
         this.pendingRequest = req;
@@ -42,8 +48,18 @@ class TileLinkULMemory {
             // Convert to unsigned 32-bit address
             const addr = this.pendingRequest.address >>> 0;
 
+            if (addr >= 0xFF000000 && addr < 0xFF001000) {
+                if (this.ledMatrix) {
+                    if (this.pendingRequest.type === 'write' || this.pendingRequest.type === 'writeByte') {
+                        // Gửi dữ liệu sang màn hình
+                        this.ledMatrix.writeWord(addr, this.pendingRequest.value);
+                    }
+                    // Đọc từ LED Matrix (tạm thời trả về 0)
+                    data = 0; 
+                }
+            }
             // Handle DMA register access (0xFFED0000-0xFFED0007)
-            if (addr >= 0xFFED0000 && addr <= 0xFFED0007) {
+            else if (addr >= 0xFFED0000 && addr <= 0xFFED0007) {
                 if (typeof simulator !== "undefined" && simulator.dma) {
                     if (this.pendingRequest.type === 'read') {
                         data = simulator.dma.readRegister(addr);
@@ -110,6 +126,7 @@ class TileLinkULMemory {
     reset() {
         this.mem = {};
         this.pendingRequest = null;
+        if (this.ledMatrix) this.ledMatrix.reset();
     }
 }
 
