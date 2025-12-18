@@ -643,4 +643,98 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    // Hiển thị tọa độ chuột trên LED Matrix Canvas
+    const ledCanvas = document.getElementById('ledMatrixCanvas');
+    const mouseCoordinatesDisplay = document.getElementById('mouseCoordinates');
+    
+    if (ledCanvas && mouseCoordinatesDisplay) {
+        // Mouse move event
+        ledCanvas.addEventListener('mousemove', (event) => {
+            const rect = ledCanvas.getBoundingClientRect();
+            const x = Math.floor(event.clientX - rect.left);
+            const y = Math.floor(event.clientY - rect.top);
+            mouseCoordinatesDisplay.textContent = `x=${x}, y=${y}`;
+        });
+        
+        // Mouse click event - hiển thị tọa độ và log ra console
+        ledCanvas.addEventListener('click', (event) => {
+            const rect = ledCanvas.getBoundingClientRect();
+            const x = Math.floor(event.clientX - rect.left);
+            const y = Math.floor(event.clientY - rect.top);
+            
+            // Hiển thị trong UI
+            mouseCoordinatesDisplay.textContent = `x=${x}, y=${y} (Clicked!)`;
+            mouseCoordinatesDisplay.style.color = '#d63031';
+            
+            // Log ra console
+            console.log(`Mouse clicked at: x=${x}, y=${y}`);
+            
+            // Reset màu sau 500ms
+            setTimeout(() => {
+                mouseCoordinatesDisplay.style.color = '#0984e3';
+            }, 500);
+        });
+        
+        // Mouse leave event - reset display
+        ledCanvas.addEventListener('mouseleave', () => {
+            mouseCoordinatesDisplay.textContent = 'x=0, y=0';
+            mouseCoordinatesDisplay.style.color = '#0984e3';
+        });
+    }
+
+    // [MỚI] UART Console handlers
+    const uartOutput = document.getElementById('uartOutput');
+    const uartInput = document.getElementById('uartInput');
+    const uartSendButton = document.getElementById('uartSendButton');
+    const uartClearButton = document.getElementById('uartClearButton');
+
+    // Setup UART callbacks
+    if (typeof simulator !== 'undefined' && simulator.mem && simulator.mem.uart) {
+        const uart = simulator.mem.uart;
+        
+        // Callback khi UART transmit (CPU gửi dữ liệu)
+        uart.onTransmit = function(charCode) {
+            if (uartOutput) {
+                const char = String.fromCharCode(charCode);
+                uartOutput.textContent += char;
+                // Auto scroll to bottom
+                uartOutput.scrollTop = uartOutput.scrollHeight;
+            }
+        };
+    }
+
+    // Send button handler
+    if (uartSendButton && uartInput) {
+        uartSendButton.addEventListener('click', () => {
+            const text = uartInput.value;
+            if (text && simulator.mem && simulator.mem.uart) {
+                simulator.mem.uart.addStringToRxBuffer(text + '\n');
+                uartInput.value = '';
+                console.log(`[UART] Sent to RX buffer: "${text}"`);
+            }
+        });
+    }
+
+    // Enter key to send
+    if (uartInput) {
+        uartInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter' && simulator.mem && simulator.mem.uart) {
+                const text = uartInput.value;
+                simulator.mem.uart.addStringToRxBuffer(text + '\n');
+                uartInput.value = '';
+                console.log(`[UART] Sent to RX buffer: "${text}"`);
+            }
+        });
+    }
+
+    // Clear button handler
+    if (uartClearButton && uartOutput) {
+        uartClearButton.addEventListener('click', () => {
+            uartOutput.textContent = '';
+            if (simulator.mem && simulator.mem.uart) {
+                simulator.mem.uart.clearTxBuffer();
+            }
+        });
+    }
 });
