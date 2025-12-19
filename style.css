@@ -473,11 +473,22 @@ body, html {
 
 .io-body {
     padding: 10px;
-    background-color: #636e72; /* Nền xám đậm làm nổi bật LED */
+    background-color: #fff; /* Nền trắng mặc định */
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.led-matrix-body {
+    background-color: #636e72; /* Nền xám đậm làm nổi bật LED */
     min-height: 340px;
+}
+
+.uart-console-body {
+    background-color: #fff;
+    padding: 15px;
+    display: block !important;
+    min-height: auto;
 }
 
 .led-matrix-body canvas {

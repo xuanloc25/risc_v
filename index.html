@@ -210,9 +210,10 @@
                 </div>
             </div>
 
-            <!-- VIEW 5: I/O (LED MATRIX) -->
+            <!-- VIEW 5: I/O (LED MATRIX + UART) -->
             <div id="view-io" class="view-section">
                 <div class="io-container">
+                    <!-- LED Matrix Card -->
                     <div class="io-device-card">
                         <div class="io-header">
                             <i class="material-icons">grid_on</i>
@@ -224,6 +225,60 @@
                         </div>
                         <div class="io-footer">
                             <small>Base Address: <strong>0xFF000000</strong></small>
+                            <div style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px; font-family: monospace;">
+                                <strong>Mouse Position:</strong> <span id="mouseCoordinates" style="color: #0984e3;">x=0, y=0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- UART Console Card -->
+                    <div class="io-device-card" style="width: 600px;">
+                        <div class="io-header">
+                            <i class="material-icons">terminal</i>
+                            <span>UART Console</span>
+                        </div>
+                        <div class="io-body uart-console-body">
+                            <!-- UART Output Display -->
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-weight: bold; margin-bottom: 5px; display: block;">Output:</label>
+                                <div id="uartOutput" style="
+                                    background: #1e1e1e; 
+                                    color: #00ff00; 
+                                    font-family: 'Courier New', monospace; 
+                                    font-size: 14px;
+                                    padding: 10px; 
+                                    height: 250px; 
+                                    overflow-y: auto; 
+                                    border: 1px solid #444;
+                                    border-radius: 4px;
+                                    white-space: pre-wrap;
+                                    word-wrap: break-word;
+                                "></div>
+                            </div>
+                            
+                            <!-- UART Input -->
+                            <div>
+                                <label style="font-weight: bold; margin-bottom: 5px; display: block;">Input:</label>
+                                <div style="display: flex; gap: 5px;">
+                                    <input type="text" id="uartInput" placeholder="Type and press Enter..." style="
+                                        flex: 1;
+                                        padding: 8px;
+                                        font-family: 'Courier New', monospace;
+                                        font-size: 14px;
+                                        border: 1px solid #ccc;
+                                        border-radius: 4px;
+                                    ">
+                                    <button id="uartSendButton" class="mdc-button mdc-button--outlined">
+                                        <span class="mdc-button__label">Send</span>
+                                    </button>
+                                    <button id="uartClearButton" class="mdc-button mdc-button--outlined">
+                                        <span class="mdc-button__label">Clear</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="io-footer">
+                            <small>Base Address: <strong>0x10000000</strong> | TX: +0x00, RX: +0x04, Status: +0x08</small>
                         </div>
                     </div>
                 </div>
@@ -232,7 +287,7 @@
         </div> <!-- End Main Content -->
     </div>
 
-    <!-- Modules Scripts -->
+    <!-- Modules Scripts test -->
     <script type="module" src="js/javascript.js"></script>
     <script type="module" src="js/assembler.js"></script>
     <script type="module" src="js/simulator.js"></script>

@@ -1,4 +1,5 @@
 import { LEDMatrix } from './led_matrix.js';
+import { UART } from './uart.js';
 // simulator.js
 // Mô phỏng việc thực thi mã máy RISC-V, bao gồm RV32I, RV32M và các lệnh RV32F cơ bản.
 
@@ -38,6 +39,8 @@ class TileLinkULMemory {
         if (typeof document !== 'undefined') {
              this.ledMatrix = new LEDMatrix('ledMatrixCanvas', 32, 32, 0xFF000000);
         }
+        // [BỔ SUNG] Khởi tạo UART
+        this.uart = new UART(0x10000000);
     }
     receiveRequest(req) {
         this.pendingRequest = req;
@@ -48,7 +51,17 @@ class TileLinkULMemory {
             // Convert to unsigned 32-bit address
             const addr = this.pendingRequest.address >>> 0;
 
-            if (addr >= 0xFF000000 && addr < 0xFF001000) {
+            // Handle UART register access (0x10000000-0x1000000F)
+            if (this.uart && this.uart.isUARTAddress(addr)) {
+                if (this.pendingRequest.type === 'read') {
+                    data = this.uart.readRegister(addr);
+                } else if (this.pendingRequest.type === 'write') {
+                    this.uart.writeRegister(addr, this.pendingRequest.value);
+                    data = 0; // Write operation, return dummy data
+                }
+            }
+            // Handle LED Matrix access (0xFF000000-0xFF000FFF)
+            else if (addr >= 0xFF000000 && addr < 0xFF001000) {
                 if (this.ledMatrix) {
                     if (this.pendingRequest.type === 'write' || this.pendingRequest.type === 'writeByte') {
                         // Gửi dữ liệu sang màn hình
@@ -127,6 +140,7 @@ class TileLinkULMemory {
         this.mem = {};
         this.pendingRequest = null;
         if (this.ledMatrix) this.ledMatrix.reset();
+        if (this.uart) this.uart.reset();
     }
 }
 
@@ -796,13 +810,18 @@ class TileLinkCPU {
                 }
                 break;
 
+            case 0: // Syscall ID 0 - Treat as NOP or implicit exit
+                // Không làm gì, chỉ log
+                console.log(`[Syscall] ecall with ID 0 (no operation or implicit halt)`);
+                this.isRunning = false; // Dừng execution như exit
+                break;
+
             default:
                 const errorMsg = `Unsupported syscall ID: ${syscallId}`;
-                if (isBrowser) {
-                    alert(errorMsg);
-                } else {
-                    console.warn(`\n[Syscall] ${errorMsg}`);
-                }
+                console.warn(`\n[Syscall] ${errorMsg}`);
+                // Không hiển thị alert để không làm gián đoạn
+                // Chỉ dừng chương trình
+                this.isRunning = false;
         }
     }
 
