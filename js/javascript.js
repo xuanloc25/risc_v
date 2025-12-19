@@ -350,6 +350,25 @@ function updateUIGlobally() {
 
 window.updateUIGlobally = updateUIGlobally;
 
+// --- SETUP UART CALLBACKS ---
+function setupUARTCallbacks() {
+    const uartOutput = document.getElementById('uartOutput');
+    if (typeof simulator !== 'undefined' && simulator.mem && simulator.mem.uart && uartOutput) {
+        const uart = simulator.mem.uart;
+        
+        // Callback khi UART transmit (CPU gửi dữ liệu)
+        uart.onTransmit = function(charCode) {
+            const char = String.fromCharCode(charCode);
+            uartOutput.textContent += char;
+            // Auto scroll to bottom
+            uartOutput.scrollTop = uartOutput.scrollHeight;
+            console.log(`[UART TX] '${char}' (0x${charCode.toString(16)})`);
+        };
+        
+        console.log('[UART] Callbacks setup successfully');
+    }
+}
+
 // --- EVENT HANDLERS (Nút điều khiển) ---
 
 function handleAssemble() {
@@ -358,6 +377,7 @@ function handleAssemble() {
     
     if (instructionViewBody) instructionViewBody.innerHTML = '';
     simulator.reset();
+    setupUARTCallbacks(); // Setup lại UART callbacks sau reset
 
     setTimeout(() => {
         try {
@@ -371,6 +391,7 @@ function handleAssemble() {
             }
 
             simulator.loadProgram(programData);
+            setupUARTCallbacks(); // Setup lại callbacks sau load program
 
             let dataStartAddrFound = false;
             if (programData.memory && Object.keys(programData.memory).length > 0) {
@@ -619,6 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`);
         setRegisterView('integer');
         updateUIGlobally();
+        setupUARTCallbacks(); // Setup UART callbacks lần đầu
     }
 
     const sidebarItems = document.querySelectorAll('.sidebar-item');
