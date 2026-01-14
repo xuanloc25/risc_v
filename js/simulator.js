@@ -1,5 +1,6 @@
 import { LEDMatrix } from './led_matrix.js';
 import { UART } from './uart.js';
+import { MousePeripheral } from './mouse.js';
 // simulator.js
 // Mô phỏng việc thực thi mã máy RISC-V, bao gồm RV32I, RV32M và các lệnh RV32F cơ bản.
 
@@ -41,6 +42,13 @@ class TileLinkULMemory {
         }
         // [BỔ SUNG] Khởi tạo UART
         this.uart = new UART(0x10000000);
+        // [MỚI] Khởi tạo chuột memory-mapped
+        this.mouse = new MousePeripheral(0xFF100000);
+
+        // Log IO map for quick reference in console
+        console.info('[IO MAP] LED Matrix: 0xFF000000-0xFF000FFF (write VRAM)');
+        console.info('[IO MAP] Mouse:      0xFF100000-0xFF100013 (X/Y/BTN/STATUS/CTRL)');
+        console.info('[IO MAP] UART:       0x10000000-0x10000013 (TX/RX/STATUS/CTRL/BAUD)');
     }
     receiveRequest(req) {
         this.pendingRequest = req;
@@ -69,6 +77,15 @@ class TileLinkULMemory {
                     }
                     // Đọc từ LED Matrix (tạm thời trả về 0)
                     data = 0; 
+                }
+            }
+            // Handle Mouse peripheral access (0xFF100000-0xFF100013)
+            else if (this.mouse && this.mouse.isMouseAddress(addr)) {
+                if (this.pendingRequest.type === 'read') {
+                    data = this.mouse.readRegister(addr);
+                } else if (this.pendingRequest.type === 'write') {
+                    this.mouse.writeRegister(addr, this.pendingRequest.value);
+                    data = 0;
                 }
             }
             // Handle DMA register access (0xFFED0000-0xFFED0007)
@@ -141,6 +158,7 @@ class TileLinkULMemory {
         this.pendingRequest = null;
         if (this.ledMatrix) this.ledMatrix.reset();
         if (this.uart) this.uart.reset();
+        if (this.mouse) this.mouse.reset();
     }
 }
 
@@ -1409,10 +1427,17 @@ export const simulator = {
             this.cpu.isRunning = false;
             console.error(e);
         }
+        
+        // Tick UART TRƯỚC khi tick DMA (để update timing mỗi cycle)
+        if (this.mem && this.mem.uart) {
+            this.mem.uart.tick();
+        }
+        
         if (this.cpu.isRunning && this.dma) {
             console.log(`[SIMULATOR] DMA tick: busy=${this.dma.registers?.busy}, enabled=${this.dma.registers?.enabled}`);
             this.dma.tick();
         }
+        
         this.cycleCount++;
     }
 };
