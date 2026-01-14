@@ -1,6 +1,7 @@
 import { LEDMatrix } from './led_matrix.js';
 import { UART } from './uart.js';
 import { MousePeripheral } from './mouse.js';
+import { Keyboard } from './keyboard.js';
 // simulator.js
 // Mô phỏng việc thực thi mã máy RISC-V, bao gồm RV32I, RV32M và các lệnh RV32F cơ bản.
 
@@ -38,7 +39,30 @@ class TileLinkULMemory {
         // [BỔ SUNG] Khởi tạo LED Matrix
         // Kiểm tra document tồn tại để tránh lỗi nếu chạy môi trường nodejs
         if (typeof document !== 'undefined') {
-             this.ledMatrix = new LEDMatrix('ledMatrixCanvas', 32, 32, 0xFF000000);
+            this.ledMatrix = new LEDMatrix('ledMatrixCanvas', 32, 32, 0xFF000000);
+            // Keyboard initialization inside browser environment check or separate
+            this.keyboard = new Keyboard(0xFFFF0000);
+
+            // setup keyboard UI event listeners if document exists
+            const kbInput = document.getElementById('keyboardInput');
+            if (kbInput) {
+                kbInput.addEventListener('keydown', (e) => {
+                    e.preventDefault(); // Prevent typing in textarea usually
+                    if (e.key.length === 1) {
+                        this.keyboard.pressKey(e.key.charCodeAt(0));
+                    } else if (e.key === "Enter") {
+                        this.keyboard.pressKey(10); // \n
+                    }
+                });
+
+                this.keyboard.onUpdate = () => {
+                    const statusSpan = document.getElementById('keyboardStatus');
+                    if (statusSpan) {
+                        statusSpan.textContent = this.keyboard.buffer.length > 0 ? "Data Available" : "Empty";
+                        statusSpan.style.color = this.keyboard.buffer.length > 0 ? "#00b894" : "#666";
+                    }
+                };
+            }
         }
         // [BỔ SUNG] Khởi tạo UART
         this.uart = new UART(0x10000000);
@@ -68,6 +92,15 @@ class TileLinkULMemory {
                     data = 0; // Write operation, return dummy data
                 }
             }
+            // Handle Keyboard register access (0xFFFF0000 - 0xFFFF0007)
+            else if (this.keyboard && this.keyboard.isKeyboardAddress(addr)) {
+                if (this.pendingRequest.type === 'read') {
+                    data = this.keyboard.readRegister(addr);
+                } else if (this.pendingRequest.type === 'write') {
+                    this.keyboard.writeRegister(addr, this.pendingRequest.value);
+                    data = 0;
+                }
+            }
             // Handle LED Matrix access (0xFF000000-0xFF000FFF)
             else if (addr >= 0xFF000000 && addr < 0xFF001000) {
                 if (this.ledMatrix) {
@@ -76,7 +109,7 @@ class TileLinkULMemory {
                         this.ledMatrix.writeWord(addr, this.pendingRequest.value);
                     }
                     // Đọc từ LED Matrix (tạm thời trả về 0)
-                    data = 0; 
+                    data = 0;
                 }
             }
             // Handle Mouse peripheral access (0xFF100000-0xFF100013)
@@ -105,9 +138,9 @@ class TileLinkULMemory {
             // Handle standard memory operations
             else if (this.pendingRequest.type === 'read') {
                 data = ((this.mem[this.pendingRequest.address + 3] ?? 0) << 24) |
-                       ((this.mem[this.pendingRequest.address + 2] ?? 0) << 16) |
-                       ((this.mem[this.pendingRequest.address + 1] ?? 0) << 8) |
-                       (this.mem[this.pendingRequest.address] ?? 0);
+                    ((this.mem[this.pendingRequest.address + 2] ?? 0) << 16) |
+                    ((this.mem[this.pendingRequest.address + 1] ?? 0) << 8) |
+                    (this.mem[this.pendingRequest.address] ?? 0);
             } else if (this.pendingRequest.type === 'write') {
                 this.mem[this.pendingRequest.address] = this.pendingRequest.value & 0xFF;
                 this.mem[this.pendingRequest.address + 1] = (this.pendingRequest.value >> 8) & 0xFF;
@@ -159,6 +192,7 @@ class TileLinkULMemory {
         if (this.ledMatrix) this.ledMatrix.reset();
         if (this.uart) this.uart.reset();
         if (this.mouse) this.mouse.reset();
+        if (this.keyboard) this.keyboard.reset();
     }
 }
 
@@ -195,8 +229,8 @@ class TileLinkCPU {
         }
         this.pc = programData.startAddress || 0;
     }
-    
-     // DECODE: Giải mã từ lệnh 32-bit thành các trường và tên lệnh
+
+    // DECODE: Giải mã từ lệnh 32-bit thành các trường và tên lệnh
     decode(instructionWord) {
         // Trích xuất các trường bit cơ bản từ từ lệnh
         const opcode = instructionWord & 0x7F;          // 7 bit opcode
@@ -220,77 +254,77 @@ class TileLinkCPU {
         // Nên đồng bộ với bảng `opcodes` trong `assembler.js`
         const instructionFormats = {
             // ----- RV32I Base -----
-            "ADD":   { type: "R", opcode: "0110011", funct3: "000", funct7: "0000000" },
-            "SUB":   { type: "R", opcode: "0110011", funct3: "000", funct7: "0100000" },
-            "SLL":   { type: "R", opcode: "0110011", funct3: "001", funct7: "0000000" },
-            "SLT":   { type: "R", opcode: "0110011", funct3: "010", funct7: "0000000" },
-            "SLTU":  { type: "R", opcode: "0110011", funct3: "011", funct7: "0000000" },
-            "XOR":   { type: "R", opcode: "0110011", funct3: "100", funct7: "0000000" },
-            "SRL":   { type: "R", opcode: "0110011", funct3: "101", funct7: "0000000" },
-            "SRA":   { type: "R", opcode: "0110011", funct3: "101", funct7: "0100000" },
-            "OR":    { type: "R", opcode: "0110011", funct3: "110", funct7: "0000000" },
-            "AND":   { type: "R", opcode: "0110011", funct3: "111", funct7: "0000000" },
-            "ADDI":  { type: "I", opcode: "0010011", funct3: "000" },
-            "SLTI":  { type: "I", opcode: "0010011", funct3: "010" },
+            "ADD": { type: "R", opcode: "0110011", funct3: "000", funct7: "0000000" },
+            "SUB": { type: "R", opcode: "0110011", funct3: "000", funct7: "0100000" },
+            "SLL": { type: "R", opcode: "0110011", funct3: "001", funct7: "0000000" },
+            "SLT": { type: "R", opcode: "0110011", funct3: "010", funct7: "0000000" },
+            "SLTU": { type: "R", opcode: "0110011", funct3: "011", funct7: "0000000" },
+            "XOR": { type: "R", opcode: "0110011", funct3: "100", funct7: "0000000" },
+            "SRL": { type: "R", opcode: "0110011", funct3: "101", funct7: "0000000" },
+            "SRA": { type: "R", opcode: "0110011", funct3: "101", funct7: "0100000" },
+            "OR": { type: "R", opcode: "0110011", funct3: "110", funct7: "0000000" },
+            "AND": { type: "R", opcode: "0110011", funct3: "111", funct7: "0000000" },
+            "ADDI": { type: "I", opcode: "0010011", funct3: "000" },
+            "SLTI": { type: "I", opcode: "0010011", funct3: "010" },
             "SLTIU": { type: "I", opcode: "0010011", funct3: "011" },
-            "XORI":  { type: "I", opcode: "0010011", funct3: "100" },
-            "ORI":   { type: "I", opcode: "0010011", funct3: "110" },
-            "ANDI":  { type: "I", opcode: "0010011", funct3: "111" },
-            "SLLI":  { type: "I-shamt", opcode: "0010011", funct3: "001", funct7Matcher: "0000000" },
-            "SRLI":  { type: "I-shamt", opcode: "0010011", funct3: "101", funct7Matcher: "0000000" },
-            "SRAI":  { type: "I-shamt", opcode: "0010011", funct3: "101", funct7Matcher: "0100000" },
-            "LW":    { type: "I", opcode: "0000011", funct3: "010" },
-            "LH":    { type: "I", opcode: "0000011", funct3: "001" },
-            "LB":    { type: "I", opcode: "0000011", funct3: "000" },
-            "LHU":   { type: "I", opcode: "0000011", funct3: "101" },
-            "LBU":   { type: "I", opcode: "0000011", funct3: "100" },
-            "SW":    { type: "S", opcode: "0100011", funct3: "010" },
-            "SH":    { type: "S", opcode: "0100011", funct3: "001" },
-            "SB":    { type: "S", opcode: "0100011", funct3: "000" },
-            "LUI":   { type: "U", opcode: "0110111" },
+            "XORI": { type: "I", opcode: "0010011", funct3: "100" },
+            "ORI": { type: "I", opcode: "0010011", funct3: "110" },
+            "ANDI": { type: "I", opcode: "0010011", funct3: "111" },
+            "SLLI": { type: "I-shamt", opcode: "0010011", funct3: "001", funct7Matcher: "0000000" },
+            "SRLI": { type: "I-shamt", opcode: "0010011", funct3: "101", funct7Matcher: "0000000" },
+            "SRAI": { type: "I-shamt", opcode: "0010011", funct3: "101", funct7Matcher: "0100000" },
+            "LW": { type: "I", opcode: "0000011", funct3: "010" },
+            "LH": { type: "I", opcode: "0000011", funct3: "001" },
+            "LB": { type: "I", opcode: "0000011", funct3: "000" },
+            "LHU": { type: "I", opcode: "0000011", funct3: "101" },
+            "LBU": { type: "I", opcode: "0000011", funct3: "100" },
+            "SW": { type: "S", opcode: "0100011", funct3: "010" },
+            "SH": { type: "S", opcode: "0100011", funct3: "001" },
+            "SB": { type: "S", opcode: "0100011", funct3: "000" },
+            "LUI": { type: "U", opcode: "0110111" },
             "AUIPC": { type: "U", opcode: "0010111" },
-            "JAL":   { type: "J", opcode: "1101111" },
-            "JALR":  { type: "I", opcode: "1100111", funct3: "000" },
-            "BEQ":   { type: "B", opcode: "1100011", funct3: "000" },
-            "BNE":   { type: "B", opcode: "1100011", funct3: "001" },
-            "BLT":   { type: "B", opcode: "1100011", funct3: "100" },
-            "BGE":   { type: "B", opcode: "1100011", funct3: "101" },
-            "BLTU":  { type: "B", opcode: "1100011", funct3: "110" },
-            "BGEU":  { type: "B", opcode: "1100011", funct3: "111" },
+            "JAL": { type: "J", opcode: "1101111" },
+            "JALR": { type: "I", opcode: "1100111", funct3: "000" },
+            "BEQ": { type: "B", opcode: "1100011", funct3: "000" },
+            "BNE": { type: "B", opcode: "1100011", funct3: "001" },
+            "BLT": { type: "B", opcode: "1100011", funct3: "100" },
+            "BGE": { type: "B", opcode: "1100011", funct3: "101" },
+            "BLTU": { type: "B", opcode: "1100011", funct3: "110" },
+            "BGEU": { type: "B", opcode: "1100011", funct3: "111" },
             "ECALL": { type: "I", opcode: "1110011", funct3: "000", immFieldMatcher: "000000000000" },
-            "EBREAK":{ type: "I", opcode: "1110011", funct3: "000", immFieldMatcher: "000000000001" },
+            "EBREAK": { type: "I", opcode: "1110011", funct3: "000", immFieldMatcher: "000000000001" },
             // ----- RV32M Extension -----
-            "MUL":   { type: "R", opcode: "0110011", funct3: "000", funct7: "0000001" },
-            "MULH":  { type: "R", opcode: "0110011", funct3: "001", funct7: "0000001" },
-            "MULHSU":{ type: "R", opcode: "0110011", funct3: "010", funct7: "0000001" },
+            "MUL": { type: "R", opcode: "0110011", funct3: "000", funct7: "0000001" },
+            "MULH": { type: "R", opcode: "0110011", funct3: "001", funct7: "0000001" },
+            "MULHSU": { type: "R", opcode: "0110011", funct3: "010", funct7: "0000001" },
             "MULHU": { type: "R", opcode: "0110011", funct3: "011", funct7: "0000001" },
-            "DIV":   { type: "R", opcode: "0110011", funct3: "100", funct7: "0000001" },
-            "DIVU":  { type: "R", opcode: "0110011", funct3: "101", funct7: "0000001" },
-            "REM":   { type: "R", opcode: "0110011", funct3: "110", funct7: "0000001" },
-            "REMU":  { type: "R", opcode: "0110011", funct3: "111", funct7: "0000001" },
+            "DIV": { type: "R", opcode: "0110011", funct3: "100", funct7: "0000001" },
+            "DIVU": { type: "R", opcode: "0110011", funct3: "101", funct7: "0000001" },
+            "REM": { type: "R", opcode: "0110011", funct3: "110", funct7: "0000001" },
+            "REMU": { type: "R", opcode: "0110011", funct3: "111", funct7: "0000001" },
 
             // ----- RV32F Standard Extension (Single-Precision Floating-Point) -----
             // Opcode cho FLW/FSW khác với LW/SW
-            "FLW":   { type: "I-FP", opcode: "0000111", funct3: "010" }, // rd(fp), rs1(int), imm
-            "FSW":   { type: "S-FP", opcode: "0100111", funct3: "010" }, // rs1(int), rs2(fp), imm
+            "FLW": { type: "I-FP", opcode: "0000111", funct3: "010" }, // rd(fp), rs1(int), imm
+            "FSW": { type: "S-FP", opcode: "0100111", funct3: "010" }, // rs1(int), rs2(fp), imm
 
             // Opcode chung cho nhiều lệnh FP R-type: 1010011
             // funct7[6:2] (thường gọi là funct5) + rs2[1:0] (fmt=00 for .S) hoặc funct7 đầy đủ xác định phép toán
             // funct3 chứa rounding mode (rm)
             // Đối với .S, rs2 field bits [26:25] (fmt) là '00'.
             // Chúng ta sẽ dùng funct7 để xác định phép toán chính
-            "FADD.S":  { type: "R-FP", opcode: "1010011", funct3: "000", funct7: "0000000" },
-            "FSUB.S":  { type: "R-FP", opcode: "1010011", funct3: "000", funct7: "0000100" /*fmt=00*/ },
-            "FMUL.S":  { type: "R-FP", opcode: "1010011", funct3: "000", funct7: "0001000" /*fmt=00*/ },
-            "FDIV.S":  { type: "R-FP", opcode: "1010011", funct3: "000", funct7: "0001100" /*fmt=00*/ },
+            "FADD.S": { type: "R-FP", opcode: "1010011", funct3: "000", funct7: "0000000" },
+            "FSUB.S": { type: "R-FP", opcode: "1010011", funct3: "000", funct7: "0000100" /*fmt=00*/ },
+            "FMUL.S": { type: "R-FP", opcode: "1010011", funct3: "000", funct7: "0001000" /*fmt=00*/ },
+            "FDIV.S": { type: "R-FP", opcode: "1010011", funct3: "000", funct7: "0001100" /*fmt=00*/ },
 
             // Conversions: dest_is_int, src1_is_fp hoặc ngược lại sẽ giúp execute biết thanh ghi nào là int/fp
             // rs2 field bits [26:25] (fmt) là '00' cho nguồn .S, hoặc rs2 là thanh ghi nguồn cho nguồn .W/.WU
             // Đối với fcvt.w.s, rs2 chứa chỉ số thanh ghi KHÔNG dùng, chỉ có fmt ở bit 26-25.
             // funct7[6:0] = 1100000 for FCVT.W.S/FCVT.WU.S (bit rs2[0] = 0 for W, 1 for WU)
             // funct7[6:0] = 1101000 for FCVT.S.W/FCVT.S.WU (bit rs2[0] = 0 for W, 1 for WU)
-            "FCVT.W.S":  { type: "R-FP-CVT", opcode: "1010011", funct7: "1100000", rs2_subfield: "00000" /*src_fmt=S, type W*/}, // rd(int), rs1(fp), rm in funct3
-            "FCVT.S.W":  { type: "R-FP-CVT", opcode: "1010011", funct7: "1101000", rs2_subfield: "00000" /*src_fmt=W, type S*/}, // rd(fp), rs1(int), rm in funct3
+            "FCVT.W.S": { type: "R-FP-CVT", opcode: "1010011", funct7: "1100000", rs2_subfield: "00000" /*src_fmt=S, type W*/ }, // rd(int), rs1(fp), rm in funct3
+            "FCVT.S.W": { type: "R-FP-CVT", opcode: "1010011", funct7: "1101000", rs2_subfield: "00000" /*src_fmt=W, type S*/ }, // rd(fp), rs1(int), rm in funct3
             // fcvt.wu.s và fcvt.s.wu tương tự, khác ở rs2_subfield (bit 0 của rs2)
 
             // Comparisons: rd(int), rs1(fp), rs2(fp)
@@ -301,9 +335,9 @@ class TileLinkCPU {
 
             // Moves:
             // FMV.X.W: rd(int), rs1(fp). funct7='1110000', rs2=0, funct3(rm)=0
-            "FMV.X.W": { type: "R-FP-CVT", opcode: "1010011", funct7: "1110000", rs2_subfield: "00000", funct3_fixed: "000"},
+            "FMV.X.W": { type: "R-FP-CVT", opcode: "1010011", funct7: "1110000", rs2_subfield: "00000", funct3_fixed: "000" },
             // FMV.W.X: rd(fp), rs1(int). funct7='1111000', rs2=0, funct3(rm)=0
-            "FMV.W.X": { type: "R-FP-CVT", opcode: "1010011", funct7: "1111000", rs2_subfield: "00000", funct3_fixed: "000"},
+            "FMV.W.X": { type: "R-FP-CVT", opcode: "1010011", funct7: "1111000", rs2_subfield: "00000", funct3_fixed: "000" },
         };
 
         // Lặp qua bảng định dạng để tìm lệnh khớp
@@ -314,28 +348,28 @@ class TileLinkCPU {
                 // Phân loại dựa trên kiểu lệnh đã định nghĩa
                 if (format.type === 'R' || format.type === 'R-FP' || format.type === 'R-FP-CMP') {
                     if (format.funct3 === funct3Bin || format.funct3_fixed === funct3Bin || format.funct3 === 'ANY' || format.funct3_cmp === funct3Bin) {
-                        if (format.funct7 === funct7Bin || format.funct7_op === funct7Bin || format.funct7_prefix === funct7Bin.substring(0,5) ) {
+                        if (format.funct7 === funct7Bin || format.funct7_op === funct7Bin || format.funct7_prefix === funct7Bin.substring(0, 5)) {
                             // Đối với R-FP, rs2 chứa format (01000 cho .S). Cần kiểm tra thêm nếu lệnh yêu cầu.
                             // Ví dụ FADD.S, rs2 bits [26:25] (fmt) là 00. Bit [24:20] là rs2.
                             // Mã hóa chuẩn thường đặt fmt vào các bit rs2[26:25] khi rs2 không phải là thanh ghi nguồn thứ 3.
                             // Với lệnh .S, rs2 field thường là 01000 (fmt=00, còn lại là rs2 index).
                             // Nếu instrInfo.rs2_fmt, kiểm tra thêm rs2 (chứa fmt)
-                            if (format.rs2_fmt && format.rs2_fmt !== rs2.toString(2).padStart(5, '0').substring(0,format.rs2_fmt.length)) { // rs2 chứa fmt
+                            if (format.rs2_fmt && format.rs2_fmt !== rs2.toString(2).padStart(5, '0').substring(0, format.rs2_fmt.length)) { // rs2 chứa fmt
                                 // continue; // Không khớp fmt
                             }
                             match = true;
                         }
                     }
                 } else if (format.type === 'R-FP-CVT') {
-                     if (format.funct3_rm === funct3Bin || format.funct3_rm === 'ANY' || format.funct3_fixed === funct3Bin) {
-                        if(format.funct7 === funct7Bin || format.funct7_op === funct7Bin) {
+                    if (format.funct3_rm === funct3Bin || format.funct3_rm === 'ANY' || format.funct3_fixed === funct3Bin) {
+                        if (format.funct7 === funct7Bin || format.funct7_op === funct7Bin) {
                             // Kiểm tra rs2_subfield (thường là chỉ số thanh ghi rs2 hoặc các bit format)
-                            if (format.rs2_subfield && format.rs2_subfield !== rs2.toString(2).padStart(5,'0').substring(0, format.rs2_subfield.length)) {
+                            if (format.rs2_subfield && format.rs2_subfield !== rs2.toString(2).padStart(5, '0').substring(0, format.rs2_subfield.length)) {
                                 // continue;
                             }
                             match = true;
                         }
-                     }
+                    }
                 } else if (format.type === 'I' || format.type === 'I-FP' || format.type === 'I-shamt') {
                     if (format.funct3 === funct3Bin) {
                         if (format.immFieldMatcher !== undefined) { // Dành cho ECALL, EBREAK
@@ -384,9 +418,9 @@ class TileLinkCPU {
                 case "B":
                     // imm[12|10:5] và imm[4:1|11], nhân 2, mở rộng dấu
                     imm = (((instructionWord >> 31) & 0x1) << 12) | // imm[12] (bit 31 của lệnh)
-                          (((instructionWord >> 7) & 0x1) << 11) |   // imm[11] (bit 7 của lệnh)
-                          (((instructionWord >> 25) & 0x3F) << 5) |  // imm[10:5] (bit 30-25 của lệnh)
-                          (((instructionWord >> 8) & 0xF) << 1);     // imm[4:1] (bit 11-8 của lệnh)
+                        (((instructionWord >> 7) & 0x1) << 11) |   // imm[11] (bit 7 của lệnh)
+                        (((instructionWord >> 25) & 0x3F) << 5) |  // imm[10:5] (bit 30-25 của lệnh)
+                        (((instructionWord >> 8) & 0xF) << 1);     // imm[4:1] (bit 11-8 của lệnh)
                     // Offset được nhân 2 nhưng đã được mã hóa sẵn, chỉ cần mở rộng dấu từ bit 12 của offset
                     if ((instructionWord >> 31) & 1) imm |= 0xFFFFE000; // Mở rộng dấu từ bit 12 của offset (bit 31 của lệnh)
                     break;
@@ -398,9 +432,9 @@ class TileLinkCPU {
                 case "J":
                     // imm[20|10:1|11|19:12], nhân 2, mở rộng dấu
                     imm = (((instructionWord >> 31) & 0x1) << 20) |    // imm[20] (bit 31)
-                          (((instructionWord >> 12) & 0xFF) << 12) |  // imm[19:12] (bit 30-21 -> 19-12)
-                          (((instructionWord >> 20) & 0x1) << 11) |   // imm[11] (bit 20)
-                          (((instructionWord >> 21) & 0x3FF) << 1);   // imm[10:1] (bit 30-21 -> 10-1)
+                        (((instructionWord >> 12) & 0xFF) << 12) |  // imm[19:12] (bit 30-21 -> 19-12)
+                        (((instructionWord >> 20) & 0x1) << 11) |   // imm[11] (bit 20)
+                        (((instructionWord >> 21) & 0x3FF) << 1);   // imm[10:1] (bit 30-21 -> 10-1)
                     if ((instructionWord >> 31) & 1) imm |= 0xFFE00000; // Mở rộng dấu từ bit 20 của offset
                     break;
                 // R-type, R-FP, R-FP-CVT, R-FP-CMP không có immediate chính từ instructionWord theo cách này
@@ -414,7 +448,7 @@ class TileLinkCPU {
 
     // EXECUTE: Thực thi lệnh đã được giải mã
     execute(decoded, bus) {
-            // Đảm bảo this.memory luôn trỏ đến simulator.mem.mem
+        // Đảm bảo this.memory luôn trỏ đến simulator.mem.mem
         if (typeof simulator !== "undefined" && simulator.mem && simulator.mem.mem) {
             this.memory = simulator.mem.mem;
         }
@@ -509,13 +543,13 @@ class TileLinkCPU {
                     // Sign-extend
                     result_int = (memoryValue & 0x80) ? (memoryValue | 0xFFFFFF00) : (memoryValue & 0xFF);
                     if (rd !== 0) this.registers[rd] = result_int | 0;
-                    console.log(`[CPU] LB response: PC=0x${this.pc.toString(16)}, rd=x${rd}, value=${result_int|0}`);
+                    console.log(`[CPU] LB response: PC=0x${this.pc.toString(16)}, rd=x${rd}, value=${result_int | 0}`);
                     return {};
                 } else {
                     // Chưa có response, tiếp tục đợi
                     return { nextPc: this.pc };
                 }
-            break;
+                break;
             case 'LH':
                 memoryAddress = (val1_int + imm) | 0;
                 const lh_b0 = this.memory[memoryAddress], lh_b1 = this.memory[memoryAddress + 1];
@@ -530,14 +564,14 @@ class TileLinkCPU {
                     this.readWordAsync(memoryAddress, bus);
                     // Đợi response, không tăng PC, không thực hiện gì thêm
                     return { nextPc: this.pc };
-                }  
+                }
                 if (this.pendingResponse) {
                     result_int = this.pendingResponse.data;
                     this.waitingRequest = null;
                     this.pendingResponse = null;
                     // GHI GIÁ TRỊ VÀO THANH GHI ĐÍCH Ở ĐÂY
                     if (rd !== 0) this.registers[rd] = result_int | 0;
-                    console.log(`[CPU] LW response: PC=0x${this.pc.toString(16)}, rd=x${rd}, value=${result_int|0}`);
+                    console.log(`[CPU] LW response: PC=0x${this.pc.toString(16)}, rd=x${rd}, value=${result_int | 0}`);
                     return {}; // Đã xử lý xong, tick sẽ tự tăng PC
                 } else {
                     // Chưa có response, tiếp tục đợi
@@ -578,7 +612,7 @@ class TileLinkCPU {
                     // Chưa có response, tiếp tục đợi
                     return { nextPc: this.pc };
                 }
-            break;
+                break;
             case 'SH':
                 memoryAddress = (val1_int + imm) | 0;
                 this.memory[memoryAddress] = val2_int & 0xFF; this.memory[memoryAddress + 1] = (val2_int >> 8) & 0xFF;
@@ -601,7 +635,7 @@ class TileLinkCPU {
                     this.waitingRequest = null;
                     this.pendingResponse = null;
                     console.log(`[CPU] SW response: PC=0x${this.pc.toString(16)}`);
-                return {};
+                    return {};
                 } else {
                     // Chưa có response, tiếp tục đợi
                     return { nextPc: this.pc };
@@ -726,9 +760,9 @@ class TileLinkCPU {
             if (result_fp !== undefined) { // Nếu kết quả là cho thanh ghi FP
                 this.fregisters[rd] = result_fp; // Gán trực tiếp, Float32Array sẽ xử lý
             }
-        } else if (rd === 0 && (result_int !== undefined && result_int !== 0) ) {
+        } else if (rd === 0 && (result_int !== undefined && result_int !== 0)) {
             // console.log(`Attempted to write value ${result_int} to x0 (zero register). Write ignored.`);
-        } else if (rd === 0 && (result_fp !== undefined && result_fp !== 0.0) ) {
+        } else if (rd === 0 && (result_fp !== undefined && result_fp !== 0.0)) {
             // console.log(`Attempted to write value ${result_fp} to f0 (if f0 treated as x0). Write to actual f0 if distinct.`);
             // Hiện tại, các lệnh FP được thiết kế để rd có thể là f0.
             // Nếu có quy tắc f0 luôn là 0.0 thì cần xử lý ở đây. RISC-V không quy định f0 luôn là 0.
@@ -845,7 +879,7 @@ class TileLinkCPU {
 
 
     tick(bus) {
-            // Nếu vẫn đang chờ response thì không thực thi lệnh mới
+        // Nếu vẫn đang chờ response thì không thực thi lệnh mới
         if (this.waitingRequest && !this.pendingResponse) {
             return;
         }
@@ -855,7 +889,7 @@ class TileLinkCPU {
         // Thực thi lệnh nếu không chờ bus
 
         const mem = (typeof simulator !== "undefined" && simulator.mem && simulator.mem.mem)
-        ? simulator.mem.mem: this.memory;
+            ? simulator.mem.mem : this.memory;
         const pc = this.pc;
         const inst =
             ((mem[pc + 3] ?? 0) << 24) |
@@ -875,13 +909,13 @@ class TileLinkCPU {
         }
         // GHI LOG mỗi lần tick thực sự tăng PC
         if (this.pc !== oldPc) {
-        console.log(`[CPU] PC: 0x${oldPc.toString(16)} -> 0x${this.pc.toString(16)}, Executed: ${decoded.opName}`);
+            console.log(`[CPU] PC: 0x${oldPc.toString(16)} -> 0x${this.pc.toString(16)}, Executed: ${decoded.opName}`);
         }
     }
 
     receiveResponse(resp) {
-    this.pendingResponse = resp;
-}
+        this.pendingResponse = resp;
+    }
 
     // Gửi request đọc word
     readWordAsync(address, bus) {
@@ -939,7 +973,7 @@ class DMADescriptor {
     toString() {
         const config = this.parseConfig();
         return `DMADescriptor{src:0x${this.sourceAddr.toString(16)}, dst:0x${this.destAddr.toString(16)}, ` +
-               `elements:${config.numElements}, srcMode:${config.srcMode}, dstMode:${config.dstMode}, bswap:${config.bswap}}`;
+            `elements:${config.numElements}, srcMode:${config.srcMode}, dstMode:${config.dstMode}, bswap:${config.bswap}}`;
     }
 }
 
@@ -949,49 +983,49 @@ class DMARegisters {
         // Control Register bits
         this.enabled = false;              // Bit 0: DMA_CTRL_EN
         this.startRequested = false;       // Bit 1: DMA_CTRL_START (write-only trigger)
-        
+
         // Status flags (read-only)
         this.busy = false;                 // Bit 31: DMA_CTRL_BUSY
         this.done = false;                 // Bit 30: DMA_CTRL_DONE
         this.error = false;                // Bit 29: DMA_CTRL_ERROR
         this.fifoFull = false;            // Bit 28: DMA_CTRL_DFULL
         this.fifoEmpty = true;            // Bit 27: DMA_CTRL_DEMPTY
-        
+
         // Descriptor FIFO
         this.descriptorFifo = [];
         this.fifoDepth = 8;               // 2^3 = 8 entries (configurable)
         this.currentDescriptorWords = []; // Buffer for building descriptor (needs 3 words)
-        
+
         console.log(`[DMA] Registers initialized. FIFO depth: ${this.fifoDepth}`);
     }
 
     // Read CTRL register (0xFFED0000)
     readCtrl() {
         let ctrl = 0;
-        
+
         // Control bits
         if (this.enabled) ctrl |= 0x1;        // Bit 0: Enable status
         if (this.startRequested) ctrl |= 0x2; // Bit 1: Start requested
         if (this.done) ctrl |= 0x4;           // Bit 2: Transfer complete 
-        
+
         // Bits 19:16: FIFO depth (log2)
         const fifoDepthLog2 = Math.log2(this.fifoDepth);
         ctrl |= (fifoDepthLog2 & 0xF) << 16;
-        
+
         // Status flags (read-only) - keep high bits for compatibility
         if (this.fifoEmpty) ctrl |= (1 << 27);
         if (this.fifoFull) ctrl |= (1 << 28);
         if (this.error) ctrl |= (1 << 29);
         if (this.done) ctrl |= (1 << 30);      // Keep old bit for compatibility
         if (this.busy) ctrl |= (1 << 31);
-        
+
         return ctrl >>> 0; // Ensure unsigned 32-bit
     }
 
     // Write CTRL register (0xFFED0000)
     writeCtrl(value) {
         console.log(`[DMA] Writing CTRL: 0x${value.toString(16)}`);
-        
+
         // Bit 0: DMA_CTRL_EN (enable/disable)
         const newEnabled = (value & 0x1) !== 0;
         if (newEnabled !== this.enabled) {
@@ -1004,20 +1038,20 @@ class DMARegisters {
                 console.log("[DMA] DMA enabled");
             }
         }
-        
+
         // Bit 1: DMA_CTRL_START (trigger transfer)
         if (value & 0x2) {
             this.startRequested = true;
             console.log("[DMA] Start transfer requested");
         }
-        
+
         // Bit 27: DMA_CTRL_ACK (acknowledge interrupts)
         if (value & (1 << 27)) {
             this.done = false;
             this.error = false;
             console.log("[DMA] Interrupts acknowledged");
         }
-        
+
         return true;
     }
 
@@ -1039,34 +1073,34 @@ class DMARegisters {
                 this.currentDescriptorWords[1], // Destination address
                 this.currentDescriptorWords[2]  // Configuration word
             );
-            
+
             this.descriptorFifo.push(descriptor);
             this.currentDescriptorWords = [];
-            
+
             // Update FIFO status
             this.fifoEmpty = false;
             this.fifoFull = (this.descriptorFifo.length >= this.fifoDepth);
-            
+
             console.log(`[DMA] Descriptor added: ${descriptor.toString()}`);
             console.log(`[DMA] FIFO status: ${this.descriptorFifo.length}/${this.fifoDepth} entries`);
         }
-        
+
         return true;
     }
 
     // Get next descriptor from FIFO
     getNextDescriptor() {
         if (this.fifoEmpty) return null;
-        
+
         const descriptor = this.descriptorFifo.shift();
-        
+
         // Update FIFO status
         this.fifoEmpty = (this.descriptorFifo.length === 0);
         this.fifoFull = false;
-        
+
         console.log(`[DMA] Retrieved descriptor: ${descriptor.toString()}`);
         console.log(`[DMA] FIFO entries remaining: ${this.descriptorFifo.length}`);
-        
+
         return descriptor;
     }
 
@@ -1094,22 +1128,22 @@ class DMAController {
     constructor(memory) {
         this.memory = memory;
         this.registers = new DMARegisters();
-        
+
         // Current transfer state
         this.currentDescriptor = null;
         this.transferProgress = 0;
         this.currentSrcAddr = 0;
         this.currentDstAddr = 0;
-        
+
         // Transfer configuration
         this.numElements = 0;
         this.bswap = false;
         this.srcMode = 0; // 00=const byte, 01=const word, 10=inc byte, 11=inc word
         this.dstMode = 0;
-        
+
         // Compatibility
         this.callback = null;
-        
+
         console.log("[DMA] Controller initialized");
     }
 
@@ -1146,21 +1180,21 @@ class DMAController {
     // Legacy interface for compatibility
     start(src, dst, length, callback) {
         console.log(`[DMA] Legacy start: src=0x${src.toString(16)}, dst=0x${dst.toString(16)}, length=${length}`);
-        
+
         // Enable DMA
         this.registers.writeCtrl(1);
-        
+
         // Create descriptor with incrementing byte mode
         const config = DMADescriptor.createConfig(length, 0, 2, 2); // inc byte both
-        
+
         // Write descriptor
         this.registers.writeDescriptor(src);
         this.registers.writeDescriptor(dst);
         this.registers.writeDescriptor(config);
-        
+
         // Start transfer
         this.registers.writeCtrl(3); // Enable + Start
-        
+
         this.callback = callback;
     }
 
@@ -1172,7 +1206,7 @@ class DMAController {
             this.startNextTransfer();
             this.registers.startRequested = false;
         }
-        
+
         // Continue current transfer
         if (this.registers.busy && this.currentDescriptor) {
             this.performTransferStep();
@@ -1186,27 +1220,27 @@ class DMAController {
             console.warn("[DMA] No descriptors available to start");
             return false;
         }
-        
+
         const config = this.currentDescriptor.parseConfig();
-        
+
         // Set up transfer parameters
         this.numElements = config.numElements;
         this.bswap = config.bswap !== 0;
         this.srcMode = config.srcMode;
         this.dstMode = config.dstMode;
-        
+
         this.currentSrcAddr = this.currentDescriptor.sourceAddr;
         this.currentDstAddr = this.currentDescriptor.destAddr;
         this.transferProgress = 0;
-        
+
         // Update status
         this.registers.busy = true;
         this.registers.done = false;
         this.registers.error = false;
-        
+
         console.log(`[DMA] Transfer started: ${this.currentDescriptor.toString()}`);
         console.log(`[DMA] Config: elements=${this.numElements}, bswap=${this.bswap}, srcMode=${this.srcMode}, dstMode=${this.dstMode}`);
-        
+
         return true;
     }
 
@@ -1217,28 +1251,28 @@ class DMAController {
             this.completeTransfer();
             return;
         }
-        
+
         try {
             // Calculate current addresses based on mode and progress
             const srcAddr = this.calculateAddress(this.currentSrcAddr, this.transferProgress, this.srcMode);
             const dstAddr = this.calculateAddress(this.currentDstAddr, this.transferProgress, this.dstMode);
-            
+
             // Read data from source
             let data = this.readData(srcAddr, this.srcMode);
-            
+
             // Apply byte swapping if enabled
             if (this.bswap) {
                 data = this.swapBytes(data, this.getElementSize(this.srcMode));
             }
-            
+
             // Write data to destination
             this.writeData(dstAddr, data, this.dstMode);
-            
+
             this.transferProgress++;
-            
+
             console.log(`[DMA] Progress: ${this.transferProgress}/${this.numElements}, ` +
-                       `src=0x${srcAddr.toString(16)}, dst=0x${dstAddr.toString(16)}, data=0x${data.toString(16)}`);
-            
+                `src=0x${srcAddr.toString(16)}, dst=0x${dstAddr.toString(16)}, data=0x${data.toString(16)}`);
+
         } catch (error) {
             console.error(`[DMA] Transfer error: ${error.message}`);
             this.registers.error = true;
@@ -1268,15 +1302,15 @@ class DMAController {
             case 0: // Constant byte
             case 2: // Incrementing byte
                 return this.memory[address] ?? 0;
-                
+
             case 1: // Constant word
             case 3: // Incrementing word
                 // Read 32-bit word (little-endian)
                 return ((this.memory[address + 3] ?? 0) << 24) |
-                       ((this.memory[address + 2] ?? 0) << 16) |
-                       ((this.memory[address + 1] ?? 0) << 8) |
-                       (this.memory[address] ?? 0);
-                       
+                    ((this.memory[address + 2] ?? 0) << 16) |
+                    ((this.memory[address + 1] ?? 0) << 8) |
+                    (this.memory[address] ?? 0);
+
             default:
                 throw new Error(`Invalid read mode: ${mode}`);
         }
@@ -1289,7 +1323,7 @@ class DMAController {
             case 2: // Incrementing byte
                 this.memory[address] = data & 0xFF;
                 break;
-                
+
             case 1: // Constant word
             case 3: // Incrementing word
                 // Write 32-bit word (little-endian)
@@ -1298,7 +1332,7 @@ class DMAController {
                 this.memory[address + 2] = (data >> 16) & 0xFF;
                 this.memory[address + 3] = (data >> 24) & 0xFF;
                 break;
-                
+
             default:
                 throw new Error(`Invalid write mode: ${mode}`);
         }
@@ -1325,9 +1359,9 @@ class DMAController {
         } else if (size === 4) {
             // Swap bytes in 32-bit word: 0x12345678 -> 0x78563412
             return ((data & 0xFF) << 24) |
-                   (((data >> 8) & 0xFF) << 16) |
-                   (((data >> 16) & 0xFF) << 8) |
-                   ((data >> 24) & 0xFF);
+                (((data >> 8) & 0xFF) << 16) |
+                (((data >> 16) & 0xFF) << 8) |
+                ((data >> 24) & 0xFF);
         }
         return data;
     }
@@ -1336,19 +1370,19 @@ class DMAController {
     completeTransfer() {
         this.registers.busy = false;
         this.registers.done = true;
-        
+
         console.log(`[DMA] Transfer completed successfully: ${this.transferProgress} elements transferred`);
-        
+
         // Legacy callback support
         if (typeof this.callback === "function") {
             this.callback();
             this.callback = null;
         }
-        
+
         // Reset current transfer state
         this.currentDescriptor = null;
         this.transferProgress = 0;
-        
+
         // Check for next transfer in FIFO
         if (!this.registers.fifoEmpty) {
             console.log("[DMA] More descriptors in FIFO, will start next transfer on next tick");
