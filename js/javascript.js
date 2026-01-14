@@ -167,7 +167,7 @@ function disassembleInstruction(instructionWord) {
             case 'R': return `${op} ${rd}, ${rs1}, ${rs2}`;
             case 'I':
                 if (['lw', 'lb', 'lh', 'lbu', 'lhu', 'jalr', 'flw'].includes(op)) {
-                    return `${op} ${op.startsWith('f') ? `f${decoded.rd}`: rd}, ${decoded.imm}(${rs1})`;
+                    return `${op} ${op.startsWith('f') ? `f${decoded.rd}` : rd}, ${decoded.imm}(${rs1})`;
                 }
                 return `${op} ${rd}, ${rs1}, ${decoded.imm}`;
             case 'S': return `${op} ${rs2}, ${decoded.imm}(${rs1})`;
@@ -231,12 +231,12 @@ function renderInstructionView() {
             checkbox.addEventListener('click', (e) => {
                 const lineNum = parseInt(e.currentTarget.dataset.lineNumber, 10);
                 const cmLine = lineNum - 1;
-                
+
                 if (activeBreakpoints.has(lineNum)) {
-                    if(instructionInput) instructionInput.setGutterMarker(cmLine, "breakpoints", null);
+                    if (instructionInput) instructionInput.setGutterMarker(cmLine, "breakpoints", null);
                     activeBreakpoints.delete(lineNum);
                 } else {
-                    if(instructionInput) instructionInput.setGutterMarker(cmLine, "breakpoints", makeBreakpointMarker());
+                    if (instructionInput) instructionInput.setGutterMarker(cmLine, "breakpoints", makeBreakpointMarker());
                     activeBreakpoints.add(lineNum);
                 }
                 updateBreakpointUI();
@@ -250,7 +250,7 @@ function renderInstructionView() {
         row.insertCell().textContent = `0x${instr.address.toString(16).padStart(8, '0')}`;
         row.insertCell().textContent = instr.hex;
         row.insertCell().textContent = disassembleInstruction(parseInt(instr.hex, 16));
-        
+
         const sourceCell = row.insertCell();
         if (sourceLine && sourceLine.lineNumber !== lastSourceLineNum) {
             sourceCell.textContent = `${sourceLine.lineNumber}: ${sourceLine.original.trim()}`;
@@ -355,16 +355,16 @@ function setupUARTCallbacks() {
     const uartOutput = document.getElementById('uartOutput');
     if (typeof simulator !== 'undefined' && simulator.mem && simulator.mem.uart && uartOutput) {
         const uart = simulator.mem.uart;
-        
+
         // Callback khi UART transmit (CPU gửi dữ liệu)
-        uart.onTransmit = function(charCode) {
+        uart.onTransmit = function (charCode) {
             const char = String.fromCharCode(charCode);
             uartOutput.textContent += char;
             // Auto scroll to bottom
             uartOutput.scrollTop = uartOutput.scrollHeight;
             console.log(`[UART TX] '${char}' (0x${charCode.toString(16)})`);
         };
-        
+
         console.log('[UART] Callbacks setup successfully');
     }
 }
@@ -374,7 +374,7 @@ function setupUARTCallbacks() {
 function handleAssemble() {
     if (!assembler || !simulator || !binaryOutput || !instructionInput) return;
     binaryOutput.textContent = "Assembling...";
-    
+
     if (instructionViewBody) instructionViewBody.innerHTML = '';
     simulator.reset();
     setupUARTCallbacks(); // Setup lại UART callbacks sau reset
@@ -409,13 +409,13 @@ function handleAssemble() {
             }
             dataSegmentStartAddress = Math.max(0, Math.floor(dataSegmentStartAddress / bytesPerRow) * bytesPerRow);
             setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`);
-            
+
             updateUIGlobally();
 
         } catch (error) {
             console.error("Assembly Error:", error);
             binaryOutput.textContent = `Error:\n${error.message}`;
-            assembler._reset(); 
+            assembler._reset();
             updateUIGlobally();
         }
     }, 10);
@@ -431,8 +431,8 @@ function handleRun() {
     if (activeBreakpoints.size > 0) {
         const firstBreakpointLine = Math.min(...activeBreakpoints);
         const instructionLineInfo = assembler.instructionLines.find(
-            line => line.lineNumber === firstBreakpointLine && 
-            (line.type === 'instruction' || line.type === 'pseudo-instruction')
+            line => line.lineNumber === firstBreakpointLine &&
+                (line.type === 'instruction' || line.type === 'pseudo-instruction')
         );
         if (instructionLineInfo) {
             breakpointAddress = instructionLineInfo.address;
@@ -441,7 +441,7 @@ function handleRun() {
     }
 
     let running = true;
-    const maxCycles = 500000; 
+    const maxCycles = 500000;
     let cycle = 0;
 
     // [MỚI] Biến dùng để đo tốc độ
@@ -470,7 +470,7 @@ function handleRun() {
             if (breakpointAddress !== null && simulator.cpu.pc === breakpointAddress) {
                 running = false;
                 binaryOutput.textContent += `\n🔴 Breakpoint hit at PC = 0x${breakpointAddress.toString(16)}`;
-                break; 
+                break;
             }
             if (!simulator.cpu.isRunning) {
                 running = false;
@@ -478,10 +478,10 @@ function handleRun() {
             }
 
             try {
-                simulator.tick(); 
+                simulator.tick();
                 cycle++;
                 executedThisFrame++; // Đếm số lệnh chạy được trong frame này
-                
+
                 if (cycle > maxCycles) {
                     running = false;
                     break;
@@ -503,12 +503,12 @@ function handleRun() {
         if (elapsed >= 500) {
             // Công thức: (Số lệnh / Số mili giây) * 1000 = Số lệnh/giây
             const hz = Math.round((cyclesInLastSecond / elapsed) * 1000);
-            
+
             if (clockRateDisplay) {
                 // Định dạng số có dấu phẩy (ví dụ: 1,200 Hz)
                 clockRateDisplay.textContent = hz.toLocaleString() + " Hz";
             }
-            
+
             // Reset bộ đếm
             cyclesInLastSecond = 0;
             lastTime = now;
@@ -545,9 +545,20 @@ function handleReset() {
         assembler._reset();
     }
 
-    instructionInput.setValue("");
-    try { instructionInput.clearGutter("breakpoints"); } catch {}
+    // instructionInput.setValue(""); // [FIX] Không xóa code khi reset
+    try { instructionInput.clearGutter("breakpoints"); } catch { }
     binaryOutput.textContent = "";
+    if (clockRateDisplay) clockRateDisplay.textContent = "0 Hz"; // [FIX] Reset IPS display
+
+    // [FIX] Reset Keyboard UI
+    const kbInput = document.getElementById('keyboardInput');
+    const kbStatus = document.getElementById('keyboardStatus');
+    if (kbInput) kbInput.value = "";
+    if (kbStatus) {
+        kbStatus.textContent = "Empty";
+        kbStatus.style.color = "#666";
+    }
+
     activeBreakpoints.clear();
 
     dataSegmentStartAddress = assembler.dataBaseAddress || 0x10010000;
@@ -572,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gutters: ["CodeMirror-linenumbers", "breakpoints"]
     });
 
-    instructionInput.on("gutterClick", function(cm, n) {
+    instructionInput.on("gutterClick", function (cm, n) {
         const lineNumber = n + 1;
         const info = cm.lineInfo(n);
         if (info.gutterMarkers) {
@@ -669,7 +680,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hiển thị tọa độ chuột trên LED Matrix Canvas
     const ledCanvas = document.getElementById('ledMatrixCanvas');
     const mouseCoordinatesDisplay = document.getElementById('mouseCoordinates');
-    
+
     if (ledCanvas && mouseCoordinatesDisplay) {
         // Mouse move event
         ledCanvas.addEventListener('mousemove', (event) => {
@@ -678,26 +689,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const y = Math.floor(event.clientY - rect.top);
             mouseCoordinatesDisplay.textContent = `x=${x}, y=${y}`;
         });
-        
+
         // Mouse click event - hiển thị tọa độ và log ra console
         ledCanvas.addEventListener('click', (event) => {
             const rect = ledCanvas.getBoundingClientRect();
             const x = Math.floor(event.clientX - rect.left);
             const y = Math.floor(event.clientY - rect.top);
-            
+
             // Hiển thị trong UI
             mouseCoordinatesDisplay.textContent = `x=${x}, y=${y} (Clicked!)`;
             mouseCoordinatesDisplay.style.color = '#d63031';
-            
+
             // Log ra console
             console.log(`Mouse clicked at: x=${x}, y=${y}`);
-            
+
             // Reset màu sau 500ms
             setTimeout(() => {
                 mouseCoordinatesDisplay.style.color = '#0984e3';
             }, 500);
         });
-        
+
         // Mouse leave event - reset display
         ledCanvas.addEventListener('mouseleave', () => {
             mouseCoordinatesDisplay.textContent = 'x=0, y=0';
@@ -714,9 +725,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup UART callbacks
     if (typeof simulator !== 'undefined' && simulator.mem && simulator.mem.uart) {
         const uart = simulator.mem.uart;
-        
+
         // Callback khi UART transmit (CPU gửi dữ liệu)
-        uart.onTransmit = function(charCode) {
+        uart.onTransmit = function (charCode) {
             if (uartOutput) {
                 const char = String.fromCharCode(charCode);
                 uartOutput.textContent += char;
