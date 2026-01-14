@@ -11,6 +11,7 @@ export class UART {
         this.UART_RX = 0x04;      // Read-only: Receive data
         this.UART_STATUS = 0x08;  // Read-only: Status register
         this.UART_CTRL = 0x0C;    // Read/Write: Control register
+        this.UART_BAUD = 0x10;    // Read/Write: Baud rate divisor
         
         // Buffers
         this.txBuffer = [];       // Output buffer (characters sent to console)
@@ -23,6 +24,16 @@ export class UART {
         // Control flags
         this.txInterruptEnable = false;
         this.rxInterruptEnable = false;
+        
+        // Baud rate configuration (giống UART thực tế)
+        this.peripheralClock = 48000000;  // 48 MHz UART peripheral clock (riêng với CPU clock)
+        this.oversampling = 16;           // Oversampling 16x (chuẩn UART)
+        this.baudDivisor = 26;            // Default divisor cho 115200 baud
+        this.baudRate = this.peripheralClock / (this.oversampling * this.baudDivisor); // ~115200
+        this.cpuFrequency = 100000000;    // 100 MHz CPU clock (để tính cycles)
+        this.bitsPerFrame = 10;           // START + 8 data + STOP
+        this.txCyclesRemaining = 0;       // Cycles until TX ready again
+        this.rxCyclesRemaining = 0;       // Cycles until RX ready
         
         // Callbacks for UI updates
         this.onTransmit = null;   // Called when character is transmitted
@@ -43,6 +54,18 @@ export class UART {
                 // Update control register
                 this.txInterruptEnable = (value & 0x01) !== 0;
                 this.rxInterruptEnable = (value & 0x02) !== 0;
+                break;
+                
+            case this.UART_BAUD:
+                // UART_BAUD register lưu DIVISOR (giống STM32/ESP32)
+                // Baud rate = peripheral_clock / (oversampling × divisor)
+                this.baudDivisor = value;
+                if (this.baudDivisor === 0) {
+                    console.warn('[UART] Invalid divisor 0, keeping previous value');
+                    return;
+                }
+                this.baudRate = Math.floor(this.peripheralClock / (this.oversampling * this.baudDivisor));
+                console.log(`[UART] Divisor set to ${this.baudDivisor} → Baud rate: ${this.baudRate} (PCLK=${this.peripheralClock/1000000}MHz, OS=${this.oversampling}x)`);
                 break;
                 
             default:
@@ -75,6 +98,10 @@ export class UART {
                 return (this.txInterruptEnable ? 0x01 : 0x00) |
                        (this.rxInterruptEnable ? 0x02 : 0x00);
                        
+            case this.UART_BAUD:
+                // Return current divisor (NOT baud rate)
+                return this.baudDivisor;
+                       
             case this.UART_TX:
                 // Reading TX register returns 0
                 return 0;
@@ -99,11 +126,15 @@ export class UART {
             this.onTransmit(charCode);
         }
         
-        // Simulate transmission delay (instant for now)
+        // Calculate transmission delay based on baud rate
+        // Time per byte = bits_per_frame / baud_rate (seconds)
+        // CPU cycles = time * cpu_frequency
+        const cyclesPerByte = Math.floor((this.bitsPerFrame * this.cpuFrequency) / this.baudRate);
+        
         this.txReady = false;
-        setTimeout(() => {
-            this.txReady = true;
-        }, 0);
+        this.txCyclesRemaining = cyclesPerByte;
+        
+        console.log(`[UART] Transmitting 0x${charCode.toString(16)}, will be ready in ${cyclesPerByte} cycles (${(cyclesPerByte/this.cpuFrequency*1000000).toFixed(2)} μs)`);
     }
     
     // Receive a character (called when CPU reads from UART_RX)
@@ -160,11 +191,35 @@ export class UART {
         this.rxAvailable = false;
         this.txInterruptEnable = false;
         this.rxInterruptEnable = false;
+        this.txCyclesRemaining = 0;
+        this.rxCyclesRemaining = 0;
+        this.baudDivisor = 26; // Reset to default (115200 @ 48MHz/16x)
+        this.baudRate = this.peripheralClock / (this.oversampling * this.baudDivisor);
+    }
+    
+    // Called every CPU cycle to update UART timing
+    tick() {
+        // Count down TX delay
+        if (this.txCyclesRemaining > 0) {
+            this.txCyclesRemaining--;
+            if (this.txCyclesRemaining % 10 === 0) {
+                console.log(`[UART TICK] TX cycles remaining: ${this.txCyclesRemaining}`);
+            }
+            if (this.txCyclesRemaining === 0) {
+                this.txReady = true;
+                console.log('[UART] ✅ TX ready again after countdown');
+            }
+        }
+        
+        // Count down RX delay (if needed)
+        if (this.rxCyclesRemaining > 0) {
+            this.rxCyclesRemaining--;
+        }
     }
     
     // Check if address is in UART range
     isUARTAddress(address) {
         return address >= this.baseAddress && 
-               address < this.baseAddress + 0x10;
+               address < this.baseAddress + 0x14; // Include UART_BAUD (0x10)
     }
 }

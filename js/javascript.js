@@ -677,10 +677,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Hiển thị tọa độ chuột trên LED Matrix Canvas
+    // Hiển thị tọa độ chuột trên LED Matrix Canvas và bơm vào peripheral mouse (MMIO)
     const ledCanvas = document.getElementById('ledMatrixCanvas');
     const mouseCoordinatesDisplay = document.getElementById('mouseCoordinates');
 
+    const sendMouseToPeripheral = (x, y, buttonMask, isClick = false) => {
+        if (typeof simulator !== 'undefined' && simulator.mem && simulator.mem.mouse) {
+            simulator.mem.mouse.reportEvent(x, y, buttonMask, isClick);
+        }
+    };
+    
     if (ledCanvas && mouseCoordinatesDisplay) {
         // Mouse move event
         ledCanvas.addEventListener('mousemove', (event) => {
@@ -688,6 +694,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const x = Math.floor(event.clientX - rect.left);
             const y = Math.floor(event.clientY - rect.top);
             mouseCoordinatesDisplay.textContent = `x=${x}, y=${y}`;
+            sendMouseToPeripheral(x, y, event.buttons & 0x7, false);
         });
 
         // Mouse click event - hiển thị tọa độ và log ra console
@@ -703,6 +710,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Log ra console
             console.log(`Mouse clicked at: x=${x}, y=${y}`);
 
+            // Map event.button (0:left, 1:middle, 2:right) to mask bits (bit0/bit2/bit1)
+            const buttonMask = event.button === 0 ? 0x1 : event.button === 1 ? 0x4 : event.button === 2 ? 0x2 : 0;
+            sendMouseToPeripheral(x, y, buttonMask, true);
+            
             // Reset màu sau 500ms
             setTimeout(() => {
                 mouseCoordinatesDisplay.style.color = '#0984e3';
@@ -713,6 +724,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ledCanvas.addEventListener('mouseleave', () => {
             mouseCoordinatesDisplay.textContent = 'x=0, y=0';
             mouseCoordinatesDisplay.style.color = '#0984e3';
+            sendMouseToPeripheral(0, 0, 0, false);
         });
     }
 
