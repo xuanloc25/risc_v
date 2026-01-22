@@ -15,7 +15,7 @@ CodeMirror.defineSimpleMode("riscv", {
 });
 
 import { assembler } from './assembler.js';
-import { simulator } from './simulator.js';
+import { simulator } from './soc.js';
 
 // --- THAM CHIẾU DOM ---
 let instructionInput; // Sẽ được khởi tạo bởi CodeMirror

@@ -119,6 +119,30 @@ done:
     li a7, 93
     ecall
 
+# --- UART_CTRL demo: bật bit TX/RX interrupt enable, gửi một ký tự ---
+# Đổi entry sang _start_uart_ctrl nếu muốn chạy đoạn này
+.text
+.globl _start_uart_ctrl
+_start_uart_ctrl:
+    li t0, 0x10000000    # UART base
+    li t1, 0x03          # Bit0 = TX_IE, Bit1 = RX_IE
+    sw t1, 12(t0)        # Ghi UART_CTRL (offset 0x0C)
+
+    lw t2, 12(t0)        # Đọc lại UART_CTRL (t2 = 0x03)
+    lw t3, 8(t0)         # Đọc UART_STATUS, bit2/bit3 phản ánh enable
+
+    li t4, 79            # 'O'
+wait_tx_ready_ctrl:
+    lw t5, 8(t0)
+    andi t5, t5, 1       # TX Ready?
+    beqz t5, wait_tx_ready_ctrl
+
+    sw t4, 0(t0)         # Gửi ký tự để thấy TX_IE=1 vẫn hoạt động
+
+    li a7, 93            # exit
+    li a0, 0
+    ecall
+
 led---
 # Vẽ 1 pixel màu đỏ tại tọa độ (5, 10)
 li t0, 0xFF000000        # LED Matrix base address

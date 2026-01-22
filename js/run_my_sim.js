@@ -5,7 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 import { assembler } from './assembler.js';
-import { simulator } from './simulator.js';
+import { simulator } from './soc.js';
 
 /**
  * In ra trạng thái hiện tại của simulator theo một định dạng chuẩn, có cấu trúc.
