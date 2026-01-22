@@ -12,7 +12,7 @@ export class Keyboard {
         this.KEYBOARD_DATA = 0x04; // Read-only: Data register (ASCII value)
 
         // State
-        this.buffer = [];      // Key buffer
+        this.buffer = [32];      // Key buffer
         this.ready = false;    // Ready bit
 
         // Callbacks

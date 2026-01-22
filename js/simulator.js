@@ -77,18 +77,18 @@ class TileLinkULMemory {
 
             // Handle UART register access (0x10000000-0x1000000F)
             if (this.uart && this.uart.isUARTAddress(addr)) {
-                if (this.pendingRequest.type === 'read') {
+                if (this.pendingRequest.type === 'read' || this.pendingRequest.type === 'readByte') {
                     data = this.uart.readRegister(addr);
-                } else if (this.pendingRequest.type === 'write') {
+                } else if (this.pendingRequest.type === 'write' || this.pendingRequest.type === 'writeByte') {
                     this.uart.writeRegister(addr, this.pendingRequest.value);
                     data = 0; // Write operation, return dummy data
                 }
             }
             // Handle Keyboard register access (0xFFFF0000 - 0xFFFF0007)
             else if (this.keyboard && this.keyboard.isKeyboardAddress(addr)) {
-                if (this.pendingRequest.type === 'read') {
+                if (this.pendingRequest.type === 'read' || this.pendingRequest.type === 'readByte') {
                     data = this.keyboard.readRegister(addr);
-                } else if (this.pendingRequest.type === 'write') {
+                } else if (this.pendingRequest.type === 'write' || this.pendingRequest.type === 'writeByte') {
                     this.keyboard.writeRegister(addr, this.pendingRequest.value);
                     data = 0;
                 }

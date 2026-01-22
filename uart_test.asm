@@ -3,7 +3,7 @@
 
 .text
 _start:
-    li t0, 0x10000000    # UART base address
+    li t0, 0xffff0004    # UART base address
     
     # Print 'H'
     li t1, 72
@@ -61,20 +61,20 @@ _start:
 
 loop:
 
-# Echo: Đọc từ UART và gửi lại
+# Echo: �?�?c từ UART và gửi lại
 .text
 _start:
     li t0, 0x10000000    # UART base
 
 loop:
-    # Chờ có data
+    # Ch�? có data
 wait:
-    lw t1, 8(t0)         # Đọc STATUS
+    lw t1, 8(t0)         # �?�?c STATUS
     andi t1, t1, 2       # Check RX Available (bit 1)
     beqz t1, wait        # Loop nếu chưa có
     
-    # Đọc ký tự
-    lw t2, 4(t0)         # Đọc từ RX
+    # �?�?c ký tự
+    lw t2, 4(t0)         # �?�?c từ RX
     
     # Echo lại
     sw t2, 0(t0)         # Ghi vào TX
