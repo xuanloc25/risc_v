@@ -12,16 +12,7 @@ main:
     li s1, 0xFFFF0004   # Keyboard Data Address
     li s2, 0x10000000   # UART TX Address
 
-    # Print welcome message
-    la a0, msg
-    li t0, 0
-print_loop:
-    add t1, a0, t0
-    lb t2, 0(t1)
-    beqz t2, loop_start
-    sb t2, 0(s2)        # Write to UART
-    addi t0, t0, 1
-    j print_loop
+    j loop_start
 
 loop_start:
     # Poll Keyboard Control
@@ -37,6 +28,3 @@ loop_start:
     
     # Loop back
     j loop_start
-
-.data
-msg: .string "Keyboard Test: Type in the keyboard box, characters should appear here.\n"
