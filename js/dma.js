@@ -156,8 +156,8 @@ export class DMARegisters {
 }
 
 export class DMAController {
-    constructor(memory) {
-        this.memory = memory;
+    constructor(bus) {
+        this.bus = bus;
         this.registers = new DMARegisters();
 
         this.currentDescriptor = null;
@@ -171,6 +171,14 @@ export class DMAController {
         this.dstMode = 0;
 
         this.callback = null;
+
+        // Async bus state
+        this.waitingRequest = null;
+        this.pendingResponse = null;
+        this.transferStage = null; // 'read' | 'write'
+        this.latchedData = 0;
+        this.latchedSrcAddr = 0;
+        this.latchedDstAddr = 0;
 
         console.log('[DMA] Controller initialized');
     }
@@ -248,6 +256,9 @@ export class DMAController {
         this.currentSrcAddr = this.currentDescriptor.sourceAddr;
         this.currentDstAddr = this.currentDescriptor.destAddr;
         this.transferProgress = 0;
+        this.transferStage = null;
+        this.waitingRequest = null;
+        this.pendingResponse = null;
 
         this.registers.busy = true;
         this.registers.done = false;
@@ -267,20 +278,55 @@ export class DMAController {
         }
 
         try {
-            const srcAddr = this.calculateAddress(this.currentSrcAddr, this.transferProgress, this.srcMode);
-            const dstAddr = this.calculateAddress(this.currentDstAddr, this.transferProgress, this.dstMode);
-
-            let data = this.readData(srcAddr, this.srcMode);
-
-            if (this.bswap) {
-                data = this.swapBytes(data, this.getElementSize(this.srcMode));
+            // If no stage is active, prepare new element
+            if (!this.transferStage) {
+                this.latchedSrcAddr = this.calculateAddress(this.currentSrcAddr, this.transferProgress, this.srcMode);
+                this.latchedDstAddr = this.calculateAddress(this.currentDstAddr, this.transferProgress, this.dstMode);
+                this.transferStage = 'read';
             }
 
-            this.writeData(dstAddr, data, this.dstMode);
+            if (this.transferStage === 'read') {
+                // Issue read if none in flight
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    const readReq = this.buildReadRequest(this.latchedSrcAddr, this.srcMode);
+                    this.waitingRequest = readReq;
+                    this.bus.sendRequest('dma', readReq);
+                    return;
+                }
+                // Await response
+                if (this.pendingResponse) {
+                    let data = this.pendingResponse.data >>> 0;
+                    this.pendingResponse = null;
+                    this.waitingRequest = null;
+                    // Byte swap if requested (only meaningful for word-size)
+                    if (this.bswap) {
+                        data = this.swapBytes(data, this.getElementSize(this.srcMode));
+                    }
+                    this.latchedData = data;
+                    this.transferStage = 'write';
+                }
+                return;
+            }
 
-            this.transferProgress++;
-
-            console.log(`[DMA] Progress: ${this.transferProgress}/${this.numElements}, src=0x${srcAddr.toString(16)}, dst=0x${dstAddr.toString(16)}, data=0x${data.toString(16)}`);
+            if (this.transferStage === 'write') {
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    const writeReq = this.buildWriteRequest(this.latchedDstAddr, this.latchedData, this.dstMode);
+                    this.waitingRequest = writeReq;
+                    this.bus.sendRequest('dma', writeReq);
+                    return;
+                }
+                if (this.pendingResponse) {
+                    // Write completed
+                    this.pendingResponse = null;
+                    this.waitingRequest = null;
+                    this.transferStage = null;
+                    this.transferProgress++;
+                    console.log(`[DMA] Progress: ${this.transferProgress}/${this.numElements}, src=0x${this.latchedSrcAddr.toString(16)}, dst=0x${this.latchedDstAddr.toString(16)}, data=0x${this.latchedData.toString(16)}`);
+                    if (this.transferProgress >= this.numElements) {
+                        this.completeTransfer();
+                    }
+                }
+            }
 
         } catch (error) {
             console.error(`[DMA] Transfer error: ${error.message}`);
@@ -304,40 +350,6 @@ export class DMAController {
         }
     }
 
-    readData(address, mode) {
-        switch (mode) {
-            case 0:
-            case 2:
-                return this.memory[address] ?? 0;
-            case 1:
-            case 3:
-                return ((this.memory[address + 3] ?? 0) << 24) |
-                    ((this.memory[address + 2] ?? 0) << 16) |
-                    ((this.memory[address + 1] ?? 0) << 8) |
-                    (this.memory[address] ?? 0);
-            default:
-                throw new Error(`Invalid read mode: ${mode}`);
-        }
-    }
-
-    writeData(address, data, mode) {
-        switch (mode) {
-            case 0:
-            case 2:
-                this.memory[address] = data & 0xFF;
-                break;
-            case 1:
-            case 3:
-                this.memory[address] = data & 0xFF;
-                this.memory[address + 1] = (data >> 8) & 0xFF;
-                this.memory[address + 2] = (data >> 16) & 0xFF;
-                this.memory[address + 3] = (data >> 24) & 0xFF;
-                break;
-            default:
-                throw new Error(`Invalid write mode: ${mode}`);
-        }
-    }
-
     getElementSize(mode) {
         switch (mode) {
             case 0:
@@ -349,6 +361,36 @@ export class DMAController {
             default:
                 return 1;
         }
+    }
+
+    buildReadRequest(address, mode) {
+        switch (mode) {
+            case 0: // constant byte
+            case 2: // incrementing byte
+                return { type: 'readByte', address };
+            case 1: // constant word
+            case 3: // incrementing word
+                return { type: 'read', address };
+            default:
+                throw new Error(`Invalid read mode: ${mode}`);
+        }
+    }
+
+    buildWriteRequest(address, data, mode) {
+        switch (mode) {
+            case 0: // constant byte
+            case 2: // incrementing byte
+                return { type: 'writeByte', address, value: data & 0xFF };
+            case 1: // constant word
+            case 3: // incrementing word
+                return { type: 'write', address, value: data >>> 0 };
+            default:
+                throw new Error(`Invalid write mode: ${mode}`);
+        }
+    }
+
+    receiveResponse(resp) {
+        this.pendingResponse = resp;
     }
 
     swapBytes(data, size) {
@@ -366,6 +408,11 @@ export class DMAController {
     completeTransfer() {
         this.registers.busy = false;
         this.registers.done = true;
+
+        // Clear in-flight DMA bus state
+        this.transferStage = null;
+        this.waitingRequest = null;
+        this.pendingResponse = null;
 
         console.log(`[DMA] Transfer completed successfully: ${this.transferProgress} elements transferred`);
 

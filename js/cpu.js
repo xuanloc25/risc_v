@@ -580,21 +580,21 @@ export class TileLinkCPU {
 
     readWordAsync(address, bus) {
         this.waitingRequest = { type: 'read', address: address | 0 };
-        bus.sendRequest(this.waitingRequest);
+        bus.sendRequest('cpu', this.waitingRequest);
     }
 
     readByteAsync(address, bus) {
         this.waitingRequest = { type: 'readByte', address: address | 0 };
-        bus.sendRequest(this.waitingRequest);
+        bus.sendRequest('cpu', this.waitingRequest);
     }
 
     writeWordAsync(address, value, bus) {
         this.waitingRequest = { type: 'write', address: address | 0, value };
-        bus.sendRequest(this.waitingRequest);
+        bus.sendRequest('cpu', this.waitingRequest);
     }
 
     writeByteAsync(address, value, bus) {
         this.waitingRequest = { type: 'writeByte', address: address | 0, value };
-        bus.sendRequest(this.waitingRequest);
+        bus.sendRequest('cpu', this.waitingRequest);
     }
 }

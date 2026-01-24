@@ -60,7 +60,11 @@ export const simulator = {
         this.bus = new TileLinkBus();
         this.mem = new TileLinkULMemory({ ledMatrix, uart, mouse, keyboard });
         this.tilelinkMem = this.mem; // Cho phép code cũ truy cập simulator.tilelinkMem
-        this.dma = new DMAController(this.mem.mem); // Khởi tạo DMA controller
+        this.dma = new DMAController(this.bus); // DMA now issues transfers through the bus
+
+        // Wire up cross references so memory can handle DMA register accesses and future DMA-to-CPU coordination.
+        this.mem.setDMA(this.dma);
+        this.mem.setCPU(this.cpu);
         this.ledMatrix = ledMatrix;
         this.uart = uart;
         this.mouse = mouse;
@@ -74,48 +78,47 @@ export const simulator = {
     loadProgram(programData) {
         this.cpu.loadProgram(programData, this.mem);
         this.cpu.isRunning = true;
-        this.dma.memory = this.mem.mem; // Đảm bảo DMA dùng vùng nhớ mới nhất
     },
     tick() {
-        // Nếu CPU dừng và DMA không chạy thì dừng hoàn toàn
-        if (this.cpu.isRunning === false && (!this.dma || !this.dma.registers?.busy)) {
+        const cpuActive = this.cpu.isRunning;
+        const dmaActive = this.dma?.registers?.busy;
+
+        if (!cpuActive && !dmaActive) {
             console.log("Simulation halted.");
             return;
         }
-        // Nếu CPU dừng nhưng DMA vẫn đang chạy thì chỉ tick DMA
-        if (this.cpu.isRunning === false && this.dma && this.dma.registers?.busy) {
-            this.dma.tick();
-            this.cycleCount++;
-            return;
-        }
+
         try {
-            if (this.cpu.isRunning) {
+            if (cpuActive) {
                 this.cpu.tick(this.bus);
-                console.log(`[Cycle ${this.cycleCount + 1}] BUS request:`, this.bus.request, "BUS response:", this.bus.response);
-                this.bus.tick(this.cpu, this.mem);
-                console.log(`[Cycle ${this.cycleCount + 1}] MEM pendingRequest:`, this.mem.pendingRequest);
-                this.mem.tick(this.bus);
-                console.log(`[Cycle ${this.cycleCount + 1}] CPU waitingRequest:`, this.cpu.waitingRequest, "CPU pendingResponse:", this.cpu.pendingResponse);
             }
         } catch (e) {
             this.cpu.isRunning = false;
             console.error(e);
         }
-        
-        // Tick UART TRƯỚC khi tick DMA (để update timing mỗi cycle)
+
+        // DMA produces bus traffic even when CPU is idle
+        if (this.dma) {
+            this.dma.tick();
+        }
+
+        // First arbitration/issue stage
+        this.bus.tick(this.cpu, this.mem, this.dma);
+        // Memory services the issued request
+        this.mem.tick(this.bus);
+        // Route memory response back to masters in the same cycle if available
+        this.bus.tick(this.cpu, this.mem, this.dma);
+
+        // Simple cycle log showing CPU and DMA status
+        console.log(`[Cycle ${this.cycleCount + 1}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} | DMA busy=${this.dma?.registers?.busy ?? false} progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`);
+
+        // Peripheral timing (UART)
         if (this.mem && this.mem.uart) {
             this.mem.uart.tick();
         }
-        
-        if (this.cpu.isRunning && this.dma) {
-            console.log(`[SIMULATOR] DMA tick: busy=${this.dma.registers?.busy}, enabled=${this.dma.registers?.enabled}`);
-            this.dma.tick();
-        }
-        
+
         this.cycleCount++;
     }
 };
 
 simulator.reset();
-console.log("DMA memory === MEM memory:", simulator.dma.memory === simulator.mem.mem);
-console.log("MEM memory === tilelinkMem memory:", simulator.mem.mem === simulator.tilelinkMem.mem);
