@@ -3,9 +3,9 @@ import { LEDMatrix } from './led_matrix.js';
 import { UART } from './uart.js';
 import { MousePeripheral } from './mouse.js';
 import { Keyboard } from './keyboard.js';
-import { TileLinkBus } from './bus.js';
-import { TileLinkULMemory } from './mem.js';
-import { TileLinkCPU } from './cpu.js';
+import { Bus } from './bus.js';
+import { Mem } from './mem.js';
+import { CPU } from './cpu.js';
 import { DMAController } from './dma.js';
 
 // --- Simulator ---
@@ -56,15 +56,18 @@ export const simulator = {
         const uart = new UART(0x10000000);
         const mouse = new MousePeripheral(0xFF100000);
 
-        this.cpu = new TileLinkCPU();
-        this.bus = new TileLinkBus();
-        this.mem = new TileLinkULMemory({ ledMatrix, uart, mouse, keyboard });
+        this.cpu = new CPU();
+        this.bus = new Bus();
+        this.mem = new Mem({ ledMatrix, uart, mouse, keyboard });
         this.tilelinkMem = this.mem; // Cho phép code cũ truy cập simulator.tilelinkMem
         this.dma = new DMAController(this.bus); // DMA now issues transfers through the bus
 
-        // Wire up cross references so memory can handle DMA register accesses and future DMA-to-CPU coordination.
-        this.mem.setDMA(this.dma);
-        this.mem.setCPU(this.cpu);
+        // Bus nắm quyền truy cập bộ nhớ, CPU chỉ đi qua bus
+        this.bus.registerSlave('mem', this.mem, () => true);
+        this.bus.registerSlave('dma-regs', this.dma, (addr) => (addr >>> 0) >= 0xFFED0000 && (addr >>> 0) <= 0xFFED0007);
+        this.bus.registerMaster('cpu', this.cpu);
+        this.bus.registerMaster('dma', this.dma);
+
         this.ledMatrix = ledMatrix;
         this.uart = uart;
         this.mouse = mouse;
@@ -76,7 +79,10 @@ export const simulator = {
         console.info('[IO MAP] UART:       0x10000000-0x10000013 (TX/RX/STATUS/CTRL/BAUD)');
     },
     loadProgram(programData) {
-        this.cpu.loadProgram(programData, this.mem);
+        if (programData.memory) {
+            this.mem.loadMemoryMap(programData.memory);
+        }
+        this.cpu.loadProgram(programData);
         this.cpu.isRunning = true;
     },
     tick() {
@@ -103,11 +109,11 @@ export const simulator = {
         }
 
         // First arbitration/issue stage
-        this.bus.tick(this.cpu, this.mem, this.dma);
+        this.bus.tick();
         // Memory services the issued request
         this.mem.tick(this.bus);
         // Route memory response back to masters in the same cycle if available
-        this.bus.tick(this.cpu, this.mem, this.dma);
+        this.bus.tick();
 
         // Simple cycle log showing CPU and DMA status
         console.log(`[Cycle ${this.cycleCount + 1}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} | DMA busy=${this.dma?.registers?.busy ?? false} progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`);

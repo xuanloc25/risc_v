@@ -1,5 +1,5 @@
 // TileLink-UL CPU implementation
-export class TileLinkCPU {
+export class CPU {
     constructor() {
         this.registers = new Int32Array(32);
         this.fregisters = new Float32Array(32);
@@ -10,11 +10,8 @@ export class TileLinkCPU {
         this.pendingResponse = null;
         this.waitingRequest = null;
         this.resolve = null;
-        this.memory = null;
-    }
-
-    setMemory(memory) {
-        this.memory = memory;
+        this.fetchPending = null;
+        this.fetchWaiting = false;
     }
 
     resetRegisters() {
@@ -29,14 +26,12 @@ export class TileLinkCPU {
         this.pendingResponse = null;
         this.waitingRequest = null;
         this.resolve = null;
+        this.fetchPending = null;
+        this.fetchWaiting = false;
     }
 
-    loadProgram(programData, memory) {
+    loadProgram(programData) {
         this.reset();
-        if (programData.memory) {
-            memory.loadMemoryMap(programData.memory);
-        }
-        this.setMemory(memory.mem);
         this.pc = programData.startAddress || 0;
     }
 
@@ -208,7 +203,7 @@ export class TileLinkCPU {
     }
 
     execute(decoded, bus) {
-        if (!this.memory) throw new Error('CPU memory not set');
+        if (!bus || typeof bus.memBytes !== 'function') throw new Error('Bus has no attached memory');
 
         const { opName, type, rd, rs1, rs2, funct3, funct7, imm, rm } = decoded;
 
@@ -290,11 +285,19 @@ export class TileLinkCPU {
                 return { nextPc: this.pc };
             case 'LH':
                 memoryAddress = (val1_int + imm) | 0;
-                const lh_b0 = this.memory[memoryAddress], lh_b1 = this.memory[memoryAddress + 1];
-                if (lh_b0 === undefined || lh_b1 === undefined) throw new Error(`Memory read error at 0x${memoryAddress.toString(16)}`);
-                memoryValue = (lh_b1 << 8) | lh_b0;
-                result_int = (memoryValue & 0x8000) ? (memoryValue | 0xFFFF0000) : (memoryValue & 0xFFFF);
-                break;
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    this.readHalfAsync(memoryAddress, bus);
+                    return { nextPc: this.pc };
+                }
+                if (this.pendingResponse) {
+                    memoryValue = this.pendingResponse.data & 0xFFFF;
+                    this.waitingRequest = null;
+                    this.pendingResponse = null;
+                    result_int = (memoryValue & 0x8000) ? (memoryValue | 0xFFFF0000) : memoryValue;
+                    if (rd !== 0) this.registers[rd] = result_int | 0;
+                    return {};
+                }
+                return { nextPc: this.pc };
             case 'LW':
                 memoryAddress = (val1_int + imm) | 0;
                 if (!this.waitingRequest && !this.pendingResponse) {
@@ -311,17 +314,35 @@ export class TileLinkCPU {
                 }
                 return { nextPc: this.pc };
             case 'LBU':
-                memoryAddress = (val1_int + imm) | 0; memoryValue = this.memory[memoryAddress];
-                if (memoryValue === undefined) throw new Error(`Memory read error at 0x${memoryAddress.toString(16)}`);
-                result_int = memoryValue & 0xFF;
-                break;
+                memoryAddress = (val1_int + imm) | 0;
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    this.readByteAsync(memoryAddress, bus);
+                    return { nextPc: this.pc };
+                }
+                if (this.pendingResponse) {
+                    memoryValue = this.pendingResponse.data & 0xFF;
+                    this.waitingRequest = null;
+                    this.pendingResponse = null;
+                    result_int = memoryValue;
+                    if (rd !== 0) this.registers[rd] = result_int | 0;
+                    return {};
+                }
+                return { nextPc: this.pc };
             case 'LHU':
                 memoryAddress = (val1_int + imm) | 0;
-                const lhu_b0 = this.memory[memoryAddress], lhu_b1 = this.memory[memoryAddress + 1];
-                if (lhu_b0 === undefined || lhu_b1 === undefined) throw new Error(`Memory read error at 0x${memoryAddress.toString(16)}`);
-                memoryValue = (lhu_b1 << 8) | lhu_b0;
-                result_int = memoryValue & 0xFFFF;
-                break;
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    this.readHalfAsync(memoryAddress, bus);
+                    return { nextPc: this.pc };
+                }
+                if (this.pendingResponse) {
+                    memoryValue = this.pendingResponse.data & 0xFFFF;
+                    this.waitingRequest = null;
+                    this.pendingResponse = null;
+                    result_int = memoryValue;
+                    if (rd !== 0) this.registers[rd] = result_int | 0;
+                    return {};
+                }
+                return { nextPc: this.pc };
             case 'SB':
                 memoryAddress = (val1_int + imm) | 0;
                 if (!this.waitingRequest && !this.pendingResponse) {
@@ -337,8 +358,16 @@ export class TileLinkCPU {
                 return { nextPc: this.pc };
             case 'SH':
                 memoryAddress = (val1_int + imm) | 0;
-                this.memory[memoryAddress] = val2_int & 0xFF; this.memory[memoryAddress + 1] = (val2_int >> 8) & 0xFF;
-                break;
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    this.writeHalfAsync(memoryAddress, val2_int & 0xFFFF, bus);
+                    return { nextPc: this.pc };
+                }
+                if (this.pendingResponse) {
+                    this.waitingRequest = null;
+                    this.pendingResponse = null;
+                    return {};
+                }
+                return { nextPc: this.pc };
             case 'SW':
                 memoryAddress = (val1_int + imm) | 0;
                 console.log(`[CPU] SW: Ghi value=0x${val2_int.toString(16)} vào địa chỉ 0x${memoryAddress.toString(16)}`);
@@ -366,31 +395,41 @@ export class TileLinkCPU {
             case 'BGE': if (val1_int >= val2_int) branchTaken = true; break;
             case 'BLTU': if ((val1_int >>> 0) < (val2_int >>> 0)) branchTaken = true; break;
             case 'BGEU': if ((val1_int >>> 0) >= (val2_int >>> 0)) branchTaken = true; break;
-            case 'ECALL': this.handleSyscall(); break;
+            case 'ECALL': this.handleSyscall(bus); break;
             case 'EBREAK': this.isRunning = false; throw new Error('EBREAK instruction encountered.');
             case 'FLW':
                 memoryAddress = (val1_int + imm) | 0;
-                const flw_b0 = this.memory[memoryAddress]; const flw_b1 = this.memory[memoryAddress + 1];
-                const flw_b2 = this.memory[memoryAddress + 2]; const flw_b3 = this.memory[memoryAddress + 3];
-                if (flw_b0 === undefined || flw_b1 === undefined || flw_b2 === undefined || flw_b3 === undefined) {
-                    throw new Error(`FLW: Memory read error at 0x${memoryAddress.toString(16)}`);
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    this.readWordAsync(memoryAddress, bus);
+                    return { nextPc: this.pc };
                 }
-                const flw_buffer = new ArrayBuffer(4);
-                const flw_view = new DataView(flw_buffer);
-                flw_view.setUint8(0, flw_b0); flw_view.setUint8(1, flw_b1);
-                flw_view.setUint8(2, flw_b2); flw_view.setUint8(3, flw_b3);
-                result_fp = flw_view.getFloat32(0, true);
-                break;
+                if (this.pendingResponse) {
+                    const flw_buffer = new ArrayBuffer(4);
+                    const flw_view = new DataView(flw_buffer);
+                    flw_view.setUint32(0, this.pendingResponse.data >>> 0, true);
+                    result_fp = flw_view.getFloat32(0, true);
+                    this.waitingRequest = null;
+                    this.pendingResponse = null;
+                    if (rd !== 0) this.fregisters[rd] = result_fp;
+                    return {};
+                }
+                return { nextPc: this.pc };
             case 'FSW':
                 memoryAddress = (val1_int + imm) | 0;
-                const fsw_float_val = val2_fp;
-                const fsw_buffer = new ArrayBuffer(4);
-                const fsw_view = new DataView(fsw_buffer);
-                fsw_view.setFloat32(0, fsw_float_val, true);
-                for (let i = 0; i < 4; i++) {
-                    this.memory[memoryAddress + i] = fsw_view.getUint8(i);
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    const fsw_buffer = new ArrayBuffer(4);
+                    const fsw_view = new DataView(fsw_buffer);
+                    fsw_view.setFloat32(0, val2_fp, true);
+                    const wordVal = fsw_view.getUint32(0, true);
+                    this.writeWordAsync(memoryAddress, wordVal, bus);
+                    return { nextPc: this.pc };
                 }
-                break;
+                if (this.pendingResponse) {
+                    this.waitingRequest = null;
+                    this.pendingResponse = null;
+                    return {};
+                }
+                return { nextPc: this.pc };
             case 'FADD.S': result_fp = val1_fp + val2_fp; break;
             case 'FSUB.S': result_fp = val1_fp - val2_fp; break;
             case 'FMUL.S': result_fp = val1_fp * val2_fp; break;
@@ -460,7 +499,7 @@ export class TileLinkCPU {
         return { nextPc };
     }
 
-    handleSyscall() {
+    handleSyscall(bus) {
         const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
         const syscallId = this.registers[17];
@@ -486,11 +525,12 @@ export class TileLinkCPU {
                 }
                 break;
             case 4:
+                const memForStr = this.getMemBytes(bus);
                 let str = '';
                 let addr = arg0;
                 let charByte;
                 while (true) {
-                    charByte = this.memory[addr];
+                    charByte = memForStr[addr];
                     if (charByte === undefined || charByte === 0) break;
                     str += String.fromCharCode(charByte);
                     addr++;
@@ -511,8 +551,9 @@ export class TileLinkCPU {
                 const count_write = arg2;
                 if (fd_write === 1) {
                     let outputStr = '';
+                    const memForWrite = this.getMemBytes(bus);
                     for (let i = 0; i < count_write; i++) {
-                        const byte = this.memory[bufAddr_write + i];
+                        const byte = memForWrite[bufAddr_write + i];
                         if (byte === undefined) {
                             this.registers[10] = i;
                             return;
@@ -550,16 +591,20 @@ export class TileLinkCPU {
         if (this.waitingRequest && !this.pendingResponse) {
             return;
         }
-        const oldPc = this.pc;
 
-        if (!this.memory) throw new Error('CPU memory not set');
-        const mem = this.memory;
+        // Issue instruction fetch if none in flight and no pending inst
+        if (!this.fetchWaiting && !this.fetchPending) {
+            this.readInstructionAsync(this.pc, bus);
+            return;
+        }
+
+        // Wait for instruction fetch
+        if (!this.fetchPending) return;
+
+        const oldPc = this.pc;
         const pc = this.pc;
-        const inst =
-            ((mem[pc + 3] ?? 0) << 24) |
-            ((mem[pc + 2] ?? 0) << 16) |
-            ((mem[pc + 1] ?? 0) << 8) |
-            (mem[pc] ?? 0);
+        const inst = this.fetchPending.data;
+        this.fetchPending = null;
 
         const decoded = this.decode(inst);
         const { nextPc } = this.execute(decoded, bus);
@@ -574,8 +619,23 @@ export class TileLinkCPU {
         }
     }
 
+    readInstructionAsync(address, bus) {
+        this.fetchWaiting = true;
+        bus.sendRequest('cpu', { type: 'fetch', address: address | 0 });
+    }
+
     receiveResponse(resp) {
-        this.pendingResponse = resp;
+        if (resp.type === 'fetch') {
+            this.fetchPending = resp;
+            this.fetchWaiting = false;
+        } else {
+            this.pendingResponse = resp;
+        }
+    }
+
+    getMemBytes(bus) {
+        if (!bus || typeof bus.memBytes !== 'function') throw new Error('Bus has no attached memory');
+        return bus.memBytes();
     }
 
     readWordAsync(address, bus) {
@@ -588,6 +648,11 @@ export class TileLinkCPU {
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
+    readHalfAsync(address, bus) {
+        this.waitingRequest = { type: 'readHalf', address: address | 0 };
+        bus.sendRequest('cpu', this.waitingRequest);
+    }
+
     writeWordAsync(address, value, bus) {
         this.waitingRequest = { type: 'write', address: address | 0, value };
         bus.sendRequest('cpu', this.waitingRequest);
@@ -595,6 +660,11 @@ export class TileLinkCPU {
 
     writeByteAsync(address, value, bus) {
         this.waitingRequest = { type: 'writeByte', address: address | 0, value };
+        bus.sendRequest('cpu', this.waitingRequest);
+    }
+
+    writeHalfAsync(address, value, bus) {
+        this.waitingRequest = { type: 'writeHalf', address: address | 0, value };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 }

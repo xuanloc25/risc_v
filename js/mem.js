@@ -2,8 +2,8 @@ import { UART } from './uart.js';
 import { MousePeripheral } from './mouse.js';
 
 // TileLink-UL Memory implementation
-export class TileLinkULMemory {
-    constructor({ ledMatrix = null, uart = null, mouse = null, keyboard = null, dma = null, cpu = null } = {}) {
+export class Mem {
+    constructor({ ledMatrix = null, uart = null, mouse = null, keyboard = null } = {}) {
         this.mem = {};
         this.pendingRequest = null;
         this._pendingDMA = null; // Reserved for future DMA trigger support
@@ -14,16 +14,6 @@ export class TileLinkULMemory {
         this.mouse = mouse ?? new MousePeripheral(0xFF100000);
         this.keyboard = keyboard;
 
-        this.dma = dma;
-        this.cpu = cpu;
-    }
-
-    setDMA(dma) {
-        this.dma = dma;
-    }
-
-    setCPU(cpu) {
-        this.cpu = cpu;
     }
 
     receiveRequest(req) {
@@ -67,29 +57,22 @@ export class TileLinkULMemory {
                     data = 0;
                 }
             }
-            else if (addr >= 0xFFED0000 && addr <= 0xFFED0007) {
-                if (this.dma) {
-                    if (this.pendingRequest.type === 'read') {
-                        data = this.dma.readRegister(addr);
-                    } else if (this.pendingRequest.type === 'write') {
-                        this.dma.writeRegister(addr, this.pendingRequest.value);
-                        data = 0;
-                    }
-                } else {
-                    console.warn(`[MEM] DMA not available for register access: 0x${this.pendingRequest.address.toString(16)}`);
-                    data = 0;
-                }
-            }
-            else if (this.pendingRequest.type === 'read') {
+            else if (this.pendingRequest.type === 'read' || this.pendingRequest.type === 'fetch') {
                 data = ((this.mem[this.pendingRequest.address + 3] ?? 0) << 24) |
                     ((this.mem[this.pendingRequest.address + 2] ?? 0) << 16) |
                     ((this.mem[this.pendingRequest.address + 1] ?? 0) << 8) |
+                    (this.mem[this.pendingRequest.address] ?? 0);
+            } else if (this.pendingRequest.type === 'readHalf') {
+                data = ((this.mem[this.pendingRequest.address + 1] ?? 0) << 8) |
                     (this.mem[this.pendingRequest.address] ?? 0);
             } else if (this.pendingRequest.type === 'write') {
                 this.mem[this.pendingRequest.address] = this.pendingRequest.value & 0xFF;
                 this.mem[this.pendingRequest.address + 1] = (this.pendingRequest.value >> 8) & 0xFF;
                 this.mem[this.pendingRequest.address + 2] = (this.pendingRequest.value >> 16) & 0xFF;
                 this.mem[this.pendingRequest.address + 3] = (this.pendingRequest.value >> 24) & 0xFF;
+            } else if (this.pendingRequest.type === 'writeHalf') {
+                this.mem[this.pendingRequest.address] = this.pendingRequest.value & 0xFF;
+                this.mem[this.pendingRequest.address + 1] = (this.pendingRequest.value >> 8) & 0xFF;
             } else if (this.pendingRequest.type === 'readByte') {
                 data = this.mem[this.pendingRequest.address] ?? 0;
             } else if (this.pendingRequest.type === 'writeByte') {
@@ -98,33 +81,6 @@ export class TileLinkULMemory {
 
             bus.sendResponse({ ...this.pendingRequest, data });
             this.pendingRequest = null;
-        }
-
-        if (!this.pendingRequest && this._pendingDMA && this.cpu && !this.cpu.waitingRequest && !this.cpu.pendingResponse) {
-            const { src, dst, length } = this._pendingDMA;
-            if (this.dma) {
-                for (let i = 0; i < length; i++) {
-                    const srcAddr = src + i;
-                    console.log(`[CHECK BEFORE DMA] src[0x${srcAddr.toString(16)}]=0x${(this.mem[srcAddr] ?? 0).toString(16)}`);
-                }
-                this.dma.start(src, dst, length, () => {
-                    console.log('DMA transfer completed!');
-                    for (let i = 0; i < length; i++) {
-                        const srcAddr = src + i;
-                        const dstAddr = dst + i;
-                        const srcVal = this.mem[srcAddr];
-                        const dstVal = this.mem[dstAddr];
-                        console.log(`Byte ${i}: src[0x${srcAddr.toString(16)}]=0x${(srcVal ?? 0).toString(16)}, dst[0x${dstAddr.toString(16)}]=0x${(dstVal ?? 0).toString(16)}`);
-                    }
-                    console.log('Kiểm tra trực tiếp vùng đích sau DMA:');
-                    for (let i = 0; i < length; i++) {
-                        const dstAddr = dst + i;
-                        console.log(`mem[0x${dstAddr.toString(16)}]=0x${(this.mem[dstAddr] ?? 0).toString(16)}`);
-                    }
-                    this.cpu.isRunning = false;
-                });
-            }
-            this._pendingDMA = null;
         }
     }
 

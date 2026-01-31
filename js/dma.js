@@ -182,6 +182,11 @@ export class DMAController {
 
         console.log('[DMA] Controller initialized');
     }
+    
+    // Handle memory-mapped register accesses as a bus slave
+    receiveRequest(req) {
+        this.pendingRegReq = req;
+    }
 
     readRegister(address) {
         switch (address) {
@@ -237,6 +242,26 @@ export class DMAController {
 
         if (this.registers.busy && this.currentDescriptor) {
             this.performTransferStep();
+        }
+        
+        // Service register accesses from bus
+        if (this.pendingRegReq) {
+            const { address, type, value } = this.pendingRegReq;
+            let data = 0;
+            if (address === 0xFFED0000) {
+                if (type === 'read') data = this.registers.readCtrl();
+                else if (type === 'write') this.registers.writeCtrl(value);
+            } else if (address === 0xFFED0004) {
+                if (type === 'write') this.registers.writeDescriptor(value);
+                // read treated as zero
+            } else {
+                console.warn(`[DMA] Unknown register access at 0x${address.toString(16)}`);
+            }
+            if (this.bus) {
+                this.bus.sendResponse({ ...this.pendingRegReq, data });
+            }
+            this.pendingRegReq = null;
+            return; // Only one register op per tick
         }
     }
 
