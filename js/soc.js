@@ -7,12 +7,14 @@ import { Bus } from './bus.js';
 import { Mem } from './mem.js';
 import { CPU } from './cpu.js';
 import { DMAController } from './dma.js';
+import { Cache } from './cache.js';
 
 // --- Simulator ---
 export const simulator = {
     cpu: null,
     bus: null,
     mem: null,
+    cache: null,
     tilelinkMem: null, // Để tương thích với code cũ
     dma: null, // Thêm DMA controller
     ledMatrix: null,
@@ -20,6 +22,7 @@ export const simulator = {
     mouse: null,
     keyboard: null,
     cycleCount: 0,
+    useCache: true,
 
     reset() {
         // Khởi tạo ngoại vi và gắn lên simulator để dễ truy cập bên ngoài
@@ -58,13 +61,94 @@ export const simulator = {
 
         this.cpu = new CPU();
         this.bus = new Bus();
-        this.mem = new Mem({ ledMatrix, uart, mouse, keyboard });
-        this.tilelinkMem = this.mem; // Cho phép code cũ truy cập simulator.tilelinkMem
+        // SRAM-like main memory; latency modeled in cache miss path if needed
+        this.mem = new Mem();
+        this.cache = new Cache(this.mem, {
+            cacheSize: 4096,
+            blockSize: 32,
+            associativity: 4,
+            hitLatency: 1,
+            missLatency: 10
+        });
+        this.tilelinkMem = this.mem; 
         this.dma = new DMAController(this.bus); // DMA now issues transfers through the bus
 
+        // Helpers for address decode and MMIO registration
+        const bus = this.bus;
+        const inRange = (addr, base, size) => {
+            const a = addr >>> 0;
+            const b = base >>> 0;
+            return a >= b && a < (b + size);
+        };
+
+        const uartRange = (addr) => inRange(addr, uart.baseAddress, 0x14);
+        const mouseRange = (addr) => inRange(addr, mouse.baseAddress, 0x14);
+        const keyboardRange = (addr) => keyboard ? inRange(addr, keyboard.baseAddress, 0x08) : false;
+        const ledRange = (addr) => ledMatrix ? inRange(addr, ledMatrix.baseAddress, ledMatrix.sizeInBytes) : false;
+        const dmaRegRange = (addr) => inRange(addr, 0xFFED0000, 0x8);
+
+        const isPeripheralAddress = (addr) =>
+            uartRange(addr) ||
+            mouseRange(addr) ||
+            keyboardRange(addr) ||
+            ledRange(addr) ||
+            dmaRegRange(addr);
+            
+        //cheat ready/valid, will update later
+        const registerMMIOSlave = (name, matchFn, { read, write }) => {
+            bus.registerSlave(name, {
+                receiveRequest: (req) => {
+                    let data = 0;
+                    if (req.type === 'read' || req.type === 'fetch') {
+                        data = typeof read === 'function' ? read(req.address, req.type) : 0;
+                    } else if (req.type === 'write') {
+                        if (typeof write === 'function') write(req.address, req.value, req.type);
+                    } else if (req.type === 'readByte' || req.type === 'readHalf') {
+                        data = typeof read === 'function' ? read(req.address, req.type) : 0;
+                    } else if (req.type === 'writeByte' || req.type === 'writeHalf') {
+                        if (typeof write === 'function') write(req.address, req.value, req.type);
+                    } else {
+                        console.warn(`[SoC] Unsupported request type ${req.type} for ${name}`);
+                    }
+                    bus.sendResponse({ ...req, data });
+                }
+            }, matchFn);
+        };
+
         // Bus nắm quyền truy cập bộ nhớ, CPU chỉ đi qua bus
-        this.bus.registerSlave('mem', this.mem, () => true);
-        this.bus.registerSlave('dma-regs', this.dma, (addr) => (addr >>> 0) >= 0xFFED0000 && (addr >>> 0) <= 0xFFED0007);
+        if (this.useCache) {
+            this.bus.registerSlave('cache', this.cache, (addr) => !isPeripheralAddress(addr));
+        } else {
+            this.bus.registerSlave('mem', this.mem, (addr) => !isPeripheralAddress(addr));
+        }
+        this.bus.registerSlave('dma-regs', this.dma, dmaRegRange);
+
+        registerMMIOSlave('uart', uartRange, {
+            read: (addr) => uart.readRegister(addr),
+            write: (addr, val) => uart.writeRegister(addr, val)
+        });
+
+        registerMMIOSlave('mouse', mouseRange, {
+            read: (addr) => mouse.readRegister(addr),
+            write: (addr, val) => mouse.writeRegister(addr, val)
+        });
+
+        if (keyboard) {
+            registerMMIOSlave('keyboard', keyboardRange, {
+                read: (addr) => keyboard.readRegister(addr),
+                write: (addr, val) => keyboard.writeRegister(addr, val)
+            });
+        }
+
+        if (ledMatrix) {
+            registerMMIOSlave('led-matrix', ledRange, {
+                read: () => 0,
+                write: (addr, val, type) => {
+                    if (type === 'write') ledMatrix.writeWord(addr, val);
+                }
+            });
+        }
+
         this.bus.registerMaster('cpu', this.cpu);
         this.bus.registerMaster('dma', this.dma);
 
@@ -73,6 +157,13 @@ export const simulator = {
         this.mouse = mouse;
         this.keyboard = keyboard;
         this.cycleCount = 0;
+
+        // Ensure fresh peripheral state
+        if (this.ledMatrix) this.ledMatrix.reset();
+        if (this.uart) this.uart.reset();
+        if (this.mouse) this.mouse.reset();
+        if (this.keyboard) this.keyboard.reset();
+        if (this.cache) this.cache.reset();
 
         console.info('[IO MAP] LED Matrix: 0xFF000000-0xFF000FFF (write VRAM)');
         console.info('[IO MAP] Mouse:      0xFF100000-0xFF100013 (X/Y/BTN/STATUS/CTRL)');
@@ -110,8 +201,12 @@ export const simulator = {
 
         // First arbitration/issue stage
         this.bus.tick();
-        // Memory services the issued request
-        this.mem.tick(this.bus);
+        // Memory path: via cache or direct mem depending on flag
+        if (this.useCache) {
+            this.cache.tick(this.bus);
+        } else {
+            this.mem.tick(this.bus);
+        }
         // Route memory response back to masters in the same cycle if available
         this.bus.tick();
 
@@ -119,8 +214,8 @@ export const simulator = {
         console.log(`[Cycle ${this.cycleCount + 1}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} | DMA busy=${this.dma?.registers?.busy ?? false} progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`);
 
         // Peripheral timing (UART)
-        if (this.mem && this.mem.uart) {
-            this.mem.uart.tick();
+        if (this.uart) {
+            this.uart.tick();
         }
 
         this.cycleCount++;

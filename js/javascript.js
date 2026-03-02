@@ -45,6 +45,10 @@ const resetButton = document.getElementById('resetButton');
 const speedSlider = document.getElementById('speedSlider');
 const speedValueLabel = document.getElementById('speedValue');
 const clockRateDisplay = document.getElementById('clockRateDisplay');
+const cacheToggleButton = document.getElementById('cacheToggleButton');
+const cacheToggleLabel = document.getElementById('cacheToggleLabel');
+const cacheTableBody = document.getElementById('cacheTableBody');
+const cacheStats = document.getElementById('cacheStats');
 // Data Segment Controls
 const dataSegmentAddressInput = document.getElementById('dataSegmentAddressInput');
 const goToDataSegmentAddressButton = document.getElementById('goToDataSegmentAddress');
@@ -342,19 +346,81 @@ function updateUIGlobally() {
 
     renderDataSegmentTable();
     renderInstructionView();
+    updateCacheToggleUI();
+    renderCacheView();
 
     setTimeout(() => {
         document.querySelectorAll('tr.highlight').forEach(row => row.classList.remove('highlight'));
     }, 500);
 }
 
+function updateCacheToggleUI() {
+    if (!cacheToggleButton || !cacheToggleLabel) return;
+    const on = simulator.useCache;
+    cacheToggleLabel.textContent = on ? 'Cache: ON' : 'Cache: OFF';
+    cacheToggleButton.classList.toggle('active', on);
+}
+
+function renderCacheView() {
+    if (!cacheTableBody) return;
+    cacheTableBody.innerHTML = '';
+
+    if (!simulator.useCache) {
+        cacheTableBody.innerHTML = '<tr><td colspan="7">Cache disabled. Toggle cache ON to view lines.</td></tr>';
+        if (cacheStats) cacheStats.textContent = 'Cache disabled';
+        return;
+    }
+
+    const cache = simulator.cache;
+    if (!cache) {
+        cacheTableBody.innerHTML = '<tr><td colspan="7">Cache not initialized.</td></tr>';
+        if (cacheStats) cacheStats.textContent = 'Cache not initialized';
+        return;
+    }
+
+    const assoc = cache.policy?.associativity ?? 1;
+    const formatHex = (v, pad = 0) => '0x' + (v >>> 0).toString(16).padStart(pad, '0');
+
+    cache.blocks.forEach(block => {
+        const row = cacheTableBody.insertRow();
+        const set = Math.floor(block.id / assoc);
+        const way = block.id % assoc;
+        const bytesPreview = Array.from(block.data.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+
+        row.insertCell().textContent = set;
+        row.insertCell().textContent = way;
+        row.insertCell().textContent = block.valid ? '1' : '0';
+        row.insertCell().textContent = block.modified ? '1' : '0';
+        row.insertCell().textContent = formatHex(block.tag);
+        row.insertCell().textContent = block.lastReference;
+        row.insertCell().textContent = block.valid ? bytesPreview : '';
+    });
+
+    if (cacheStats) {
+        const s = cache.statistics;
+        cacheStats.innerHTML = `
+            <div>Reads: ${s.numRead} | Writes: ${s.numWrite}</div>
+            <div>Hits: ${s.numHit} | Misses: ${s.numMiss}</div>
+            <div>Total Cycles: ${s.totalCycles}</div>
+        `;
+    }
+}
+
 window.updateUIGlobally = updateUIGlobally;
+
+function toggleCacheAndReset() {
+    simulator.useCache = !simulator.useCache;
+    updateCacheToggleUI();
+    console.log(`[UI] Cache toggled -> ${simulator.useCache ? 'ON' : 'OFF'}`);
+    simulator.reset();
+    setupUARTCallbacks();
+}
 
 // --- SETUP UART CALLBACKS ---
 function setupUARTCallbacks() {
     const uartOutput = document.getElementById('uartOutput');
-    if (typeof simulator !== 'undefined' && simulator.mem && simulator.mem.uart && uartOutput) {
-        const uart = simulator.mem.uart;
+    if (typeof simulator !== 'undefined' && simulator.uart && uartOutput) {
+        const uart = simulator.uart;
 
         // Callback khi UART transmit (CPU gửi dữ liệu)
         uart.onTransmit = function (charCode) {
@@ -419,6 +485,11 @@ function handleAssemble() {
             updateUIGlobally();
         }
     }, 10);
+}
+
+// Gán sự kiện toggle cache
+if (cacheToggleButton) {
+    cacheToggleButton.addEventListener('click', toggleCacheAndReset);
 }
 
 // --- [CẬP NHẬT] HÀM RUN MỚI HỖ TRỢ TỐC ĐỘ ---
@@ -735,8 +806,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const uartClearButton = document.getElementById('uartClearButton');
 
     // Setup UART callbacks
-    if (typeof simulator !== 'undefined' && simulator.mem && simulator.mem.uart) {
-        const uart = simulator.mem.uart;
+    if (typeof simulator !== 'undefined' && simulator.uart) {
+        const uart = simulator.uart;
 
         // Callback khi UART transmit (CPU gửi dữ liệu)
         uart.onTransmit = function (charCode) {
@@ -753,8 +824,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (uartSendButton && uartInput) {
         uartSendButton.addEventListener('click', () => {
             const text = uartInput.value;
-            if (text && simulator.mem && simulator.mem.uart) {
-                simulator.mem.uart.addStringToRxBuffer(text + '\n');
+            if (text && simulator.uart) {
+                simulator.uart.addStringToRxBuffer(text + '\n');
                 uartInput.value = '';
                 console.log(`[UART] Sent to RX buffer: "${text}"`);
             }
@@ -764,9 +835,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Enter key to send
     if (uartInput) {
         uartInput.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter' && simulator.mem && simulator.mem.uart) {
+            if (event.key === 'Enter' && simulator.uart) {
                 const text = uartInput.value;
-                simulator.mem.uart.addStringToRxBuffer(text + '\n');
+                simulator.uart.addStringToRxBuffer(text + '\n');
                 uartInput.value = '';
                 console.log(`[UART] Sent to RX buffer: "${text}"`);
             }
@@ -777,8 +848,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (uartClearButton && uartOutput) {
         uartClearButton.addEventListener('click', () => {
             uartOutput.textContent = '';
-            if (simulator.mem && simulator.mem.uart) {
-                simulator.mem.uart.clearTxBuffer();
+            if (simulator.uart) {
+                simulator.uart.clearTxBuffer();
             }
         });
     }

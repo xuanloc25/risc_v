@@ -84,6 +84,12 @@
                         style="margin-left: 15px; padding-left: 15px; border-left: 1px solid #ccc; color: #2d3436; font-size: 0.9rem;">
                         IPS: <strong id="clockRateDisplay" style="color: #0984e3;">0 Hz</strong>
                     </div>
+
+                    <button class="mdc-button mdc-button--outlined cache-toggle-btn" id="cacheToggleButton"
+                        style="margin-left: 10px;">
+                        <i class="material-icons mdc-button__icon" aria-hidden="true">cached</i>
+                        <span class="mdc-button__label" id="cacheToggleLabel">Cache: ON</span>
+                    </button>
                 </div>
             </div>
 
@@ -204,12 +210,34 @@
                 </div>
             </div>
 
-            <!-- VIEW 4: CACHE (Placeholder) -->
+            <!-- VIEW 4: CACHE -->
             <div id="view-cache" class="view-section">
-                <div class="placeholder-view">
-                    <i class="material-icons">cached</i>
-                    <h2>Cache Simulator</h2>
-                    <p>Cache configuration and statistics are not yet implemented.</p>
+                <div class="cache-layout">
+                    <div class="memory-panel" style="flex:1;">
+                        <div class="panel-header">Cache Lines</div>
+                        <div class="table-scroll-container">
+                            <table class="simple-table" id="cacheTable">
+                                <thead>
+                                    <tr>
+                                        <th>Set</th>
+                                        <th>Way</th>
+                                        <th>Valid</th>
+                                        <th>Dirty</th>
+                                        <th>Tag</th>
+                                        <th>Last Ref</th>
+                                        <th>Bytes (first 8)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cacheTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="memory-panel" style="flex:0.4;">
+                        <div class="panel-header">Cache Stats</div>
+                        <div class="cache-stats" id="cacheStats">
+                            <p>Cache disabled.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
