@@ -68,7 +68,7 @@ export const simulator = {
             blockSize: 32,
             associativity: 4,
             hitLatency: 1,
-            missLatency: 10
+            missLatency: 0 // 
         });
         this.tilelinkMem = this.mem; 
         this.dma = new DMAController(this.bus); // DMA now issues transfers through the bus
