@@ -1,4 +1,4 @@
-import { simulator } from './js/soc.js';
+import { simulator } from '../src/js/soc.js';
 
 function makeProgram() {
     const ECALL = 0x00000073;
