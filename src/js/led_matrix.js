@@ -56,8 +56,10 @@ export class LEDMatrix {
 
     // Hàm quan trọng: CPU ghi vào địa chỉ -> Thiết bị vẽ lên màn hình
     writeWord(address, value) {
+        // Chuẩn hóa về unsigned để không bị âm khi CPU gửi địa chỉ 0xFFxxxxxx (signed 32-bit)
+        const addr = address >>> 0;
         // 1. Tính offset (khoảng cách từ địa chỉ base)
-        const offset = address - this.baseAddress;
+        const offset = addr - this.baseAddress;
         
         // 2. Kiểm tra an toàn
         if (offset < 0 || offset >= this.sizeInBytes) return;

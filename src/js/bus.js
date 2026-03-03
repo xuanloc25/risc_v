@@ -5,7 +5,7 @@ export class Bus {
         this.inFlight = null;    // request currently issued to memory
         this.responseQueue = []; // responses from memory waiting to be routed
         this.masters = {};       // name -> target with receiveResponse()
-        this.slaves = [];        // [{ name, target, match(addr) }]
+        this.slaves = {};        // name -> { target, match(addr) }
     }
 
     /** Register a master endpoint so responses can be routed back. */
@@ -15,7 +15,7 @@ export class Bus {
 
     /** Register a slave/target with optional address match predicate. */
     registerSlave(name, target, matchFn = () => true) {
-        this.slaves.push({ name, target, match: matchFn });
+        this.slaves[name] = { name, target, match: matchFn };
     }
 
     /**
@@ -23,7 +23,7 @@ export class Bus {
      * route at most one response back to the originating master.
      */
     tick() {
-        if (this.slaves.length === 0) throw new Error('Bus has no attached slave');
+        if (Object.keys(this.slaves).length === 0) throw new Error('Bus has no attached slave');
 
         // Issue next request if memory is free
         if (!this.inFlight && this.requestQueue.length > 0) {
@@ -49,7 +49,7 @@ export class Bus {
     }
 
     _selectSlave(address) {
-        const entry = this.slaves.find(s => s.match(address));
+        const entry = Object.values(this.slaves).find(s => s.match(address));
         if (!entry) throw new Error(`No slave matched address 0x${(address >>> 0).toString(16)}`);
         return entry.target;
     }
@@ -67,7 +67,8 @@ export class Bus {
     // Direct peek/poke helpers used by CPU for instruction fetch and syscall strings.
     _memBytes() {
         // Legacy helper: use first registered slave (assumed memory map)
-        const target = this.slaves[0]?.target;
+        const first = Object.values(this.slaves)[0];
+        const target = first?.target;
         if (!target) throw new Error('Bus has no attached slave');
         return target.mem ?? target; // fallback for raw map
     }

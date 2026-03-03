@@ -96,7 +96,7 @@ export class Cache {
             associativity,
             numSets,
             hitLatency: userPolicy.hitLatency ?? 1,
-            missLatency: userPolicy.missLatency ?? 10// 
+            missLatency: userPolicy.missLatency ?? 2// 
         };
     }
 

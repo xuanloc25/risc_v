@@ -23,6 +23,7 @@ export const simulator = {
     keyboard: null,
     cycleCount: 0,
     useCache: true,
+    memLatency: 5, // hệ số độ trễ RAM (chu kỳ)
 
     reset() {
         // Khởi tạo ngoại vi và gắn lên simulator để dễ truy cập bên ngoài
@@ -62,13 +63,13 @@ export const simulator = {
         this.cpu = new CPU();
         this.bus = new Bus();
         // SRAM-like main memory; latency modeled in cache miss path if needed
-        this.mem = new Mem();
+        this.mem = new Mem({ latency: this.memLatency });
         this.cache = new Cache(this.mem, {
             cacheSize: 4096,
             blockSize: 32,
             associativity: 4,
             hitLatency: 1,
-            missLatency: 0 // 
+            missLatency: 2 // 
         });
         this.tilelinkMem = this.mem; 
         this.dma = new DMAController(this.bus); // DMA now issues transfers through the bus
@@ -177,6 +178,10 @@ export const simulator = {
         this.cpu.isRunning = true;
     },
     tick() {
+        const cycleId = this.cycleCount + 1;
+        // Group logs per cycle (expanded by default to avoid missing logs)
+        if (console.group) console.group(`[Cycle ${cycleId}]`);
+
         const cpuActive = this.cpu.isRunning;
         const dmaActive = this.dma?.registers?.busy;
 
@@ -211,7 +216,7 @@ export const simulator = {
         this.bus.tick();
 
         // Simple cycle log showing CPU and DMA status
-        console.log(`[Cycle ${this.cycleCount + 1}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} | DMA busy=${this.dma?.registers?.busy ?? false} progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`);
+        console.log(`[Cycle ${cycleId}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} | DMA busy=${this.dma?.registers?.busy ?? false} progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`);
 
         // Peripheral timing (UART)
         if (this.uart) {
@@ -219,6 +224,7 @@ export const simulator = {
         }
 
         this.cycleCount++;
+        if (console.groupEnd) console.groupEnd();
     }
 };
 
