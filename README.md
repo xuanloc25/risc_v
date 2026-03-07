@@ -61,5 +61,6 @@ The simulator models a simplified System-on-Chip architecture including:
 - **DMA Controller** – memory transfer without CPU
 - **Peripheral Controllers** – external device interaction
 
+---
 
 Developed by Xuan Loc and Gia Khang
