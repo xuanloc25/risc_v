@@ -64,4 +64,5 @@ The simulator models a simplified System-on-Chip architecture including:
 ---
 
 Developed by Xuan Loc and Gia Khang
+
 University of Information Technology – VNU-HCM
