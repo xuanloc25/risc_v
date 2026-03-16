@@ -352,6 +352,23 @@
     <script type="module" src="js/javascript.js"></script>
     <script type="module" src="js/assembler.js"></script>
     <script type="module" src="js/soc.js"></script>
+
+    <!-- System Log Terminal -->
+    <div id="systemLogTerminal" class="system-log-terminal">
+        <div class="log-header">
+            <span>Systems Log Console</span>
+            <div class="log-actions">
+                <button id="logExportBtn" class="mdc-button mdc-button--outlined log-btn">
+                    <span class="mdc-button__label">Export</span>
+                </button>
+                <button id="logClearBtn" class="mdc-button mdc-button--outlined log-btn">
+                    <span class="mdc-button__label">Clear</span>
+                </button>
+                <button id="logToggleBtn" class="mdc-icon-button material-icons" aria-label="Toggle Console">expand_more</button>
+            </div>
+        </div>
+        <div id="logContent" class="log-content"></div>
+    </div>
 </body>
 
 </html>

@@ -1,3 +1,5 @@
+import { TL_A_Opcode } from './tilelink.js';
+
 // DMA descriptor and controller implementation
 export class DMADescriptor {
     constructor(sourceAddr = 0, destAddr = 0, configWord = 0) {
@@ -175,10 +177,12 @@ export class DMAController {
         // Async bus state
         this.waitingRequest = null;
         this.pendingResponse = null;
-        this.transferStage = null; // 'read' | 'write'
         this.latchedData = 0;
         this.latchedSrcAddr = 0;
         this.latchedDstAddr = 0;
+        this.burstRemainingReads = 0;
+        this.burstRemainingWrites = 0;
+        this.burstDataBuffer = [];
 
         console.log('[DMA] Controller initialized');
     }
@@ -303,52 +307,94 @@ export class DMAController {
         }
 
         try {
-            // If no stage is active, prepare new element
+            // Determine maximum burst we can do. TileLink size is log2(bytes).
+            // For simplicity, let's limit max burst to 16 bytes (size: 4 = 4 words) or 64 bytes (size: 6 = 16 words).
+            // Let's use 16 words (64 bytes) max burst.
             if (!this.transferStage) {
+                const wordsLeft = this.numElements - this.transferProgress;
+                let burstWords = 1;
+                // Only burst if modes are incrementing (2 or 3). If constant (0 or 1), stick to 1 beat.
+                if ((this.srcMode === 2 || this.srcMode === 3) && (this.dstMode === 2 || this.dstMode === 3)) {
+                    if (wordsLeft >= 16) burstWords = 16;
+                    else if (wordsLeft >= 8) burstWords = 8;
+                    else if (wordsLeft >= 4) burstWords = 4;
+                    else if (wordsLeft >= 2) burstWords = 2;
+                }
+                
+                this.burstRemainingReads = burstWords;
+                this.burstRemainingWrites = burstWords;
+                this.burstDataBuffer = [];
+                
                 this.latchedSrcAddr = this.calculateAddress(this.currentSrcAddr, this.transferProgress, this.srcMode);
                 this.latchedDstAddr = this.calculateAddress(this.currentDstAddr, this.transferProgress, this.dstMode);
                 this.transferStage = 'read';
             }
 
             if (this.transferStage === 'read') {
-                // Issue read if none in flight
                 if (!this.waitingRequest && !this.pendingResponse) {
-                    const readReq = this.buildReadRequest(this.latchedSrcAddr, this.srcMode);
+                    // size = log2(bytes). If we read N words (where word is 4 bytes), size = log2(N*4).
+                    // size(1 word) = 2. size(2 words) = 3. size(4 words) = 4.
+                    const byteSize = this.burstRemainingReads * this.getElementSize(this.srcMode);
+                    const tlSizeLog2 = Math.log2(byteSize);
+                    
+                    const readReq = this.buildReadRequest(this.latchedSrcAddr, this.srcMode, tlSizeLog2);
                     this.waitingRequest = readReq;
                     this.bus.sendRequest('dma', readReq);
                     return;
                 }
-                // Await response
+                
                 if (this.pendingResponse) {
                     let data = this.pendingResponse.data >>> 0;
-                    this.pendingResponse = null;
-                    this.waitingRequest = null;
-                    // Byte swap if requested (only meaningful for word-size)
                     if (this.bswap) {
                         data = this.swapBytes(data, this.getElementSize(this.srcMode));
                     }
-                    this.latchedData = data;
-                    this.transferStage = 'write';
+                    this.burstDataBuffer.push(data);
+                    
+                    this.pendingResponse = null;
+                    this.burstRemainingReads--;
+                    
+                    if (this.burstRemainingReads <= 0) {
+                        this.waitingRequest = null;
+                        this.transferStage = 'write';
+                    }
                 }
                 return;
             }
 
             if (this.transferStage === 'write') {
                 if (!this.waitingRequest && !this.pendingResponse) {
-                    const writeReq = this.buildWriteRequest(this.latchedDstAddr, this.latchedData, this.dstMode);
+                    const byteSize = this.burstRemainingWrites * this.getElementSize(this.dstMode);
+                    const tlSizeLog2 = Math.log2(byteSize);
+                    
+                    // We only support setting ONE value per PutFullData in this simple emulator unless we send a buffer
+                    // To do proper bursts, we need to send individual write beats or attach an array.
+                    // For now, let's just loop locally and send single writes for the burst, or if we send a block, mem has to support it.
+                    // Actually, if we're simulating TileLink bursts, we should just send multiple PutFullData requests (one per beat).
+                    
+                    // Sending beat
+                    const writeData = this.burstDataBuffer[this.burstDataBuffer.length - this.burstRemainingWrites];
+                    const currentBeatAddr = this.latchedDstAddr + ((this.burstDataBuffer.length - this.burstRemainingWrites) * this.getElementSize(this.dstMode));
+                    
+                    // Just standard single-beat writes for simplicity, DMA generates multiple requests.
+                    // (True TL burst would have same address and changing opcodes/masks, but this works for basic sim)
+                    const writeReq = this.buildWriteRequest(currentBeatAddr, writeData, this.dstMode, tlSizeLog2);
                     this.waitingRequest = writeReq;
                     this.bus.sendRequest('dma', writeReq);
                     return;
                 }
+                
                 if (this.pendingResponse) {
-                    // Write completed
                     this.pendingResponse = null;
                     this.waitingRequest = null;
-                    this.transferStage = null;
+                    this.burstRemainingWrites--;
                     this.transferProgress++;
-                    console.log(`[DMA] Progress: ${this.transferProgress}/${this.numElements}, src=0x${this.latchedSrcAddr.toString(16)}, dst=0x${this.latchedDstAddr.toString(16)}, data=0x${this.latchedData.toString(16)}`);
-                    if (this.transferProgress >= this.numElements) {
-                        this.completeTransfer();
+                    
+                    if (this.burstRemainingWrites <= 0) {
+                        this.transferStage = null;
+                        console.log(`[DMA] Progress: ${this.transferProgress}/${this.numElements}, burst block done.`);
+                        if (this.transferProgress >= this.numElements) {
+                            this.completeTransfer();
+                        }
                     }
                 }
             }
@@ -388,27 +434,27 @@ export class DMAController {
         }
     }
 
-    buildReadRequest(address, mode) {
+    buildReadRequest(address, mode, tlSizeLog2 = undefined) {
         switch (mode) {
             case 0: // constant byte
             case 2: // incrementing byte
-                return { type: 'readByte', address };
+                return { type: TL_A_Opcode.Get, address, size: tlSizeLog2 !== undefined ? tlSizeLog2 : 0 };
             case 1: // constant word
             case 3: // incrementing word
-                return { type: 'read', address };
+                return { type: TL_A_Opcode.Get, address, size: tlSizeLog2 !== undefined ? tlSizeLog2 : 2 };
             default:
                 throw new Error(`Invalid read mode: ${mode}`);
         }
     }
 
-    buildWriteRequest(address, data, mode) {
+    buildWriteRequest(address, data, mode, tlSizeLog2 = undefined) {
         switch (mode) {
             case 0: // constant byte
             case 2: // incrementing byte
-                return { type: 'writeByte', address, value: data & 0xFF };
+                return { type: TL_A_Opcode.PutFullData, address, value: data & 0xFF, size: tlSizeLog2 !== undefined ? tlSizeLog2 : 0 };
             case 1: // constant word
             case 3: // incrementing word
-                return { type: 'write', address, value: data >>> 0 };
+                return { type: TL_A_Opcode.PutFullData, address, value: data >>> 0, size: tlSizeLog2 !== undefined ? tlSizeLog2 : 2 };
             default:
                 throw new Error(`Invalid write mode: ${mode}`);
         }

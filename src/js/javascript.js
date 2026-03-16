@@ -65,6 +65,141 @@ const wordsPerRow = 8;
 let currentRegisterView = 'integer';
 let activeBreakpoints = new Set();
 
+// --- SYSTEM LOG TERMINAL LOGIC ---
+const logContent = document.getElementById('logContent');
+const logToggleBtn = document.getElementById('logToggleBtn');
+const logClearBtn = document.getElementById('logClearBtn');
+const logExportBtn = document.getElementById('logExportBtn');
+const systemLogTerminal = document.getElementById('systemLogTerminal');
+
+let exportLogs = [];     // Stores all logs infinitely
+let domLogBuffer = [];   // Batch buffer for DOM updates
+let isAutoScrollPaused = false;
+const MAX_DOM_LINES = 2000;
+let currentDomLines = 0;
+
+// Set up UI listeners for terminal
+if (logToggleBtn && systemLogTerminal) {
+    // Also allow clicking the header to toggle
+    document.querySelector('.log-header').addEventListener('click', (e) => {
+        if(e.target.tagName === 'BUTTON' || e.target.parentElement.tagName === 'BUTTON') return;
+        systemLogTerminal.classList.toggle('expanded');
+    });
+    logToggleBtn.addEventListener('click', () => {
+        systemLogTerminal.classList.toggle('expanded');
+    });
+}
+
+if (logClearBtn) {
+    logClearBtn.addEventListener('click', () => {
+        exportLogs = [];
+        domLogBuffer = [];
+        if (logContent) logContent.textContent = '';
+        currentDomLines = 0;
+    });
+}
+
+if (logExportBtn) {
+    logExportBtn.addEventListener('click', () => {
+        const blob = new Blob([exportLogs.join('\n')], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'simulator_logs.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+}
+
+// Track scrolling to pause auto-scroll
+if (logContent) {
+    logContent.addEventListener('scroll', () => {
+        // If user scrolls up (not at the very bottom), pause auto-scroll
+        const isAtBottom = Math.abs((logContent.scrollHeight - logContent.scrollTop) - logContent.clientHeight) < 10;
+        isAutoScrollPaused = !isAtBottom;
+    });
+}
+
+// Override console methods
+const originalConsole = {
+    log: console.log,
+    warn: console.warn,
+    error: console.error,
+    info: console.info
+};
+
+function formatArg(arg) {
+    if (typeof arg === 'object') {
+        try { return JSON.stringify(arg); } catch (e) { return String(arg); }
+    }
+    return String(arg);
+}
+
+function interceptLog(level, args) {
+    const msg = Array.from(args).map(formatArg).join(' ');
+    
+    // Add prefix if it's not a generic log, just for visual distinction
+    let prefix = '';
+    if (level === 'error') prefix = '[ERROR] ';
+    if (level === 'warn') prefix = '[WARN] ';
+    
+    const finalMsg = prefix + msg;
+    
+    // 1. Always store in infinite export array
+    exportLogs.push(finalMsg);
+    
+    // 2. Buffer for DOM
+    // Wrap in a span if error/warn to allow CSS coloring, otherwise raw text
+    if (level === 'error') {
+        domLogBuffer.push(`<span class="log-error">${finalMsg}</span>`);
+    } else if (level === 'warn') {
+        domLogBuffer.push(`<span class="log-warn">${finalMsg}</span>`);
+    } else if (level === 'info') {
+        domLogBuffer.push(`<span class="log-info">${finalMsg}</span>`);
+    } else {
+        domLogBuffer.push(finalMsg); // plain text for standard logs is faster
+    }
+}
+
+console.log = function() { originalConsole.log.apply('console', arguments); interceptLog('log', arguments); };
+console.warn = function() { originalConsole.warn.apply('console', arguments); interceptLog('warn', arguments); };
+console.error = function() { originalConsole.error.apply('console', arguments); interceptLog('error', arguments); };
+console.info = function() { originalConsole.info.apply('console', arguments); interceptLog('info', arguments); };
+
+// Batch DOM Updater Loop
+setInterval(() => {
+    if (domLogBuffer.length === 0 || !logContent) return;
+
+    // Join buffer with newlines
+    const newHtmlChunk = domLogBuffer.join('<br>') + '<br>';
+    const linesAdded = domLogBuffer.length;
+    
+    // Append to DOM (using innerHTML since we inject spans for colors)
+    // Note: Instead of innerHTML += which is slow, insertAdjacentHTML is slightly better
+    logContent.insertAdjacentHTML('beforeend', newHtmlChunk);
+    
+    currentDomLines += linesAdded;
+    domLogBuffer = []; // Clear buffer
+
+    // Enforce Max Lines
+    if (currentDomLines > MAX_DOM_LINES) {
+        // Prune older lines (simple string manipulation on innerHTML is faster than killing thousands of nodes)
+        // Since we mostly have text breaks <br>, splitting by <br> works.
+        const currentHtml = logContent.innerHTML;
+        const parts = currentHtml.split('<br>');
+        if (parts.length > MAX_DOM_LINES) {
+            const chopped = parts.slice(parts.length - MAX_DOM_LINES).join('<br>');
+            logContent.innerHTML = chopped;
+            currentDomLines = MAX_DOM_LINES;
+        }
+    }
+
+    // Auto-scroll if not paused by user
+    if (!isAutoScrollPaused) {
+        logContent.scrollTop = logContent.scrollHeight;
+    }
+}, 150); // Flush every 150ms
+
 // --- HÀM QUẢN LÝ VIEW ---
 
 /* Hàm chuyển đổi hiển thị bảng thanh ghi (Tabs Logic) */
@@ -283,7 +418,7 @@ function renderDataSegmentTable() {
             let allBytesNull = true;
 
             for (let k = 0; k < 4; k++) {
-                const byte = simulator.tilelinkMem.mem[wordStartAddress + k] ?? null;
+                const byte = simulator.mem.mem[wordStartAddress + k] ?? null;
                 if (byte !== null) {
                     allBytesNull = false;
                     wordValue |= (byte << (k * 8));
@@ -757,7 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
             simulator.mem.mouse.reportEvent(x, y, buttonMask, isClick);
         }
     };
-    
+
     if (ledCanvas && mouseCoordinatesDisplay) {
         // Mouse move event
         ledCanvas.addEventListener('mousemove', (event) => {
@@ -784,7 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Map event.button (0:left, 1:middle, 2:right) to mask bits (bit0/bit2/bit1)
             const buttonMask = event.button === 0 ? 0x1 : event.button === 1 ? 0x4 : event.button === 2 ? 0x2 : 0;
             sendMouseToPeripheral(x, y, buttonMask, true);
-            
+
             // Reset màu sau 500ms
             setTimeout(() => {
                 mouseCoordinatesDisplay.style.color = '#0984e3';
