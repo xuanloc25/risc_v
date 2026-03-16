@@ -132,10 +132,18 @@ export const assembler = {
         'flw': { opcode: '0000111', funct3: '010', type: 'I-FP' },
         'fsw': { opcode: '0100111', funct3: '010', type: 'S-FP' },
 
+        'fmadd.s': { opcode: '1000011', fmt: '00', type: 'R4-FP' },
+        'fmsub.s': { opcode: '1000111', fmt: '00', type: 'R4-FP' },
+        'fnmsub.s': { opcode: '1001011', fmt: '00', type: 'R4-FP' },
+        'fnmadd.s': { opcode: '1001111', fmt: '00', type: 'R4-FP' },
+
         'fadd.s': { opcode: '1010011', funct7: '0000000', type: 'R-FP' },
         'fsub.s': { opcode: '1010011', funct7: '0000100', type: 'R-FP' },
         'fmul.s': { opcode: '1010011', funct7: '0001000', type: 'R-FP' },
         'fdiv.s': { opcode: '1010011', funct7: '0001100', type: 'R-FP' },
+        'fsqrt.s': { opcode: '1010011', funct7: '0101100', rs2_subfield: '00000', type: 'R-FP-CVT' },
+        'fmin.s': { opcode: '1010011', funct3: '001', funct7: '0010100', type: 'R-FP' },
+        'fmax.s': { opcode: '1010011', funct3: '000', funct7: '0010100', type: 'R-FP' },
 
         'fsgnj.s': { opcode: '1010011', funct3: '000', funct7: '0010000', type: 'R-FP' },
         'fsgnjn.s': { opcode: '1010011', funct3: '001', funct7: '0010000', type: 'R-FP' },
@@ -149,6 +157,7 @@ export const assembler = {
         'feq.s': { opcode: '1010011', funct3: '010', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
         'flt.s': { opcode: '1010011', funct3: '001', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
         'fle.s': { opcode: '1010011', funct3: '000', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
+        'fclass.s': { opcode: '1010011', funct3: '001', funct7: '1110000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
 
         'fmv.x.w': { opcode: '1010011', funct3: '000', funct7: '1110000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
         'fmv.w.x': { opcode: '1010011', funct3: '000', funct7: '1111000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
@@ -534,6 +543,16 @@ export const assembler = {
                 // ===================================
                 // == CÁC LỆNH DẤU PHẨY ĐỘNG (FLOAT)
                 // ===================================
+                case 'R4-FP':
+                    rd_s = encodeReg(operands[0]);
+                    rs1_s = encodeReg(operands[1]);
+                    rs2_s = encodeReg(operands[2]);
+                    const rs3_s = encodeReg(operands[3]);
+                    const rm_r4 = instrInfo.funct3 || '000'; // Default rounding mode
+                    const fmt_s = instrInfo.fmt || '00';
+                    binaryInstruction = rs3_s + fmt_s + rs2_s + rs1_s + rm_r4 + rd_s + instrInfo.opcode;
+                    break;
+
                 case 'R-FP':
                     rd_s = encodeReg(operands[0]);
                     rs1_s = encodeReg(operands[1]);

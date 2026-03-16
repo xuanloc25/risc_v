@@ -172,6 +172,7 @@ body, html {
     display: none; /* Ẩn mặc định */
     flex: 1;
     padding: 15px;
+    padding-bottom: 50px; /* 15px original padding + 35px for Log Terminal */
     overflow: hidden;
     height: calc(100vh - var(--header-height));
 }
