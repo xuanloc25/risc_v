@@ -98,14 +98,16 @@ export const simulator = {
             bus.registerSlave(name, {
                 receiveRequest: (req) => {
                     let data = 0;
+                    let responseType = TL_D_Opcode.AccessAck;
                     if (req.type === TL_A_Opcode.Get || req.type === 'read' || req.type === 'fetch' || req.type === 'readByte' || req.type === 'readHalf') {
                         data = typeof read === 'function' ? read(req.address, req.type, req.size) : 0;
-                    } else if (req.type === TL_A_Opcode.PutFullData || req.type === 'write' || req.type === 'writeByte' || req.type === 'writeHalf') {
+                        responseType = TL_D_Opcode.AccessAckData;
+                    } else if (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData || req.type === 'write' || req.type === 'writeByte' || req.type === 'writeHalf') {
                         if (typeof write === 'function') write(req.address, req.value, req.type, req.size);
                     } else {
                         console.warn(`[SoC] Unsupported request type ${req.type} for ${name}`);
                     }
-                    bus.sendResponse({ from: name, to: req.from, type: TL_D_Opcode.AccessAckData, data, address: req.address });
+                    bus.sendResponse({ from: name, to: req.from, type: responseType, data, address: req.address, size: req.size });
                 }
             }, matchFn);
         };
@@ -139,7 +141,7 @@ export const simulator = {
             registerMMIOSlave('led-matrix', ledRange, {
                 read: () => 0,
                 write: (addr, val, type) => {
-                    if (type === 'write') ledMatrix.writeWord(addr, val);
+                    if (type === TL_A_Opcode.PutFullData || type === 'write') ledMatrix.writeWord(addr, val);
                 }
             });
         }

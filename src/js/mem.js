@@ -40,7 +40,7 @@ export class Mem {
                 totalBytes: bytesRequested,
                 bytesRemaining: bytesRequested,
                 currentAddr: req.address,
-                isWrite: (req.type === TL_A_Opcode.PutFullData)
+                isWrite: (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData)
             };
             this.pendingRequest = null;
             this._processBurstBeat(bus);
@@ -74,7 +74,7 @@ export class Mem {
             // Legacy fallbacks
             if (req.type === 'readHalf') { data = ((this.mem[addr + 1] ?? 0) << 8) | (this.mem[addr] ?? 0); }
             if (req.type === 'readByte') { data = this.mem[addr] ?? 0; }
-        } else if (opA === TL_A_Opcode.PutFullData || req.type === 'write' || req.type === 'writeHalf' || req.type === 'writeByte') {
+        } else if (opA === TL_A_Opcode.PutFullData || opA === TL_A_Opcode.PutPartialData || req.type === 'write' || req.type === 'writeHalf' || req.type === 'writeByte') {
             let writeSize = sizeLog2;
             if (req.type === 'writeHalf') writeSize = 1;
             if (req.type === 'writeByte') writeSize = 0;
@@ -164,6 +164,7 @@ export class Mem {
     reset() {
         this.mem = {};
         this.pendingRequest = null;
+        this.burstState = null;
         this.cycle = 0;
     }
 }

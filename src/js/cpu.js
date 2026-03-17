@@ -1,4 +1,4 @@
-import { TL_A_Opcode, TL_D_Opcode } from './tilelink.js';
+﻿import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic } from './tilelink.js';
 
 // TileLink-UL CPU implementation
 export class CPU {
@@ -131,14 +131,15 @@ export class CPU {
             'FLT.S': { type: 'R-FP-CMP', opcode: '1010011', funct3: '001', funct7_prefix: '10100' },
             'FLE.S': { type: 'R-FP-CMP', opcode: '1010011', funct3: '000', funct7_prefix: '10100' },
             'FMV.X.W': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1110000', rs2_subfield: '00000', funct3_fixed: '000' },
-            'FMV.W.X': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1111000', rs2_subfield: '00000', funct3_fixed: '000' }
+            'FMV.W.X': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1111000', rs2_subfield: '00000', funct3_fixed: '000' },
+            'AMOADD.W': { type: 'R-AMO', opcode: '0101111', funct3: '010', funct7: '0000000' }
         };
 
         for (const name in instructionFormats) {
             const format = instructionFormats[name];
             let match = false;
             if (format.opcode === opcodeBin) {
-                if (format.type === 'R' || format.type === 'R-FP' || format.type === 'R-FP-CMP') {
+                if (format.type === 'R' || format.type === 'R-FP' || format.type === 'R-FP-CMP' || format.type === 'R-AMO') {
                     if (format.funct3 === funct3Bin || format.funct3_fixed === funct3Bin || format.funct3 === 'ANY' || format.funct3_cmp === funct3Bin) {
                         if (format.funct7 === funct7Bin || format.funct7_op === funct7Bin || format.funct7_prefix === funct7Bin.substring(0, 5)) {
                             if (format.rs2_fmt && format.rs2_fmt !== rs2.toString(2).padStart(5, '0').substring(0, format.rs2_fmt.length)) {
@@ -397,9 +398,9 @@ export class CPU {
                 return { nextPc: this.pc };
             case 'SW':
                 memoryAddress = (val1_int + imm) | 0;
-                console.log(`[CPU] SW: Ghi value=0x${val2_int.toString(16)} vào địa chỉ 0x${memoryAddress.toString(16)}`);
+                console.log(`[CPU] SW: Ghi value=0x${val2_int.toString(16)} vÃ o Ä‘á»‹a chá»‰ 0x${memoryAddress.toString(16)}`);
                 if (memoryAddress >= 0x100 && memoryAddress < 0x104) {
-                    console.warn(`[CẢNH BÁO] SW đang ghi vào vùng nguồn DMA tại địa chỉ 0x${memoryAddress.toString(16)}!`);
+                    console.warn(`[Cáº¢NH BÃO] SW Ä‘ang ghi vÃ o vÃ¹ng nguá»“n DMA táº¡i Ä‘á»‹a chá»‰ 0x${memoryAddress.toString(16)}!`);
                 }
                 if (!this.waitingRequest && !this.pendingResponse) {
                     this.writeWordAsync(memoryAddress, val2_int, bus);
@@ -572,6 +573,21 @@ export class CPU {
                 fmvwx_view.setInt32(0, val1_int, true);
                 result_fp = fmvwx_view.getFloat32(0, true);
                 break;
+            case 'AMOADD.W':
+                memoryAddress = val1_int | 0; // rs1 contains address
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    this.amoAddAsync(memoryAddress, val2_int, bus);
+                    return { nextPc: this.pc };
+                }
+                if (this.pendingResponse) {
+                    result_int = this.pendingResponse.data;
+                    this.waitingRequest = null;
+                    this.pendingResponse = null;
+                    if (rd !== 0) this.registers[rd] = result_int | 0;
+                    console.log(`[CPU] AMOADD.W response: PC=0x${this.pc.toString(16)}, rd=x${rd}, old_value=${result_int | 0}`);
+                    return {};
+                }
+                return { nextPc: this.pc };
             default:
                 throw new Error(`Execute: Instruction ${opName} (Type: ${type}) is not implemented in the simulator.`);
         }
@@ -761,12 +777,25 @@ export class CPU {
     }
 
     writeByteAsync(address, value, bus) {
-        this.waitingRequest = { type: TL_A_Opcode.PutFullData, address: address | 0, value, size: 0 };
+        this.waitingRequest = { type: TL_A_Opcode.PutPartialData, address: address | 0, value, size: 0 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
     writeHalfAsync(address, value, bus) {
-        this.waitingRequest = { type: TL_A_Opcode.PutFullData, address: address | 0, value, size: 1 };
+        this.waitingRequest = { type: TL_A_Opcode.PutPartialData, address: address | 0, value, size: 1 };
+        bus.sendRequest('cpu', this.waitingRequest);
+    }
+
+    amoAddAsync(address, value, bus) {
+        this.waitingRequest = { 
+            type: TL_A_Opcode.ArithmeticData, 
+            param: TL_Param_Arithmetic.ADD,
+            address: address | 0, 
+            value: value, 
+            size: 2 // 32-bit word
+        };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 }
+
+

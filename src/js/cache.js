@@ -1,4 +1,4 @@
-import { TL_A_Opcode, TL_D_Opcode, getOpcodeName } from './tilelink.js';
+import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic, TL_Param_Logical, getOpcodeName } from './tilelink.js';
 
 // Cache simulator modeled after cache.h: set-associative, write-back/write-allocate optional,
 // blocking (one outstanding request), with hit/miss latency accounting and simple LRU.
@@ -61,9 +61,12 @@ export class Cache {
         if (req.type === TL_A_Opcode.Get || req.type === 'read' || req.type === 'fetch' || req.type === 'readHalf' || req.type === 'readByte') {
             const { data, cycles } = this._handleRead(req);
             this.pending = { req: { from: 'cache', to: req.from, type: TL_D_Opcode.AccessAckData, address: req.address, data, size: req.size }, readyCycle: this.cycle + cycles };
-        } else if (req.type === TL_A_Opcode.PutFullData || req.type === 'write' || req.type === 'writeHalf' || req.type === 'writeByte') {
+        } else if (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData || req.type === 'write' || req.type === 'writeHalf' || req.type === 'writeByte') {
             const cycles = this._handleWrite(req);
-            this.pending = { req: { from: 'cache', to: req.from, type: TL_D_Opcode.AccessAckData, address: req.address, data: null, size: req.size }, readyCycle: this.cycle + cycles };
+            this.pending = { req: { from: 'cache', to: req.from, type: TL_D_Opcode.AccessAck, address: req.address, data: null, size: req.size }, readyCycle: this.cycle + cycles };
+        } else if (req.type === TL_A_Opcode.ArithmeticData || req.type === TL_A_Opcode.LogicalData) {
+            const { data, cycles } = this._handleAtomic(req);
+            this.pending = { req: { from: 'cache', to: req.from, type: TL_D_Opcode.AccessAckData, address: req.address, data, size: req.size }, readyCycle: this.cycle + cycles };
         } else {
             console.warn(`[Cache] Unsupported request type ${req.type}`);
         }
@@ -177,6 +180,32 @@ export class Cache {
         return cycles;
     }
 
+    _handleAtomic(req) {
+        this.statistics.numRead++;
+        this.statistics.numWrite++;
+
+        const addr = req.address >>> 0;
+        const block = this._findBlock(addr);
+        let cycles = this.policy.hitLatency;
+
+        if (block) {
+            this.statistics.numHit++;
+            this._touchBlock(block);
+        } else {
+            this.statistics.numMiss++;
+            cycles += this.policy.missLatency;
+            this._loadBlock(addr, cycles);
+        }
+
+        const size = req.size ?? 2;
+        const oldValue = this._readValueBySize(addr, size);
+        const newValue = this._applyAtomic(req, oldValue, size);
+        this._writeValueBySize(addr, newValue, size);
+
+        this.statistics.totalCycles += cycles;
+        return { data: oldValue, cycles };
+    }
+
     _findBlock(addr) {
         const tag = this._getTag(addr);
         const set = this._getSetIndex(addr);
@@ -273,10 +302,51 @@ export class Cache {
         return (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
     }
 
+    _readValueBySize(addr, size) {
+        if (size === 0) return this._readByte(addr);
+        if (size === 1) return this._readHalf(addr);
+        return this._readWord(addr);
+    }
+
+    _writeValueBySize(addr, value, size) {
+        if (size === 0) this._writeByte(addr, value);
+        else if (size === 1) this._writeHalf(addr, value);
+        else this._writeWord(addr, value);
+    }
+
+    _applyAtomic(req, data, size) {
+        const unsignedData = size === 0 ? (data & 0xFF) : size === 1 ? (data & 0xFFFF) : (data >>> 0);
+        const unsignedValue = size === 0 ? ((req.value ?? 0) & 0xFF) : size === 1 ? ((req.value ?? 0) & 0xFFFF) : ((req.value ?? 0) >>> 0);
+        const signedData = size === 0 ? ((unsignedData << 24) >> 24) : size === 1 ? ((unsignedData << 16) >> 16) : (data | 0);
+        const signedValue = size === 0 ? ((unsignedValue << 24) >> 24) : size === 1 ? ((unsignedValue << 16) >> 16) : ((req.value ?? 0) | 0);
+
+        let result = unsignedData;
+        if (req.type === TL_A_Opcode.ArithmeticData) {
+            if (req.param === TL_Param_Arithmetic.MIN) result = Math.min(signedData, signedValue);
+            else if (req.param === TL_Param_Arithmetic.MAX) result = Math.max(signedData, signedValue);
+            else if (req.param === TL_Param_Arithmetic.MINU) result = Math.min(unsignedData, unsignedValue);
+            else if (req.param === TL_Param_Arithmetic.MAXU) result = Math.max(unsignedData, unsignedValue);
+            else if (req.param === TL_Param_Arithmetic.ADD) {
+                if (size === 0) result = (unsignedData + unsignedValue) & 0xFF;
+                else if (size === 1) result = (unsignedData + unsignedValue) & 0xFFFF;
+                else result = (signedData + signedValue) | 0;
+            }
+        } else if (req.type === TL_A_Opcode.LogicalData) {
+            if (req.param === TL_Param_Logical.XOR) result = unsignedData ^ unsignedValue;
+            else if (req.param === TL_Param_Logical.OR) result = unsignedData | unsignedValue;
+            else if (req.param === TL_Param_Logical.AND) result = unsignedData & unsignedValue;
+            else if (req.param === TL_Param_Logical.SWAP) result = unsignedValue;
+        }
+
+        if (size === 0) return result & 0xFF;
+        if (size === 1) return result & 0xFFFF;
+        return result >>> 0;
+    }
+
     _writeByType(req) {
         const addr = req.address;
         
-        if (req.type === TL_A_Opcode.PutFullData) {
+        if (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData) {
             if (req.size === 2) this._writeWord(addr, req.value);
             else if (req.size === 1) this._writeHalf(addr, req.value);
             else if (req.size === 0) this._writeByte(addr, req.value);
@@ -291,7 +361,7 @@ export class Cache {
 
     _writeThroughBacking(req) {
         const addr = req.address;
-        if (req.type === TL_A_Opcode.PutFullData) {
+        if (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData) {
             this._writeByteLower(addr, req.value & 0xFF);
             if (req.size >= 1) this._writeByteLower(addr + 1, (req.value >> 8) & 0xFF);
             if (req.size === 2) {

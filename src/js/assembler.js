@@ -162,6 +162,9 @@ export const assembler = {
         'fmv.x.w': { opcode: '1010011', funct3: '000', funct7: '1110000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
         'fmv.w.x': { opcode: '1010011', funct3: '000', funct7: '1111000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
 
+        // ----- RV32A Standard Extension (Atomic Instructions) -----
+        'amoadd.w': { opcode: '0101111', funct3: '010', funct7: '0000000', type: 'R-AMO' },
+
         // ----- Pseudo Instructions -----
         'nop': { type: 'Pseudo', expandsTo: 'addi', args: ['x0', 'x0', '0'] },
         'li': { type: 'Pseudo' },
@@ -452,6 +455,18 @@ export const assembler = {
                     break;
 
                 // ===================
+                // == Lệnh loại R-AMO (Atomic Memory Operations)
+                // ===================
+                case 'R-AMO':
+                    rd_s = encodeReg(operands[0]);
+                    rs2_s = encodeReg(operands[1]);
+                    const memOpAmo = this._parseMemoryOperand(operands[2]);
+                    rs1_s = this._decToBin(memOpAmo.baseRegIndex, 5);
+                    // funct5 + aq + rl is packaged into funct7
+                    binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    break;
+
+                // ===================
                 // == Lệnh loại I (Register-Immediate)
                 // ===================
                 case 'I':
@@ -660,11 +675,11 @@ export const assembler = {
                 if (operands.length !== 2) throw new Error(`'la' expects rd, symbol. Got ${operands}`);
                 const rdLa = operands[0];
                 const symbolLa = operands[1];
-                
+
                 // Lấy địa chỉ của nhãn đích
                 const symbolAddress = this._parseImmediate(symbolLa, 32, false, false, address);
                 if (symbolAddress === null) throw new Error(`Unresolved symbol "${symbolLa}" in 'la'.`);
-                
+
                 // Tính toán offset tương đối so với PC hiện tại
                 const offset = symbolAddress - address;
 
@@ -681,10 +696,10 @@ export const assembler = {
                     operands: [rdLa, auipc_imm.toString()],
                     address: address
                 });
-                
+
                 // Chỉ thêm ADDI nếu phần offset thấp khác 0
                 if (lo12 !== 0 || hi20 === 0) {
-                     expandedInstructions.push({
+                    expandedInstructions.push({
                         mnemonic: 'addi',
                         operands: [rdLa, rdLa, lo12.toString()],
                         address: address + 4
@@ -865,13 +880,13 @@ export const assembler = {
             const parts = operands[0].trim().split(/\s+/);
             if (parts.length >= 2) {
                 // Cập nhật lại mảng operands
-                operands = [parts[0], parts.slice(1).join('')]; 
+                operands = [parts[0], parts.slice(1).join('')];
             }
         }
 
         // Kiểm tra lại số lượng tham số
         if (operands.length < 2) {
-             throw new Error("Directive .eqv requires 2 arguments: symbol, value");
+            throw new Error("Directive .eqv requires 2 arguments: symbol, value");
         }
 
         const label = operands[0];

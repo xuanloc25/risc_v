@@ -33,7 +33,11 @@ console.log('dst 0x300:', dumpBytes(simulator.bus, 0x300, 4));
 
 simulator.dma.start(0x200, 0x300, 4);
 
-for (let i = 0; i < 18; i++) simulator.tick();
+let cycles = 0;
+while ((simulator.cpu.isRunning || simulator.dma.isBusy) && cycles < 64) {
+    simulator.tick();
+    cycles++;
+}
 
 console.log('After DMA:');
 console.log('src 0x200:', dumpBytes(simulator.bus, 0x200, 4));
