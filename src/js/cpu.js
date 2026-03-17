@@ -1,3 +1,5 @@
+import { TL_A_Opcode, TL_D_Opcode } from './tilelink.js';
+
 // TileLink-UL CPU implementation
 export class CPU {
     constructor() {
@@ -625,7 +627,11 @@ export class CPU {
     }
 
     receiveResponse(resp) {
-        if (resp.type === 'fetch') {
+        if (resp.type === 'fetch') { // Legacy support if needed
+            this.fetchPending = resp;
+            this.fetchWaiting = false;
+        } else if (this.fetchWaiting && (resp.type === TL_D_Opcode.AccessAckData)) {
+            // Assume if fetchWaiting is true, the first incoming Get response is the fetch
             this.fetchPending = resp;
             this.fetchWaiting = false;
         } else {
@@ -639,32 +645,32 @@ export class CPU {
     }
 
     readWordAsync(address, bus) {
-        this.waitingRequest = { type: 'read', address: address | 0 };
+        this.waitingRequest = { type: TL_A_Opcode.Get, address: address | 0, size: 2 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
     readByteAsync(address, bus) {
-        this.waitingRequest = { type: 'readByte', address: address | 0 };
+        this.waitingRequest = { type: TL_A_Opcode.Get, address: address | 0, size: 0 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
     readHalfAsync(address, bus) {
-        this.waitingRequest = { type: 'readHalf', address: address | 0 };
+        this.waitingRequest = { type: TL_A_Opcode.Get, address: address | 0, size: 1 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
     writeWordAsync(address, value, bus) {
-        this.waitingRequest = { type: 'write', address: address | 0, value };
+        this.waitingRequest = { type: TL_A_Opcode.PutFullData, address: address | 0, value, size: 2 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
     writeByteAsync(address, value, bus) {
-        this.waitingRequest = { type: 'writeByte', address: address | 0, value };
+        this.waitingRequest = { type: TL_A_Opcode.PutFullData, address: address | 0, value, size: 0 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
     writeHalfAsync(address, value, bus) {
-        this.waitingRequest = { type: 'writeHalf', address: address | 0, value };
+        this.waitingRequest = { type: TL_A_Opcode.PutFullData, address: address | 0, value, size: 1 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 }

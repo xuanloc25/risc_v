@@ -1,3 +1,5 @@
+import { TL_A_Opcode, TL_D_Opcode, getOpcodeName } from './tilelink.js';
+
 // Cache simulator modeled after cache.h: set-associative, write-back/write-allocate optional,
 // blocking (one outstanding request), with hit/miss latency accounting and simple LRU.
 export class Cache {
@@ -54,14 +56,14 @@ export class Cache {
             return;
         }
 
-        console.log(`[Cache] REQ type=${req.type} addr=0x${req.address.toString(16)} value=${req.value ?? ''}`);
+        console.log(`[Cache] REQ type=${getOpcodeName(TL_A_Opcode, req.type)} addr=0x${req.address.toString(16)} value=${req.value ?? ''}`);
 
-        if (req.type === 'read' || req.type === 'fetch' || req.type === 'readHalf' || req.type === 'readByte') {
+        if (req.type === TL_A_Opcode.Get || req.type === 'read' || req.type === 'fetch' || req.type === 'readHalf' || req.type === 'readByte') {
             const { data, cycles } = this._handleRead(req);
-            this.pending = { req: { ...req, data }, readyCycle: this.cycle + cycles };
-        } else if (req.type === 'write' || req.type === 'writeHalf' || req.type === 'writeByte') {
+            this.pending = { req: { from: 'cache', to: req.from, type: TL_D_Opcode.AccessAckData, address: req.address, data, size: req.size }, readyCycle: this.cycle + cycles };
+        } else if (req.type === TL_A_Opcode.PutFullData || req.type === 'write' || req.type === 'writeHalf' || req.type === 'writeByte') {
             const cycles = this._handleWrite(req);
-            this.pending = { req: { ...req, data: null }, readyCycle: this.cycle + cycles };
+            this.pending = { req: { from: 'cache', to: req.from, type: TL_D_Opcode.AccessAckData, address: req.address, data: null, size: req.size }, readyCycle: this.cycle + cycles };
         } else {
             console.warn(`[Cache] Unsupported request type ${req.type}`);
         }
@@ -72,7 +74,7 @@ export class Cache {
         if (!this.pending) return;
 
         if (this.cycle >= this.pending.readyCycle) {
-            console.log(`[Cache] RESP type=${this.pending.req.type} addr=0x${this.pending.req.address.toString(16)} data=${this.pending.req.data ?? ''}`);
+            console.log(`[Cache] RESP type=${getOpcodeName(TL_D_Opcode, this.pending.req.type)} addr=0x${this.pending.req.address.toString(16)} data=${this.pending.req.data ?? ''}`);
             bus.sendResponse(this.pending.req);
             this.pending = null;
         }
@@ -131,7 +133,11 @@ export class Cache {
             this._loadBlock(addr, cycles);
         }
 
-        if (req.type === 'fetch') {
+        if (req.type === TL_A_Opcode.Get) {
+            if (req.size === 0) value = this._readByte(addr);
+            else if (req.size === 1) value = this._readHalf(addr);
+            else value = this._readWord(addr);
+        } else if (req.type === 'fetch') {
             value = this._readWord(addr);
         } else if (req.type === 'readByte') {
             value = this._readByte(addr);
@@ -269,7 +275,12 @@ export class Cache {
 
     _writeByType(req) {
         const addr = req.address;
-        if (req.type === 'write') {
+        
+        if (req.type === TL_A_Opcode.PutFullData) {
+            if (req.size === 2) this._writeWord(addr, req.value);
+            else if (req.size === 1) this._writeHalf(addr, req.value);
+            else if (req.size === 0) this._writeByte(addr, req.value);
+        } else if (req.type === 'write') {
             this._writeWord(addr, req.value);
         } else if (req.type === 'writeHalf') {
             this._writeHalf(addr, req.value);
@@ -280,7 +291,14 @@ export class Cache {
 
     _writeThroughBacking(req) {
         const addr = req.address;
-        if (req.type === 'write') {
+        if (req.type === TL_A_Opcode.PutFullData) {
+            this._writeByteLower(addr, req.value & 0xFF);
+            if (req.size >= 1) this._writeByteLower(addr + 1, (req.value >> 8) & 0xFF);
+            if (req.size === 2) {
+                this._writeByteLower(addr + 2, (req.value >> 16) & 0xFF);
+                this._writeByteLower(addr + 3, (req.value >> 24) & 0xFF);
+            }
+        } else if (req.type === 'write') {
             this._writeByteLower(addr, req.value & 0xFF);
             this._writeByteLower(addr + 1, (req.value >> 8) & 0xFF);
             this._writeByteLower(addr + 2, (req.value >> 16) & 0xFF);

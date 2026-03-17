@@ -8,6 +8,7 @@ import { Mem } from './mem.js';
 import { CPU } from './cpu.js';
 import { DMAController } from './dma.js';
 import { Cache } from './cache.js';
+import { TL_A_Opcode, TL_D_Opcode, getOpcodeName } from './tilelink.js';
 
 // --- Simulator ---
 export const simulator = {
@@ -15,7 +16,6 @@ export const simulator = {
     bus: null,
     mem: null,
     cache: null,
-    tilelinkMem: null, // Để tương thích với code cũ
     dma: null, // Thêm DMA controller
     ledMatrix: null,
     uart: null,
@@ -63,16 +63,16 @@ export const simulator = {
         this.cpu = new CPU();
         this.bus = new Bus();
         // SRAM-like main memory; latency modeled in cache miss path if needed
-        this.mem = new Mem({ latency: this.memLatency });
-        this.cache = new Cache(this.mem, {
-            cacheSize: 4096,
-            blockSize: 32,
-            associativity: 4,
-            hitLatency: 1,
-            missLatency: 2 // 
-        });
-        this.tilelinkMem = this.mem; 
-        this.dma = new DMAController(this.bus); // DMA now issues transfers through the bus
+this.mem = new Mem({ latency: this.memLatency });
+this.cache = new Cache(this.mem, {
+    cacheSize: 4096,
+    blockSize: 32,
+    associativity: 4,
+    hitLatency: 1,
+    missLatency: 2 // 
+});
+this.tilelinkMem = this.mem; 
+this.dma = new DMAController(this.bus); // DMA now issues transfers through the bus
 
         // Helpers for address decode and MMIO registration
         const bus = this.bus;
@@ -94,24 +94,20 @@ export const simulator = {
             keyboardRange(addr) ||
             ledRange(addr) ||
             dmaRegRange(addr);
-            
+
         //cheat ready/valid, will update later
         const registerMMIOSlave = (name, matchFn, { read, write }) => {
             bus.registerSlave(name, {
                 receiveRequest: (req) => {
                     let data = 0;
-                    if (req.type === 'read' || req.type === 'fetch') {
-                        data = typeof read === 'function' ? read(req.address, req.type) : 0;
-                    } else if (req.type === 'write') {
-                        if (typeof write === 'function') write(req.address, req.value, req.type);
-                    } else if (req.type === 'readByte' || req.type === 'readHalf') {
-                        data = typeof read === 'function' ? read(req.address, req.type) : 0;
-                    } else if (req.type === 'writeByte' || req.type === 'writeHalf') {
-                        if (typeof write === 'function') write(req.address, req.value, req.type);
+                    if (req.type === TL_A_Opcode.Get || req.type === 'read' || req.type === 'fetch' || req.type === 'readByte' || req.type === 'readHalf') {
+                        data = typeof read === 'function' ? read(req.address, req.type, req.size) : 0;
+                    } else if (req.type === TL_A_Opcode.PutFullData || req.type === 'write' || req.type === 'writeByte' || req.type === 'writeHalf') {
+                        if (typeof write === 'function') write(req.address, req.value, req.type, req.size);
                     } else {
                         console.warn(`[SoC] Unsupported request type ${req.type} for ${name}`);
                     }
-                    bus.sendResponse({ ...req, data });
+                    bus.sendResponse({ from: name, to: req.from, type: TL_D_Opcode.AccessAckData, data, address: req.address });
                 }
             }, matchFn);
         };

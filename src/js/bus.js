@@ -1,3 +1,5 @@
+import { TL_A_Opcode, TL_D_Opcode, getOpcodeName } from './tilelink.js';
+
 // TileLink-UL Bus implementation with simple arbitration for CPU + DMA masters
 export class Bus {
     constructor() {
@@ -28,7 +30,7 @@ export class Bus {
         // Issue next request if memory is free
         if (!this.inFlight && this.requestQueue.length > 0) {
             this.inFlight = this.requestQueue.shift();
-            console.log(`[BUS][A] issue from=${this.inFlight.from} type=${this.inFlight.type} addr=0x${(this.inFlight.address >>> 0).toString(16)} val=${this.inFlight.value ?? ''}`);
+            console.log(`[BUS][A] issue from=${this.inFlight.from} type=${getOpcodeName(TL_A_Opcode, this.inFlight.type)} addr=0x${(this.inFlight.address >>> 0).toString(16)} val=${this.inFlight.value ?? ''}`);
             const slave = this._selectSlave(this.inFlight.address);
             slave.receiveRequest(this.inFlight);
         }
@@ -36,12 +38,13 @@ export class Bus {
         // Route one response per tick
         if (this.responseQueue.length > 0) {
             const resp = this.responseQueue.shift();
-            console.log(`[BUS][D] route to=${resp.from} type=${resp.type} addr=0x${(resp.address >>> 0).toString(16)} data=${resp.data ?? ''}`);
-            const target = this.masters[resp.from];
+            // Burst multi-beat response sets resp.beats and doesn't clear inFlight if expecting more (handled in DMA masters usually, but currently handled master-side)
+            console.log(`[BUS][D] route to=${resp.to} type=${getOpcodeName(TL_D_Opcode, resp.type)} addr=0x${(resp.address >>> 0).toString(16)} data=${resp.data ?? ''}`);
+            const target = this.masters[resp.to];
             if (target && typeof target.receiveResponse === 'function') {
                 target.receiveResponse(resp);
             } else {
-                console.warn(`[BUS] No master registered for ${resp.from}`);
+                console.warn(`[BUS] No master registered for ${resp.to}`);
             }
             // Current transaction completed; allow next issue
             this.inFlight = null;
