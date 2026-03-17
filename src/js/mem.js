@@ -2,20 +2,25 @@ import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic, TL_Param_Logical } from 
 
 // TileLink-UL / UH Memory implementation
 export class Mem {
-    constructor() {
+    constructor({ latency = 0, burstBeatLatency = latency } = {}) {
         this.mem = {};
         this.pendingRequest = null;
         this.cycle = 0;
         this._pendingDMA = null; // Reserved for future DMA trigger support
+        this.latency = latency;
+        this.burstBeatLatency = burstBeatLatency;
         
         // Multi-beat Burst state
-        this.burstState = null; // { req, totalBytes, bytesRemaining, currentAddr, isWrite }
+        this.burstState = null; // { req, totalBytes, bytesRemaining, currentAddr, isWrite, readyCycle }
     }
 
     receiveRequest(req) {
         // Drop new requests if busy with a burst or single beat
         if (this.pendingRequest || this.burstState) return;
-        this.pendingRequest = req;
+        this.pendingRequest = {
+            req,
+            readyCycle: this.cycle + this.latency
+        };
     }
 
     tick(bus) {
@@ -23,13 +28,15 @@ export class Mem {
         
         // Handle ongoing Burst
         if (this.burstState) {
+            if (this.cycle < this.burstState.readyCycle) return;
             this._processBurstBeat(bus);
             return;
         }
         
         if (!this.pendingRequest) return;
+        if (this.cycle < this.pendingRequest.readyCycle) return;
 
-        const req = this.pendingRequest;
+        const req = this.pendingRequest.req;
         let sizeLog2 = req.size ?? 2; // Default to word (2^2 = 4 bytes)
         const bytesRequested = 1 << sizeLog2;
         
@@ -40,10 +47,13 @@ export class Mem {
                 totalBytes: bytesRequested,
                 bytesRemaining: bytesRequested,
                 currentAddr: req.address,
-                isWrite: (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData)
+                isWrite: (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData),
+                readyCycle: this.cycle + this.burstBeatLatency
             };
             this.pendingRequest = null;
-            this._processBurstBeat(bus);
+            if (this.burstBeatLatency === 0) {
+                this._processBurstBeat(bus);
+            }
             return;
         }
 
@@ -148,6 +158,8 @@ export class Mem {
             
             if (state.bytesRemaining <= 0) {
                 this.burstState = null;
+            } else {
+                state.readyCycle = this.cycle + this.burstBeatLatency;
             }
         } else {
             // Simple Burst Write logic (assumes master sends data one by one, which our DMA actually does natively anyway)

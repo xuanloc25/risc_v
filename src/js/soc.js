@@ -66,10 +66,11 @@ export const simulator = {
 
         this.cpu = new CPU();
         this.bus = new Bus();
-        // SRAM-like main memory; latency modeled in cache miss path if needed
-        this.mem = new Mem();
+        const mainMemoryLatency = 5;
+        // Main memory remains slower than a cache hit; cache miss latency mirrors this cost.
+        this.mem = new Mem({ latency: mainMemoryLatency });
         // CPU connects to Cache, Cache connects to Bus Master
-        const cacheConfig = { cacheSize: 1024, blockSize: 16, associativity: 2, numSets: 32, hitLatency: 1, missLatency: 5 };
+        const cacheConfig = { cacheSize: 1024, blockSize: 16, associativity: 2, numSets: 32, hitLatency: 1, missLatency: mainMemoryLatency };
         this.cache = new Cache(this.mem, cacheConfig, null, { writeBack: false, writeAllocate: false });
         this.bus.registerMaster('cache', this.cache);
 
