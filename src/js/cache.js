@@ -133,7 +133,7 @@ export class Cache {
             this.statistics.numMiss++;
             cycles += this.policy.missLatency;
             console.log(`[Cache] MISS R type=${req.type} addr=0x${addr.toString(16)} set=${this._getSetIndex(addr)} tag=0x${this._getTag(addr).toString(16)} cy=${cycles}`);
-            this._loadBlock(addr, cycles);
+            cycles += this._loadBlock(addr);
         }
 
         if (req.type === TL_A_Opcode.Get) {
@@ -169,7 +169,7 @@ export class Cache {
             cycles += this.policy.missLatency;
             console.log(`[Cache] MISS W type=${req.type} addr=0x${addr.toString(16)} set=${this._getSetIndex(addr)} tag=0x${this._getTag(addr).toString(16)} val=0x${(req.value >>> 0).toString(16)} cy=${cycles}`);
             if (this.writeAllocate) {
-                this._loadBlock(addr, cycles);
+                cycles += this._loadBlock(addr);
                 this._writeByType(req);
             } else {
                 this._writeThroughBacking(req);
@@ -194,7 +194,7 @@ export class Cache {
         } else {
             this.statistics.numMiss++;
             cycles += this.policy.missLatency;
-            this._loadBlock(addr, cycles);
+            cycles += this._loadBlock(addr);
         }
 
         const size = req.size ?? 2;
@@ -218,17 +218,18 @@ export class Cache {
         return null;
     }
 
-    _loadBlock(addr, cyclesAcc) {
+    _loadBlock(addr) {
         const set = this._getSetIndex(addr);
         const begin = set * this.policy.associativity;
         const end = begin + this.policy.associativity;
         const victimId = this._getReplacementBlockId(begin, end);
         const victim = this.blocks[victimId];
+        let extraCycles = 0;
 
         if (victim.valid && victim.modified && this.writeBack) {
             console.log(`[Cache] EVICT dirty set=${set} way=${victimId - begin} tag=0x${victim.tag.toString(16)}`);
             this._writeBlockToLowerLevel(victim);
-            cyclesAcc += this.policy.missLatency;
+            extraCycles += this.policy.missLatency;
         }
 
         const base = this._getBlockBase(addr);
@@ -240,6 +241,7 @@ export class Cache {
         victim.modified = false;
         victim.tag = this._getTag(addr);
         this._touchBlock(victim);
+        return extraCycles;
     }
 
     _writeBlockToLowerLevel(block) {

@@ -34,6 +34,16 @@ function tickPath(bus, target, count = 1) {
     }
 }
 
+function tickUntil(bus, target, predicate, maxTicks = 64) {
+    for (let i = 0; i < maxTicks; i++) {
+        bus.tick();
+        target.tick(bus);
+        bus.tick();
+        if (predicate()) return i + 1;
+    }
+    throw new Error('Timed out waiting for bus response');
+}
+
 function testUlReadWriteThroughCache() {
     const bus = new Bus();
     const mem = new Mem();
@@ -191,11 +201,38 @@ function testDmaRegisterMmio() {
     assert.equal(master.responses[1].data & 0x1, 1);
 }
 
+function testWriteBackDirtyEviction() {
+    const bus = new Bus();
+    const mem = new Mem();
+    const cache = new Cache(mem, { cacheSize: 32, blockSize: 16, associativity: 1, numSets: 2, hitLatency: 1, missLatency: 2 }, null, { writeBack: true, writeAllocate: true });
+    const master = makeMaster();
+
+    bus.registerMaster('m', master);
+    bus.registerSlave('cache', cache, () => true);
+
+    bus.sendRequest('m', { type: TL_A_Opcode.PutFullData, address: 0x000, value: 0xAABBCCDD, size: 2 });
+    const firstWriteTicks = tickUntil(bus, cache, () => master.responses.length === 1);
+
+    assert.equal(firstWriteTicks, 3);
+    assert.equal(master.responses[0].type, TL_D_Opcode.AccessAck);
+    assert.equal(readWord(mem.mem, 0x000) >>> 0, 0x00000000);
+
+    bus.sendRequest('m', { type: TL_A_Opcode.Get, address: 0x020, size: 2 });
+    const evictionReadTicks = tickUntil(bus, cache, () => master.responses.length === 2);
+
+    assert.equal(evictionReadTicks, 5);
+    assert.equal(master.responses[1].type, TL_D_Opcode.AccessAckData);
+    assert.equal(master.responses[1].data >>> 0, 0x00000000);
+    assert.equal(readWord(mem.mem, 0x000) >>> 0, 0xAABBCCDD);
+    assert.equal(cache.statistics.totalCycles, 8);
+}
+
 testUlReadWriteThroughCache();
 testUlPartialWrite();
 testUhAtomicsThroughCache();
 testDmaByteTransfer();
 testDmaWordIncrementingTransfer();
 testDmaRegisterMmio();
+testWriteBackDirtyEviction();
 
 console.log('TileLink UL/UH verification passed.');

@@ -24,6 +24,11 @@ export const simulator = {
     cycleCount: 0,
     useCache: true,
 
+    setCacheEnabled(enabled) {
+        this.useCache = !!enabled;
+        this.reset();
+    },
+
     reset() {
         // Khởi tạo ngoại vi và gắn lên simulator để dễ truy cập bên ngoài
         const isBrowser = typeof document !== 'undefined';
