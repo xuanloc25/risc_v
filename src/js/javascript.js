@@ -70,21 +70,99 @@ const logContent = document.getElementById('logContent');
 const logToggleBtn = document.getElementById('logToggleBtn');
 const logClearBtn = document.getElementById('logClearBtn');
 const logExportBtn = document.getElementById('logExportBtn');
+const logStats = document.getElementById('logStats');
 const systemLogTerminal = document.getElementById('systemLogTerminal');
+const systemLogStore = window.__systemLogStore || {
+    snapshot: () => [],
+    size: () => 0,
+    subscribe: () => () => { },
+    clear: () => { },
+    exportText: () => ''
+};
 
-let exportLogs = [];     // Stores all logs infinitely
-let domLogBuffer = [];   // Batch buffer for DOM updates
+let pendingLogEntries = [];
 let isAutoScrollPaused = false;
+let logFlushScheduled = false;
 const MAX_DOM_LINES = 2000;
-let currentDomLines = 0;
+const MAX_LOGS_PER_FRAME = 250;
+
+function updateLogStats() {
+    if (!logStats) return;
+    const visibleCount = logContent ? logContent.childElementCount : 0;
+    const exportCount = typeof systemLogStore.size === 'function'
+        ? systemLogStore.size()
+        : systemLogStore.snapshot().length;
+    logStats.textContent = `Visible: ${visibleCount} / Export: ${exportCount}`;
+}
+
+function createLogLine(entry) {
+    const line = document.createElement('div');
+    line.className = 'log-line';
+
+    if (entry.level === 'error') line.classList.add('log-error');
+    if (entry.level === 'warn') line.classList.add('log-warn');
+    if (entry.level === 'info') line.classList.add('log-info');
+
+    line.textContent = entry.text;
+    return line;
+}
+
+function trimLogDom() {
+    if (!logContent) return;
+    while (logContent.childElementCount > MAX_DOM_LINES) {
+        logContent.removeChild(logContent.firstElementChild);
+    }
+    updateLogStats();
+}
+
+function flushPendingLogs() {
+    logFlushScheduled = false;
+    if (!logContent || pendingLogEntries.length === 0) return;
+
+    const fragment = document.createDocumentFragment();
+    const batch = pendingLogEntries.splice(0, MAX_LOGS_PER_FRAME);
+    batch.forEach((entry) => fragment.appendChild(createLogLine(entry)));
+    logContent.appendChild(fragment);
+
+    trimLogDom();
+
+    if (!isAutoScrollPaused) {
+        logContent.scrollTop = logContent.scrollHeight;
+    }
+
+    if (pendingLogEntries.length > 0) {
+        scheduleLogFlush();
+    }
+}
+
+function scheduleLogFlush() {
+    if (logFlushScheduled || !logContent) return;
+    logFlushScheduled = true;
+    window.requestAnimationFrame(flushPendingLogs);
+}
+
+function clearRenderedLogs() {
+    pendingLogEntries = [];
+    logFlushScheduled = false;
+    if (logContent) logContent.textContent = '';
+    updateLogStats();
+}
+
+function queueLogEntries(entries) {
+    if (!logContent || entries.length === 0) return;
+    pendingLogEntries.push(...entries);
+    scheduleLogFlush();
+}
 
 // Set up UI listeners for terminal
 if (logToggleBtn && systemLogTerminal) {
-    // Also allow clicking the header to toggle
-    document.querySelector('.log-header').addEventListener('click', (e) => {
-        if(e.target.tagName === 'BUTTON' || e.target.parentElement.tagName === 'BUTTON') return;
-        systemLogTerminal.classList.toggle('expanded');
-    });
+    const logHeader = document.querySelector('.log-header');
+    if (logHeader) {
+        logHeader.addEventListener('click', (e) => {
+            if (e.target.closest('button')) return;
+            systemLogTerminal.classList.toggle('expanded');
+        });
+    }
     logToggleBtn.addEventListener('click', () => {
         systemLogTerminal.classList.toggle('expanded');
     });
@@ -92,16 +170,13 @@ if (logToggleBtn && systemLogTerminal) {
 
 if (logClearBtn) {
     logClearBtn.addEventListener('click', () => {
-        exportLogs = [];
-        domLogBuffer = [];
-        if (logContent) logContent.textContent = '';
-        currentDomLines = 0;
+        systemLogStore.clear();
     });
 }
 
 if (logExportBtn) {
     logExportBtn.addEventListener('click', () => {
-        const blob = new Blob([exportLogs.join('\n')], { type: 'text/plain' });
+        const blob = new Blob([systemLogStore.exportText()], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -114,91 +189,25 @@ if (logExportBtn) {
 // Track scrolling to pause auto-scroll
 if (logContent) {
     logContent.addEventListener('scroll', () => {
-        // If user scrolls up (not at the very bottom), pause auto-scroll
         const isAtBottom = Math.abs((logContent.scrollHeight - logContent.scrollTop) - logContent.clientHeight) < 10;
         isAutoScrollPaused = !isAtBottom;
     });
-}
 
-// Override console methods
-const originalConsole = {
-    log: console.log,
-    warn: console.warn,
-    error: console.error,
-    info: console.info
-};
-
-function formatArg(arg) {
-    if (typeof arg === 'object') {
-        try { return JSON.stringify(arg); } catch (e) { return String(arg); }
-    }
-    return String(arg);
-}
-
-function interceptLog(level, args) {
-    const msg = Array.from(args).map(formatArg).join(' ');
-    
-    // Add prefix if it's not a generic log, just for visual distinction
-    let prefix = '';
-    if (level === 'error') prefix = '[ERROR] ';
-    if (level === 'warn') prefix = '[WARN] ';
-    
-    const finalMsg = prefix + msg;
-    
-    // 1. Always store in infinite export array
-    exportLogs.push(finalMsg);
-    
-    // 2. Buffer for DOM
-    // Wrap in a span if error/warn to allow CSS coloring, otherwise raw text
-    if (level === 'error') {
-        domLogBuffer.push(`<span class="log-error">${finalMsg}</span>`);
-    } else if (level === 'warn') {
-        domLogBuffer.push(`<span class="log-warn">${finalMsg}</span>`);
-    } else if (level === 'info') {
-        domLogBuffer.push(`<span class="log-info">${finalMsg}</span>`);
-    } else {
-        domLogBuffer.push(finalMsg); // plain text for standard logs is faster
-    }
-}
-
-console.log = function() { originalConsole.log.apply('console', arguments); interceptLog('log', arguments); };
-console.warn = function() { originalConsole.warn.apply('console', arguments); interceptLog('warn', arguments); };
-console.error = function() { originalConsole.error.apply('console', arguments); interceptLog('error', arguments); };
-console.info = function() { originalConsole.info.apply('console', arguments); interceptLog('info', arguments); };
-
-// Batch DOM Updater Loop
-setInterval(() => {
-    if (domLogBuffer.length === 0 || !logContent) return;
-
-    // Join buffer with newlines
-    const newHtmlChunk = domLogBuffer.join('<br>') + '<br>';
-    const linesAdded = domLogBuffer.length;
-    
-    // Append to DOM (using innerHTML since we inject spans for colors)
-    // Note: Instead of innerHTML += which is slow, insertAdjacentHTML is slightly better
-    logContent.insertAdjacentHTML('beforeend', newHtmlChunk);
-    
-    currentDomLines += linesAdded;
-    domLogBuffer = []; // Clear buffer
-
-    // Enforce Max Lines
-    if (currentDomLines > MAX_DOM_LINES) {
-        // Prune older lines (simple string manipulation on innerHTML is faster than killing thousands of nodes)
-        // Since we mostly have text breaks <br>, splitting by <br> works.
-        const currentHtml = logContent.innerHTML;
-        const parts = currentHtml.split('<br>');
-        if (parts.length > MAX_DOM_LINES) {
-            const chopped = parts.slice(parts.length - MAX_DOM_LINES).join('<br>');
-            logContent.innerHTML = chopped;
-            currentDomLines = MAX_DOM_LINES;
+    queueLogEntries(systemLogStore.snapshot().slice(-MAX_DOM_LINES));
+    updateLogStats();
+    systemLogStore.subscribe((event) => {
+        if (event.type === 'clear') {
+            clearRenderedLogs();
+            return;
         }
-    }
-
-    // Auto-scroll if not paused by user
-    if (!isAutoScrollPaused) {
-        logContent.scrollTop = logContent.scrollHeight;
-    }
-}, 150); // Flush every 150ms
+        if (event.type === 'entry') {
+            updateLogStats();
+            queueLogEntries([event.entry]);
+        }
+    });
+} else {
+    updateLogStats();
+}
 
 // --- HÀM QUẢN LÝ VIEW ---
 
@@ -544,10 +553,9 @@ function renderCacheView() {
 window.updateUIGlobally = updateUIGlobally;
 
 function toggleCacheAndReset() {
-    simulator.useCache = !simulator.useCache;
+    simulator.setCacheEnabled(!simulator.useCache);
     updateCacheToggleUI();
     console.log(`[UI] Cache toggled -> ${simulator.useCache ? 'ON' : 'OFF'}`);
-    simulator.reset();
     setupUARTCallbacks();
 }
 

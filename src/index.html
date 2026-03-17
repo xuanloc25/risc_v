@@ -348,15 +348,17 @@
         </div> <!-- End Main Content -->
     </div>
 
-    <!-- Modules Scripts test -->
+    <!-- System log bootstrap must run before modules to capture early reset logs -->
+    <script src="js/system_log_bootstrap.js"></script>
     <script type="module" src="js/javascript.js"></script>
-    <script type="module" src="js/assembler.js"></script>
-    <script type="module" src="js/soc.js"></script>
 
     <!-- System Log Terminal -->
     <div id="systemLogTerminal" class="system-log-terminal">
         <div class="log-header">
-            <span>Systems Log Console</span>
+            <div class="log-title-group">
+                <span>Systems Log Console</span>
+                <span id="logStats" class="log-stats">Visible: 0 / Export: 0</span>
+            </div>
             <div class="log-actions">
                 <button id="logExportBtn" class="mdc-button mdc-button--outlined log-btn">
                     <span class="mdc-button__label">Export</span>

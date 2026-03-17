@@ -41,7 +41,7 @@ function main() {
     const filePath = path.resolve(args[2]);
     const useCache = !args.includes('--no-cache');
 
-    simulator.useCache = useCache;
+    simulator.setCacheEnabled(useCache);
     console.log(`[Sim] Cache enabled: ${useCache}`);
     if (!fs.existsSync(filePath)) {
         console.error(`Không tìm thấy file: ${filePath}`);

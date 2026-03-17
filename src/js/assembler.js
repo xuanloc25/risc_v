@@ -132,10 +132,18 @@ export const assembler = {
         'flw': { opcode: '0000111', funct3: '010', type: 'I-FP' },
         'fsw': { opcode: '0100111', funct3: '010', type: 'S-FP' },
 
+        'fmadd.s': { opcode: '1000011', fmt: '00', type: 'R4-FP' },
+        'fmsub.s': { opcode: '1000111', fmt: '00', type: 'R4-FP' },
+        'fnmsub.s': { opcode: '1001011', fmt: '00', type: 'R4-FP' },
+        'fnmadd.s': { opcode: '1001111', fmt: '00', type: 'R4-FP' },
+
         'fadd.s': { opcode: '1010011', funct7: '0000000', type: 'R-FP' },
         'fsub.s': { opcode: '1010011', funct7: '0000100', type: 'R-FP' },
         'fmul.s': { opcode: '1010011', funct7: '0001000', type: 'R-FP' },
         'fdiv.s': { opcode: '1010011', funct7: '0001100', type: 'R-FP' },
+        'fsqrt.s': { opcode: '1010011', funct7: '0101100', rs2_subfield: '00000', type: 'R-FP-CVT' },
+        'fmin.s': { opcode: '1010011', funct3: '001', funct7: '0010100', type: 'R-FP' },
+        'fmax.s': { opcode: '1010011', funct3: '000', funct7: '0010100', type: 'R-FP' },
 
         'fsgnj.s': { opcode: '1010011', funct3: '000', funct7: '0010000', type: 'R-FP' },
         'fsgnjn.s': { opcode: '1010011', funct3: '001', funct7: '0010000', type: 'R-FP' },
@@ -149,9 +157,13 @@ export const assembler = {
         'feq.s': { opcode: '1010011', funct3: '010', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
         'flt.s': { opcode: '1010011', funct3: '001', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
         'fle.s': { opcode: '1010011', funct3: '000', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
+        'fclass.s': { opcode: '1010011', funct3: '001', funct7: '1110000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
 
         'fmv.x.w': { opcode: '1010011', funct3: '000', funct7: '1110000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
         'fmv.w.x': { opcode: '1010011', funct3: '000', funct7: '1111000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
+
+        // ----- RV32A Standard Extension (Atomic Instructions) -----
+        'amoadd.w': { opcode: '0101111', funct3: '010', funct7: '0000000', type: 'R-AMO' },
 
         // ----- Pseudo Instructions -----
         'nop': { type: 'Pseudo', expandsTo: 'addi', args: ['x0', 'x0', '0'] },
@@ -385,6 +397,20 @@ export const assembler = {
         return value;
     },
 
+    _validatePCRelativeImmediate(value, bits, alignmentBytes, mnemonic, operand) {
+        if (value % alignmentBytes !== 0) {
+            throw new Error(`${mnemonic} immediate "${operand}" must be aligned to ${alignmentBytes} bytes`);
+        }
+
+        const min = -(2 ** (bits - 1));
+        const max = (2 ** (bits - 1)) - alignmentBytes;
+        if (value < min || value > max) {
+            throw new Error(`${mnemonic} immediate "${operand}" out of range [${min}, ${max}]`);
+        }
+
+        return value;
+    },
+
     // Lấy chỉ số (0-31) của thanh ghi
     getRegisterIndex(regNameWithXF) {
         const regName = regNameWithXF.trim().toUpperCase();
@@ -443,6 +469,18 @@ export const assembler = {
                     break;
 
                 // ===================
+                // == Lệnh loại R-AMO (Atomic Memory Operations)
+                // ===================
+                case 'R-AMO':
+                    rd_s = encodeReg(operands[0]);
+                    rs2_s = encodeReg(operands[1]);
+                    const memOpAmo = this._parseMemoryOperand(operands[2]);
+                    rs1_s = this._decToBin(memOpAmo.baseRegIndex, 5);
+                    // funct5 + aq + rl is packaged into funct7
+                    binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    break;
+
+                // ===================
                 // == Lệnh loại I (Register-Immediate)
                 // ===================
                 case 'I':
@@ -459,11 +497,22 @@ export const assembler = {
 
                     rd_s = encodeReg(operands[0]);
 
-                    // Xử lý các lệnh load và jalr có định dạng `offset(base)`
-                    if (['lw', 'lh', 'lb', 'lbu', 'lhu', 'jalr'].includes(mnemonic)) {
+                    // Loads use `offset(base)`; jalr also accepts `jalr rd, rs1, imm`.
+                    if (['lw', 'lh', 'lb', 'lbu', 'lhu'].includes(mnemonic)) {
                         const memOp = this._parseMemoryOperand(operands[1]);
                         rs1_s = this._decToBin(memOp.baseRegIndex, 5);
                         imm_s = this._decToBin(memOp.offset, 12);
+                        binaryInstruction = imm_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
+                    }
+                    else if (mnemonic === 'jalr') {
+                        if (operands.length >= 3) {
+                            rs1_s = encodeReg(operands[1]);
+                            imm_s = encodeImm(operands[2], 12, false);
+                        } else {
+                            const memOp = this._parseMemoryOperand(operands[1]);
+                            rs1_s = this._decToBin(memOp.baseRegIndex, 5);
+                            imm_s = this._decToBin(memOp.offset, 12);
+                        }
                         binaryInstruction = imm_s + rs1_s + instrInfo.funct3 + rd_s + instrInfo.opcode;
                     }
                     // Xử lý các lệnh dịch bit (shift)
@@ -498,7 +547,9 @@ export const assembler = {
                 case 'B':
                     rs1_s = encodeReg(operands[0]);
                     rs2_s = encodeReg(operands[1]);
-                    imm_s = encodeImm(operands[2], 13, true); // Immediate 13 bit, tương đối
+                    const branchOffset = this._parseImmediate(operands[2], 13, true, false, instructionAddress);
+                    this._validatePCRelativeImmediate(branchOffset, 13, 2, mnemonic, operands[2]);
+                    imm_s = this._decToBin(branchOffset, 13); // Relative 13-bit immediate
                     // Ghép các bit của immediate theo đúng thứ tự
                     const imm12 = imm_s[0];
                     const imm11 = imm_s[1];
@@ -522,7 +573,9 @@ export const assembler = {
                 // ===================
                 case 'J':
                     rd_s = encodeReg(operands[0]);
-                    imm_s = encodeImm(operands[1], 21, true); // Immediate 21 bit, tương đối
+                    const jumpOffset = this._parseImmediate(operands[1], 21, true, false, instructionAddress);
+                    this._validatePCRelativeImmediate(jumpOffset, 21, 2, mnemonic, operands[1]);
+                    imm_s = this._decToBin(jumpOffset, 21); // Relative 21-bit immediate
                     // Ghép các bit của immediate theo đúng thứ tự
                     const imm20 = imm_s[0];
                     const imm19_12 = imm_s.slice(1, 9);
@@ -534,6 +587,16 @@ export const assembler = {
                 // ===================================
                 // == CÁC LỆNH DẤU PHẨY ĐỘNG (FLOAT)
                 // ===================================
+                case 'R4-FP':
+                    rd_s = encodeReg(operands[0]);
+                    rs1_s = encodeReg(operands[1]);
+                    rs2_s = encodeReg(operands[2]);
+                    const rs3_s = encodeReg(operands[3]);
+                    const rm_r4 = instrInfo.funct3 || '000'; // Default rounding mode
+                    const fmt_s = instrInfo.fmt || '00';
+                    binaryInstruction = rs3_s + fmt_s + rs2_s + rs1_s + rm_r4 + rd_s + instrInfo.opcode;
+                    break;
+
                 case 'R-FP':
                     rd_s = encodeReg(operands[0]);
                     rs1_s = encodeReg(operands[1]);
@@ -641,11 +704,11 @@ export const assembler = {
                 if (operands.length !== 2) throw new Error(`'la' expects rd, symbol. Got ${operands}`);
                 const rdLa = operands[0];
                 const symbolLa = operands[1];
-                
+
                 // Lấy địa chỉ của nhãn đích
                 const symbolAddress = this._parseImmediate(symbolLa, 32, false, false, address);
                 if (symbolAddress === null) throw new Error(`Unresolved symbol "${symbolLa}" in 'la'.`);
-                
+
                 // Tính toán offset tương đối so với PC hiện tại
                 const offset = symbolAddress - address;
 
@@ -662,10 +725,10 @@ export const assembler = {
                     operands: [rdLa, auipc_imm.toString()],
                     address: address
                 });
-                
+
                 // Chỉ thêm ADDI nếu phần offset thấp khác 0
                 if (lo12 !== 0 || hi20 === 0) {
-                     expandedInstructions.push({
+                    expandedInstructions.push({
                         mnemonic: 'addi',
                         operands: [rdLa, rdLa, lo12.toString()],
                         address: address + 4
@@ -675,10 +738,8 @@ export const assembler = {
             case 'call':
                 const targetAddressCall = this._parseImmediate(operands[0], 32, false, false, address);
                 const offsetCall = targetAddressCall - address;
-                let hi_call = offsetCall >>> 12;
-                let lo_call = offsetCall & 0xFFF;
-                if (lo_call & 0x800) hi_call++;
-                const lo_call_signed = (lo_call & 0x800) ? (lo_call - 4096) : lo_call;
+                const hi_call = (offsetCall + 0x800) >> 12;
+                const lo_call_signed = offsetCall - (hi_call << 12);
                 expandedInstructions.push({ mnemonic: 'auipc', operands: ['ra', hi_call.toString()], address: address });
                 expandedInstructions.push({ mnemonic: 'jalr', operands: ['ra', 'ra', lo_call_signed.toString()], address: address + 4 });
                 break;
@@ -700,13 +761,6 @@ export const assembler = {
             const realInstrInfo = { ...this.opcodes[exp.mnemonic], mnemonic: exp.mnemonic };
             return this._encodeInstruction(realInstrInfo, exp.operands, exp.address);
         });
-    },
-
-    // Ghi chuỗi nhị phân vào bộ nhớ (little-endian)
-    _writeBinaryToMemory(address, binaryString) {
-        for (let i = 0; i < 4; i++) {
-            this.memory[address + i] = parseInt(binaryString.substring(32 - (i + 1) * 8, 32 - i * 8), 2);
-        }
     },
 
     // Ghi chuỗi nhị phân vào bộ nhớ (little-endian)
@@ -846,13 +900,13 @@ export const assembler = {
             const parts = operands[0].trim().split(/\s+/);
             if (parts.length >= 2) {
                 // Cập nhật lại mảng operands
-                operands = [parts[0], parts.slice(1).join('')]; 
+                operands = [parts[0], parts.slice(1).join('')];
             }
         }
 
         // Kiểm tra lại số lượng tham số
         if (operands.length < 2) {
-             throw new Error("Directive .eqv requires 2 arguments: symbol, value");
+            throw new Error("Directive .eqv requires 2 arguments: symbol, value");
         }
 
         const label = operands[0];

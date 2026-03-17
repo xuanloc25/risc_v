@@ -1,4 +1,4 @@
-import { TL_A_Opcode, TL_D_Opcode } from './tilelink.js';
+﻿import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic } from './tilelink.js';
 
 // TileLink-UL CPU implementation
 export class CPU {
@@ -48,6 +48,10 @@ export class CPU {
         const opcodeBin = opcode.toString(2).padStart(7, '0');
         const funct3Bin = funct3.toString(2).padStart(3, '0');
         const funct7Bin = funct7.toString(2).padStart(7, '0');
+
+        const rs3 = (instructionWord >> 27) & 0x1F;
+        const fmt = (instructionWord >> 25) & 0x3;
+        const fmtBin = fmt.toString(2).padStart(2, '0');
 
         let imm = 0;
         let type = null;
@@ -104,24 +108,38 @@ export class CPU {
             'REMU': { type: 'R', opcode: '0110011', funct3: '111', funct7: '0000001' },
             'FLW': { type: 'I-FP', opcode: '0000111', funct3: '010' },
             'FSW': { type: 'S-FP', opcode: '0100111', funct3: '010' },
+            'FMADD.S': { type: 'R4-FP', opcode: '1000011', funct3: '000', fmt: '00' },
+            'FMSUB.S': { type: 'R4-FP', opcode: '1000111', funct3: '000', fmt: '00' },
+            'FNMSUB.S': { type: 'R4-FP', opcode: '1001011', funct3: '000', fmt: '00' },
+            'FNMADD.S': { type: 'R4-FP', opcode: '1001111', funct3: '000', fmt: '00' },
             'FADD.S': { type: 'R-FP', opcode: '1010011', funct3: '000', funct7: '0000000' },
             'FSUB.S': { type: 'R-FP', opcode: '1010011', funct3: '000', funct7: '0000100' },
             'FMUL.S': { type: 'R-FP', opcode: '1010011', funct3: '000', funct7: '0001000' },
             'FDIV.S': { type: 'R-FP', opcode: '1010011', funct3: '000', funct7: '0001100' },
+            'FSQRT.S': { type: 'R-FP-CVT', opcode: '1010011', funct7: '0101100', rs2_subfield: '00000' },
+            'FMIN.S': { type: 'R-FP', opcode: '1010011', funct3: '001', funct7: '0010100' },
+            'FMAX.S': { type: 'R-FP', opcode: '1010011', funct3: '000', funct7: '0010100' },
+            'FSGNJ.S': { type: 'R-FP', opcode: '1010011', funct3: '000', funct7: '0010000' },
+            'FSGNJN.S': { type: 'R-FP', opcode: '1010011', funct3: '001', funct7: '0010000' },
+            'FSGNJX.S': { type: 'R-FP', opcode: '1010011', funct3: '010', funct7: '0010000' },
             'FCVT.W.S': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1100000', rs2_subfield: '00000' },
+            'FCVT.WU.S': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1100000', rs2_subfield: '00001' },
             'FCVT.S.W': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1101000', rs2_subfield: '00000' },
+            'FCVT.S.WU': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1101000', rs2_subfield: '00001' },
+            'FCLASS.S': { type: 'R-FP-CVT', opcode: '1010011', funct3_fixed: '001', funct7: '1110000', rs2_subfield: '00000' },
             'FEQ.S': { type: 'R-FP-CMP', opcode: '1010011', funct3: '010', funct7_prefix: '10100' },
             'FLT.S': { type: 'R-FP-CMP', opcode: '1010011', funct3: '001', funct7_prefix: '10100' },
             'FLE.S': { type: 'R-FP-CMP', opcode: '1010011', funct3: '000', funct7_prefix: '10100' },
             'FMV.X.W': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1110000', rs2_subfield: '00000', funct3_fixed: '000' },
-            'FMV.W.X': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1111000', rs2_subfield: '00000', funct3_fixed: '000' }
+            'FMV.W.X': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1111000', rs2_subfield: '00000', funct3_fixed: '000' },
+            'AMOADD.W': { type: 'R-AMO', opcode: '0101111', funct3: '010', funct7: '0000000' }
         };
 
         for (const name in instructionFormats) {
             const format = instructionFormats[name];
             let match = false;
             if (format.opcode === opcodeBin) {
-                if (format.type === 'R' || format.type === 'R-FP' || format.type === 'R-FP-CMP') {
+                if (format.type === 'R' || format.type === 'R-FP' || format.type === 'R-FP-CMP' || format.type === 'R-AMO') {
                     if (format.funct3 === funct3Bin || format.funct3_fixed === funct3Bin || format.funct3 === 'ANY' || format.funct3_cmp === funct3Bin) {
                         if (format.funct7 === funct7Bin || format.funct7_op === funct7Bin || format.funct7_prefix === funct7Bin.substring(0, 5)) {
                             if (format.rs2_fmt && format.rs2_fmt !== rs2.toString(2).padStart(5, '0').substring(0, format.rs2_fmt.length)) {
@@ -131,11 +149,18 @@ export class CPU {
                         }
                     }
                 } else if (format.type === 'R-FP-CVT') {
-                    if (format.funct3_rm === funct3Bin || format.funct3_rm === 'ANY' || format.funct3_fixed === funct3Bin) {
+                    if (format.funct3_rm === funct3Bin || format.funct3_rm === 'ANY' || format.funct3_fixed === funct3Bin || (!format.funct3_rm && !format.funct3_fixed)) {
                         if (format.funct7 === funct7Bin || format.funct7_op === funct7Bin) {
                             if (format.rs2_subfield && format.rs2_subfield !== rs2.toString(2).padStart(5, '0').substring(0, format.rs2_subfield.length)) {
                                 // not matched
+                            } else {
+                                match = true;
                             }
+                        }
+                    }
+                } else if (format.type === 'R4-FP') {
+                    if (format.funct3 === 'ANY' || format.funct3 === funct3Bin || !format.funct3) {
+                        if (format.fmt === fmtBin) {
                             match = true;
                         }
                     }
@@ -201,7 +226,7 @@ export class CPU {
             }
         }
 
-        return { opName, type, opcode: opcodeBin, rd, rs1, rs2, funct3: funct3Bin, funct7: funct7Bin, imm, rm };
+        return { opName, type, opcode: opcodeBin, rd, rs1, rs2, rs3, fmt: fmtBin, funct3: funct3Bin, funct7: funct7Bin, imm, rm };
     }
 
     execute(decoded, bus) {
@@ -214,6 +239,7 @@ export class CPU {
 
         const val1_fp = this.fregisters[rs1];
         const val2_fp = this.fregisters[rs2];
+        const val3_fp = decoded.rs3 !== undefined ? this.fregisters[decoded.rs3] : 0;
 
         const pc = this.pc;
 
@@ -372,9 +398,9 @@ export class CPU {
                 return { nextPc: this.pc };
             case 'SW':
                 memoryAddress = (val1_int + imm) | 0;
-                console.log(`[CPU] SW: Ghi value=0x${val2_int.toString(16)} vào địa chỉ 0x${memoryAddress.toString(16)}`);
+                console.log(`[CPU] SW: Ghi value=0x${val2_int.toString(16)} vÃ o Ä‘á»‹a chá»‰ 0x${memoryAddress.toString(16)}`);
                 if (memoryAddress >= 0x100 && memoryAddress < 0x104) {
-                    console.warn(`[CẢNH BÁO] SW đang ghi vào vùng nguồn DMA tại địa chỉ 0x${memoryAddress.toString(16)}!`);
+                    console.warn(`[Cáº¢NH BÃO] SW Ä‘ang ghi vÃ o vÃ¹ng nguá»“n DMA táº¡i Ä‘á»‹a chá»‰ 0x${memoryAddress.toString(16)}!`);
                 }
                 if (!this.waitingRequest && !this.pendingResponse) {
                     this.writeWordAsync(memoryAddress, val2_int, bus);
@@ -442,6 +468,43 @@ export class CPU {
                     result_fp = val1_fp / val2_fp;
                 }
                 break;
+            case 'FMADD.S': result_fp = (val1_fp * val2_fp) + val3_fp; break;
+            case 'FMSUB.S': result_fp = (val1_fp * val2_fp) - val3_fp; break;
+            case 'FNMSUB.S': result_fp = -(val1_fp * val2_fp) + val3_fp; break;
+            case 'FNMADD.S': result_fp = -(val1_fp * val2_fp) - val3_fp; break;
+            case 'FSQRT.S': result_fp = val1_fp < 0.0 ? NaN : Math.sqrt(val1_fp); break;
+            case 'FMIN.S':
+                if (isNaN(val1_fp) && isNaN(val2_fp)) result_fp = NaN;
+                else if (isNaN(val1_fp)) result_fp = val2_fp;
+                else if (isNaN(val2_fp)) result_fp = val1_fp;
+                else result_fp = Math.min(val1_fp, val2_fp);
+                break;
+            case 'FMAX.S':
+                if (isNaN(val1_fp) && isNaN(val2_fp)) result_fp = NaN;
+                else if (isNaN(val1_fp)) result_fp = val2_fp;
+                else if (isNaN(val2_fp)) result_fp = val1_fp;
+                else result_fp = Math.max(val1_fp, val2_fp);
+                break;
+            case 'FSGNJ.S':
+            case 'FSGNJN.S':
+            case 'FSGNJX.S':
+                const fsgnj_buf = new ArrayBuffer(8);
+                const fsgnj_view = new DataView(fsgnj_buf);
+                fsgnj_view.setFloat32(0, val1_fp, true);
+                fsgnj_view.setFloat32(4, val2_fp, true);
+                const bits1 = fsgnj_view.getUint32(0, true);
+                const bits2 = fsgnj_view.getUint32(4, true);
+                let finalBits = 0;
+                if (opName === 'FSGNJ.S') {
+                    finalBits = (bits1 & 0x7FFFFFFF) | (bits2 & 0x80000000);
+                } else if (opName === 'FSGNJN.S') {
+                    finalBits = (bits1 & 0x7FFFFFFF) | ((~bits2) & 0x80000000);
+                } else if (opName === 'FSGNJX.S') {
+                    finalBits = bits1 ^ (bits2 & 0x80000000);
+                }
+                fsgnj_view.setUint32(0, finalBits, true);
+                result_fp = fsgnj_view.getFloat32(0, true);
+                break;
             case 'FCVT.W.S':
                 let rounded_w;
                 switch (rm) {
@@ -453,8 +516,38 @@ export class CPU {
                 else if (val1_fp < -2147483648.0) rounded_w = -2147483648;
                 result_int = rounded_w | 0;
                 break;
+            case 'FCVT.WU.S':
+                let rounded_wu;
+                switch (rm) {
+                    case 0b000: rounded_wu = Math.round(val1_fp); break;
+                    case 0b001: rounded_wu = Math.trunc(val1_fp); break;
+                    default: rounded_wu = Math.round(val1_fp);
+                }
+                if (isNaN(val1_fp) || val1_fp > 4294967295.0) rounded_wu = 4294967295;
+                else if (val1_fp < 0.0) rounded_wu = 0;
+                result_int = rounded_wu >>> 0;
+                break;
             case 'FCVT.S.W':
                 result_fp = Number(val1_int);
+                break;
+            case 'FCVT.S.WU':
+                result_fp = Number(val1_int >>> 0); // Convert unsigned 32-bit int to float
+                break;
+            case 'FCLASS.S':
+                const fclass_buf = new ArrayBuffer(4);
+                const fclass_view = new DataView(fclass_buf);
+                fclass_view.setFloat32(0, val1_fp, true);
+                const fclass_bits = fclass_view.getUint32(0, true);
+                const is_neg = (fclass_bits >>> 31) === 1;
+                const exp = (fclass_bits >>> 23) & 0xFF;
+                const frac = fclass_bits & 0x7FFFFF;
+                if (exp === 0x00 && frac === 0) result_int = is_neg ? (1 << 3) : (1 << 4);
+                else if (exp === 0x00 && frac !== 0) result_int = is_neg ? (1 << 2) : (1 << 5);
+                else if (exp === 0xFF && frac === 0) result_int = is_neg ? (1 << 0) : (1 << 7);
+                else if (exp === 0xFF && frac !== 0) {
+                    if ((frac & 0x400000) === 0) result_int = (1 << 8); // sNaN
+                    else result_int = (1 << 9); // qNaN
+                } else result_int = is_neg ? (1 << 1) : (1 << 6);
                 break;
             case 'FEQ.S':
                 if (isNaN(val1_fp) || isNaN(val2_fp)) result_int = 0;
@@ -480,19 +573,38 @@ export class CPU {
                 fmvwx_view.setInt32(0, val1_int, true);
                 result_fp = fmvwx_view.getFloat32(0, true);
                 break;
+            case 'AMOADD.W':
+                memoryAddress = val1_int | 0; // rs1 contains address
+                if (!this.waitingRequest && !this.pendingResponse) {
+                    this.amoAddAsync(memoryAddress, val2_int, bus);
+                    return { nextPc: this.pc };
+                }
+                if (this.pendingResponse) {
+                    result_int = this.pendingResponse.data;
+                    this.waitingRequest = null;
+                    this.pendingResponse = null;
+                    if (rd !== 0) this.registers[rd] = result_int | 0;
+                    console.log(`[CPU] AMOADD.W response: PC=0x${this.pc.toString(16)}, rd=x${rd}, old_value=${result_int | 0}`);
+                    return {};
+                }
+                return { nextPc: this.pc };
             default:
                 throw new Error(`Execute: Instruction ${opName} (Type: ${type}) is not implemented in the simulator.`);
         }
 
-        if (rd !== 0) {
-            if (result_int !== undefined) {
+        // Determine destination register file
+        const writes_to_int = !type.includes('FP') || ['FCLASS.S', 'FEQ.S', 'FLT.S', 'FLE.S', 'FCVT.W.S', 'FCVT.WU.S', 'FMV.X.W'].includes(opName);
+        const writes_to_fp = type.includes('FP') && !writes_to_int;
+
+        if (writes_to_int) {
+            if (rd !== 0 && result_int !== undefined) {
                 this.registers[rd] = result_int | 0;
             }
+        }
+        if (writes_to_fp) {
             if (result_fp !== undefined) {
                 this.fregisters[rd] = result_fp;
             }
-        } else if (rd === 0 && (result_fp !== undefined && result_fp !== 0.0)) {
-            this.fregisters[rd] = result_fp;
         }
 
         if (type === 'B' && branchTaken) {
@@ -665,12 +777,25 @@ export class CPU {
     }
 
     writeByteAsync(address, value, bus) {
-        this.waitingRequest = { type: TL_A_Opcode.PutFullData, address: address | 0, value, size: 0 };
+        this.waitingRequest = { type: TL_A_Opcode.PutPartialData, address: address | 0, value, size: 0 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
     writeHalfAsync(address, value, bus) {
-        this.waitingRequest = { type: TL_A_Opcode.PutFullData, address: address | 0, value, size: 1 };
+        this.waitingRequest = { type: TL_A_Opcode.PutPartialData, address: address | 0, value, size: 1 };
+        bus.sendRequest('cpu', this.waitingRequest);
+    }
+
+    amoAddAsync(address, value, bus) {
+        this.waitingRequest = { 
+            type: TL_A_Opcode.ArithmeticData, 
+            param: TL_Param_Arithmetic.ADD,
+            address: address | 0, 
+            value: value, 
+            size: 2 // 32-bit word
+        };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 }
+
+

@@ -172,6 +172,7 @@ body, html {
     display: none; /* Ẩn mặc định */
     flex: 1;
     padding: 15px;
+    padding-bottom: 50px; /* 15px original padding + 35px for Log Terminal */
     overflow: hidden;
     height: calc(100vh - var(--header-height));
 }
@@ -602,6 +603,20 @@ body, html {
     flex-shrink: 0;
 }
 
+.system-log-terminal .log-title-group {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
+}
+
+.system-log-terminal .log-stats {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #9aa5b1;
+    white-space: nowrap;
+}
+
 .system-log-terminal .log-actions {
     display: flex;
     align-items: center;
@@ -644,6 +659,10 @@ body, html {
     line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-all;
+}
+
+.log-line {
+    display: block;
 }
 
 /* Scrollbar styling for log terminal */
