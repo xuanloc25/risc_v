@@ -14,6 +14,7 @@ export class CPU {
         this.resolve = null;
         this.fetchPending = null;
         this.fetchWaiting = false;
+        this.suspendedInstruction = null;
     }
 
     resetRegisters() {
@@ -30,6 +31,7 @@ export class CPU {
         this.resolve = null;
         this.fetchPending = null;
         this.fetchWaiting = false;
+        this.suspendedInstruction = null;
     }
 
     loadProgram(programData) {
@@ -706,6 +708,26 @@ export class CPU {
             return;
         }
 
+        if (this.waitingRequest && this.pendingResponse && this.suspendedInstruction) {
+            const { pc, decoded } = this.suspendedInstruction;
+            const oldPc = pc;
+
+            this.pc = pc;
+            const { nextPc } = this.execute(decoded, bus);
+            this.suspendedInstruction = null;
+
+            if (nextPc !== undefined) {
+                this.pc = nextPc;
+            } else {
+                this.pc = oldPc + 4;
+            }
+
+            if (this.pc !== oldPc) {
+                console.log(`[CPU] PC: 0x${oldPc.toString(16)} -> 0x${this.pc.toString(16)}, Executed: ${decoded.opName}`);
+            }
+            return;
+        }
+
         // Issue instruction fetch if none in flight and no pending inst
         if (!this.fetchWaiting && !this.fetchPending) {
             this.readInstructionAsync(this.pc, bus);
@@ -722,6 +744,10 @@ export class CPU {
 
         const decoded = this.decode(inst);
         const { nextPc } = this.execute(decoded, bus);
+
+        if (this.waitingRequest && !this.pendingResponse) {
+            this.suspendedInstruction = { pc: oldPc, decoded };
+        }
 
         if (nextPc !== undefined) {
             this.pc = nextPc;

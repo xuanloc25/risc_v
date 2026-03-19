@@ -16,7 +16,10 @@ export class Mem {
     receiveRequest(req) {
         // If a request is already in flight, drop the new one to keep model simple
         if (this.pendingRequest) return;
-        this.pendingRequest = req;
+        this.pendingRequest = {
+            req,
+            readyCycle: this.cycle + this.latency
+        };
     }
 
     tick(bus) {
@@ -29,8 +32,9 @@ export class Mem {
         }
         
         if (!this.pendingRequest) return;
+        if (this.cycle < this.pendingRequest.readyCycle) return;
 
-        const req = this.pendingRequest;
+        const { req } = this.pendingRequest;
         let sizeLog2 = req.size ?? 2; // Default to word (2^2 = 4 bytes)
         const bytesRequested = 1 << sizeLog2;
         
@@ -112,7 +116,14 @@ export class Mem {
             this.mem[addr + 3] = (newData >> 24) & 0xFF;
         }
 
-        bus.sendResponse({ ...this.pendingRequest, data });
+        bus.sendResponse({
+            from: 'mem',
+            to: req.from,
+            type: opD,
+            address: addr,
+            size: sizeLog2,
+            data: opD === TL_D_Opcode.AccessAckData ? data : null
+        });
         this.pendingRequest = null;
     }
 

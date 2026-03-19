@@ -103,7 +103,22 @@ function createLogLine(entry) {
     if (entry.level === 'warn') line.classList.add('log-warn');
     if (entry.level === 'info') line.classList.add('log-info');
 
-    line.textContent = entry.text;
+    const executedMarker = 'Executed:';
+    const executedIndex = entry.text.indexOf(executedMarker);
+
+    if (executedIndex === -1) {
+        line.textContent = entry.text;
+        return line;
+    }
+
+    line.appendChild(document.createTextNode(entry.text.slice(0, executedIndex)));
+
+    const executedToken = document.createElement('span');
+    executedToken.className = 'log-token-executed';
+    executedToken.textContent = executedMarker;
+    line.appendChild(executedToken);
+
+    line.appendChild(document.createTextNode(entry.text.slice(executedIndex + executedMarker.length)));
     return line;
 }
 

@@ -23,7 +23,7 @@ export const simulator = {
     keyboard: null,
     cycleCount: 0,
     useCache: true,
-    memLatency: 5, // hệ số độ trễ RAM (chu kỳ)
+    memLatency: 10, // hệ số độ trễ RAM (chu kỳ)
 
     setCacheEnabled(enabled) {
         this.useCache = !!enabled;
@@ -182,14 +182,14 @@ this.dma = new DMAController(this.bus); // DMA now issues transfers through the 
     },
     tick() {
         const cycleId = this.cycleCount + 1;
-        // Group logs per cycle (expanded by default to avoid missing logs)
-        if (console.group) console.group(`[Cycle ${cycleId}]`);
+        if (console.group) console.group(`Cycle ${cycleId}`);
 
         const cpuActive = this.cpu.isRunning;
         const dmaActive = this.dma?.registers?.busy;
 
         if (!cpuActive && !dmaActive) {
-            console.log("Simulation halted.");
+            console.log('Simulation halted.');
+            if (console.groupEnd) console.groupEnd();
             return;
         }
 
@@ -218,8 +218,7 @@ this.dma = new DMAController(this.bus); // DMA now issues transfers through the 
         // Route memory response back to masters in the same cycle if available
         this.bus.tick();
 
-        // Simple cycle log showing CPU and DMA status
-        console.log(`[Cycle ${cycleId}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} | DMA busy=${this.dma?.registers?.busy ?? false} progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`);
+        console.log(`[Summary] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} | DMA busy=${this.dma?.registers?.busy ?? false} progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`);
 
         // Peripheral timing (UART)
         if (this.uart) {

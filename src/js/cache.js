@@ -1,5 +1,11 @@
 import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic, TL_Param_Logical, getOpcodeName } from './tilelink.js';
 
+function formatLogNumber(value) {
+    if (value === null || value === undefined || value === '') return '';
+    if (typeof value !== 'number' || Number.isNaN(value)) return String(value);
+    return `${value} (0x${(value >>> 0).toString(16)})`;
+}
+
 // Cache simulator modeled after cache.h: set-associative, write-back/write-allocate optional,
 // blocking (one outstanding request), with hit/miss latency accounting and simple LRU.
 export class Cache {
@@ -56,7 +62,7 @@ export class Cache {
             return;
         }
 
-        console.log(`[Cache] REQ type=${getOpcodeName(TL_A_Opcode, req.type)} addr=0x${req.address.toString(16)} value=${req.value ?? ''}`);
+        console.log(`[Cache] REQ type=${getOpcodeName(TL_A_Opcode, req.type)} addr=0x${req.address.toString(16)} value=${formatLogNumber(req.value)}`);
 
         if (req.type === TL_A_Opcode.Get || req.type === 'read' || req.type === 'fetch' || req.type === 'readHalf' || req.type === 'readByte') {
             const { data, cycles } = this._handleRead(req);
@@ -77,7 +83,7 @@ export class Cache {
         if (!this.pending) return;
 
         if (this.cycle >= this.pending.readyCycle) {
-            console.log(`[Cache] RESP type=${getOpcodeName(TL_D_Opcode, this.pending.req.type)} addr=0x${this.pending.req.address.toString(16)} data=${this.pending.req.data ?? ''}`);
+            console.log(`[Cache] RESP type=${getOpcodeName(TL_D_Opcode, this.pending.req.type)} addr=0x${this.pending.req.address.toString(16)} data=${formatLogNumber(this.pending.req.data)}`);
             bus.sendResponse(this.pending.req);
             this.pending = null;
         }
