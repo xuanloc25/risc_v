@@ -400,9 +400,9 @@ export class CPU {
                 return { nextPc: this.pc };
             case 'SW':
                 memoryAddress = (val1_int + imm) | 0;
-                console.log(`[CPU] SW: Ghi value=0x${val2_int.toString(16)} vÃ o Ä‘á»‹a chá»‰ 0x${memoryAddress.toString(16)}`);
+                console.log(`[CPU] SW: Ghi value=0x${val2_int.toString(16)} vao dia chi 0x${memoryAddress.toString(16)}`);
                 if (memoryAddress >= 0x100 && memoryAddress < 0x104) {
-                    console.warn(`[Cáº¢NH BÃO] SW Ä‘ang ghi vÃ o vÃ¹ng nguá»“n DMA táº¡i Ä‘á»‹a chá»‰ 0x${memoryAddress.toString(16)}!`);
+                    console.warn(`[CANH BAO] SW dang ghi vao vung nguon DMA tai dia chi 0x${memoryAddress.toString(16)}!`);
                 }
                 if (!this.waitingRequest && !this.pendingResponse) {
                     this.writeWordAsync(memoryAddress, val2_int, bus);
@@ -813,11 +813,11 @@ export class CPU {
     }
 
     amoAddAsync(address, value, bus) {
-        this.waitingRequest = { 
-            type: TL_A_Opcode.ArithmeticData, 
+        this.waitingRequest = {
+            type: TL_A_Opcode.ArithmeticData,
             param: TL_Param_Arithmetic.ADD,
-            address: address | 0, 
-            value: value, 
+            address: address | 0,
+            value: value,
             size: 2 // 32-bit word
         };
         bus.sendRequest('cpu', this.waitingRequest);

@@ -227,6 +227,29 @@ function testWriteBackDirtyEviction() {
     assert.equal(cache.statistics.totalCycles, 8);
 }
 
+function testDirectMemoryLatency() {
+    const bus = new Bus();
+    const mem = new Mem({ latency: 3 });
+    const master = makeMaster();
+
+    mem.loadMemoryMap({
+        0x80: 0x78,
+        0x81: 0x56,
+        0x82: 0x34,
+        0x83: 0x12
+    });
+
+    bus.registerMaster('m', master);
+    bus.registerSlave('mem', mem, () => true);
+
+    bus.sendRequest('m', { type: TL_A_Opcode.Get, address: 0x80, size: 2 });
+    const readTicks = tickUntil(bus, mem, () => master.responses.length === 1);
+
+    assert.equal(readTicks, 3);
+    assert.equal(master.responses[0].type, TL_D_Opcode.AccessAckData);
+    assert.equal(master.responses[0].data >>> 0, 0x12345678);
+}
+
 testUlReadWriteThroughCache();
 testUlPartialWrite();
 testUhAtomicsThroughCache();
@@ -234,5 +257,6 @@ testDmaByteTransfer();
 testDmaWordIncrementingTransfer();
 testDmaRegisterMmio();
 testWriteBackDirtyEviction();
+testDirectMemoryLatency();
 
 console.log('TileLink UL/UH verification passed.');

@@ -67,17 +67,17 @@ export const simulator = {
 
         this.cpu = new CPU();
         this.bus = new Bus();
-        // SRAM-like main memory; latency modeled in cache miss path if needed
-this.mem = new Mem({ latency: this.memLatency });
-this.cache = new Cache(this.mem, {
-    cacheSize: 4096,
-    blockSize: 32,
-    associativity: 4,
-    hitLatency: 1,
-    missLatency: 2 // 
-});
-this.tilelinkMem = this.mem; 
-this.dma = new DMAController(this.bus); // DMA now issues transfers through the bus
+        const mainMemoryLatency = 5;
+        // Main memory remains slower than a cache hit; cache miss latency mirrors this cost.
+        this.mem = new Mem({ latency: mainMemoryLatency });
+        // CPU connects to Cache, Cache connects to Bus Master
+        const cacheConfig = { cacheSize: 1024, blockSize: 16, associativity: 2, numSets: 32, hitLatency: 1, missLatency: mainMemoryLatency };
+        this.cache = new Cache(this.mem, cacheConfig, null, { writeBack: false, writeAllocate: false });
+        this.bus.registerMaster('cache', this.cache);
+
+        // Map bus so CPU can peek for debugging, but true accesses go through cache
+        this.cpu.bus = this.bus;
+        this.dma = new DMAController(this.bus); // DMA now issues transfers through the bus
 
         // Helpers for address decode and MMIO registration
         const bus = this.bus;
