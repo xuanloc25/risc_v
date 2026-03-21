@@ -13,8 +13,8 @@ export class Cache {
         this.backing = backingMem;
         this.lowerCache = lowerCache;
         this.policy = this._normalizePolicy(policy);
-        this.writeBack = writeBack;
-        this.writeAllocate = writeAllocate;
+        this.writeBack = writeBack; // write-through/write-back
+        this.writeAllocate = writeAllocate; // write-to-lowermem/write-to-cache
 
         this.blocks = [];
         this.referenceCounter = 0;

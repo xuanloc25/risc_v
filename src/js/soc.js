@@ -23,7 +23,6 @@ export const simulator = {
     keyboard: null,
     cycleCount: 0,
     useCache: true,
-    memLatency: 10, // hệ số độ trễ RAM (chu kỳ)
 
     setCacheEnabled(enabled) {
         this.useCache = !!enabled;
@@ -72,7 +71,7 @@ export const simulator = {
         this.mem = new Mem({ latency: mainMemoryLatency });
         // CPU connects to Cache, Cache connects to Bus Master
         const cacheConfig = { cacheSize: 1024, blockSize: 16, associativity: 2, numSets: 32, hitLatency: 1, missLatency: mainMemoryLatency };
-        this.cache = new Cache(this.mem, cacheConfig, null, { writeBack: false, writeAllocate: false });
+        this.cache = new Cache(this.mem, cacheConfig, null, { writeBack: false, writeAllocate: true });
         this.bus.registerMaster('cache', this.cache);
 
         // Map bus so CPU can peek for debugging, but true accesses go through cache
