@@ -10,8 +10,8 @@ function formatLogNumber(value) {
 // blocking (one outstanding request), with hit/miss latency accounting and simple LRU.
 export class Cache {
     constructor(backingMem, policy = {}, lowerCache = null, { writeBack = true, writeAllocate = true } = {}) {
-        this.backing = backingMem;
-        this.lowerCache = lowerCache;
+        this.backing = backingMem; // mapped memory 
+        this.lowerCache = lowerCache; // Optional lower-level cache for multi-level configurations (e.g. L1 + L2)
         this.policy = this._normalizePolicy(policy);
         this.writeBack = writeBack; // write-through/write-back
         this.writeAllocate = writeAllocate; // write-to-lowermem/write-to-cache

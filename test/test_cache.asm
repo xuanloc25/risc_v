@@ -1,6 +1,6 @@
 # Cache exercise program for the SoC default cache:
 # - 2-way set associative, 16-byte blocks, 32 sets
-# - Write-through + no-write-allocate
+# - Write-through + no-write-allocate/ if write-allocate(*)
 # - Congruent addresses are spaced by 0x200 bytes
 #
 # Sequence:
@@ -15,7 +15,7 @@
     li   x3, 0x12345678  # data word
 
     sw   x3, 0(x1)       # write addr0 (miss, bypasses cache)
-    lw   x4, 0(x1)       # read addr0 (miss + fill)
+    lw   x4, 0(x1)       # read addr0 (miss + fill)(* hit)
     lw   x4, 0(x1)       # read addr0 (hit)
 
     lw   x4, 0(x2)       # miss, fills 2nd way in same set
