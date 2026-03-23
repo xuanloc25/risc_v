@@ -1,4 +1,13 @@
-import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic, TL_Param_Logical } from './tilelink.js';
+import {
+    TL_D_Opcode,
+    applyTileLinkAtomic,
+    getTransferSizeLog2,
+    isTileLinkAtomic,
+    isTileLinkRead,
+    isTileLinkWrite,
+    readSizedValue,
+    writeSizedValue
+} from './tilelink.js';
 
 // TileLink-UL / UH Memory implementation
 export class Mem {
@@ -6,16 +15,14 @@ export class Mem {
         this.mem = {};
         this.pendingRequest = null;
         this.cycle = 0;
-        this._pendingDMA = null; // Reserved for future DMA trigger support
+        this._pendingDMA = null;
         this.latency = latency;
         this.burstBeatLatency = burstBeatLatency;
-        
-        // Multi-beat Burst state
-        this.burstState = null; // { req, totalBytes, bytesRemaining, currentAddr, isWrite, readyCycle }
+
+        this.burstState = null;
     }
 
     receiveRequest(req) {
-        // Drop new requests if busy with a burst or single beat
         if (this.pendingRequest || this.burstState) return;
         this.pendingRequest = {
             req,
@@ -23,31 +30,37 @@ export class Mem {
         };
     }
 
+    directRead(address, size = 2) {
+        return readSizedValue(this.mem, address, size);
+    }
+
+    directWrite(address, value, size = 2) {
+        writeSizedValue(this.mem, address, value, size);
+    }
+
     tick(bus) {
         this.cycle++;
-        
-        // Handle ongoing Burst
+
         if (this.burstState) {
             if (this.cycle < this.burstState.readyCycle) return;
             this._processBurstBeat(bus);
             return;
         }
-        
+
         if (!this.pendingRequest) return;
         if (this.cycle < this.pendingRequest.readyCycle) return;
 
         const req = this.pendingRequest.req;
-        let sizeLog2 = req.size ?? 2; // Default to word (2^2 = 4 bytes)
+        const sizeLog2 = getTransferSizeLog2(req, 2);
         const bytesRequested = 1 << sizeLog2;
-        
-        // If it's a multi-beat burst (size > 2, meaning > 4 bytes requested but data path is 32-bit/4-byte)
+
         if (bytesRequested > 4) {
             this.burstState = {
-                req: req,
+                req,
                 totalBytes: bytesRequested,
                 bytesRemaining: bytesRequested,
-                currentAddr: req.address,
-                isWrite: (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData),
+                currentAddr: req.address >>> 0,
+                isWrite: isTileLinkWrite(req.type),
                 readyCycle: this.cycle + this.burstBeatLatency
             };
             this.pendingRequest = null;
@@ -57,114 +70,56 @@ export class Mem {
             return;
         }
 
-        // Single beat processing (< 4 bytes)
-        let data = 0;
-        let opA = req.type;
-        let addr = req.address;
-        let value = req.value ?? 0;
+        let data = this.directRead(req.address, sizeLog2);
         let opD = TL_D_Opcode.AccessAck;
 
-        // Fetch current data based on size
-        if (sizeLog2 === 2) {
-            data = ((this.mem[addr + 3] ?? 0) << 24) |
-                   ((this.mem[addr + 2] ?? 0) << 16) |
-                   ((this.mem[addr + 1] ?? 0) << 8) |
-                   (this.mem[addr] ?? 0);
-        } else if (sizeLog2 === 1) {
-            data = ((this.mem[addr + 1] ?? 0) << 8) | (this.mem[addr] ?? 0);
-            data = (data << 16) >> 16; // Sign extend if needed by requester later
-        } else if (sizeLog2 === 0) {
-            data = this.mem[addr] ?? 0;
-            data = (data << 24) >> 24; // Sign extend
-        }
-
-        // Processing TileLink A messages
-        if (opA === TL_A_Opcode.Get || req.type === 'fetch' || req.type === 'read' || req.type === 'readHalf' || req.type === 'readByte') {
+        if (isTileLinkRead(req.type)) {
             opD = TL_D_Opcode.AccessAckData;
-            // Legacy fallbacks
-            if (req.type === 'readHalf') { data = ((this.mem[addr + 1] ?? 0) << 8) | (this.mem[addr] ?? 0); }
-            if (req.type === 'readByte') { data = this.mem[addr] ?? 0; }
-        } else if (opA === TL_A_Opcode.PutFullData || opA === TL_A_Opcode.PutPartialData || req.type === 'write' || req.type === 'writeHalf' || req.type === 'writeByte') {
-            let writeSize = sizeLog2;
-            if (req.type === 'writeHalf') writeSize = 1;
-            if (req.type === 'writeByte') writeSize = 0;
-            
-            this.mem[addr] = value & 0xFF;
-            if (writeSize >= 1) this.mem[addr + 1] = (value >> 8) & 0xFF;
-            if (writeSize === 2) {
-                this.mem[addr + 2] = (value >> 16) & 0xFF;
-                this.mem[addr + 3] = (value >> 24) & 0xFF;
-            }
-        } else if (opA === TL_A_Opcode.ArithmeticData || opA === TL_A_Opcode.LogicalData) {
-            // TileLink UH: Atomic Memory Operations
-            opD = TL_D_Opcode.AccessAckData; // Returns the OLD data
-            let newData = data; // operates on word by default in this sim
-            
-            if (opA === TL_A_Opcode.ArithmeticData) {
-                const p = req.param;
-                if (p === TL_Param_Arithmetic.MIN) newData = Math.min(data | 0, value | 0);
-                else if (p === TL_Param_Arithmetic.MAX) newData = Math.max(data | 0, value | 0);
-                else if (p === TL_Param_Arithmetic.MINU) newData = Math.min(data >>> 0, value >>> 0);
-                else if (p === TL_Param_Arithmetic.MAXU) newData = Math.max(data >>> 0, value >>> 0);
-                else if (p === TL_Param_Arithmetic.ADD) newData = ((data | 0) + (value | 0)) | 0;
-            } else {
-                const p = req.param;
-                if (p === TL_Param_Logical.XOR) newData = data ^ value;
-                else if (p === TL_Param_Logical.OR) newData = data | value;
-                else if (p === TL_Param_Logical.AND) newData = data & value;
-                else if (p === TL_Param_Logical.SWAP) newData = value;
-            }
-            
-            this.mem[addr] = newData & 0xFF;
-            this.mem[addr + 1] = (newData >> 8) & 0xFF;
-            this.mem[addr + 2] = (newData >> 16) & 0xFF;
-            this.mem[addr + 3] = (newData >> 24) & 0xFF;
+        } else if (isTileLinkWrite(req.type)) {
+            this.directWrite(req.address, req.value ?? 0, sizeLog2);
+        } else if (isTileLinkAtomic(req.type)) {
+            opD = TL_D_Opcode.AccessAckData;
+            const newValue = applyTileLinkAtomic(req, data, sizeLog2);
+            this.directWrite(req.address, newValue, sizeLog2);
         }
 
-        bus.sendResponse({ 
+        bus.sendResponse({
             from: 'mem',
-            to: req.from, // route back
-            type: opD, 
-            data: data,
-            address: addr,
-            size: sizeLog2 
+            to: req.from,
+            type: opD,
+            data,
+            address: req.address >>> 0,
+            size: sizeLog2
         });
-        
+
         this.pendingRequest = null;
     }
 
     _processBurstBeat(bus) {
         const state = this.burstState;
-        
+
         if (!state.isWrite) {
-            // Processing a Read Beat (Get)
-            const addr = state.currentAddr;
-            let data = ((this.mem[addr + 3] ?? 0) << 24) |
-                       ((this.mem[addr + 2] ?? 0) << 16) |
-                       ((this.mem[addr + 1] ?? 0) << 8) |
-                       (this.mem[addr] ?? 0);
-            
+            const addr = state.currentAddr >>> 0;
+            const data = this.directRead(addr, 2);
+
             bus.sendResponse({
                 from: 'mem',
                 to: state.req.from,
                 type: TL_D_Opcode.AccessAckData,
-                data: data,
+                data,
                 address: addr,
-                size: 2 // We return 4 byte chunks
+                size: 2
             });
-            
+
             state.bytesRemaining -= 4;
             state.currentAddr += 4;
-            
+
             if (state.bytesRemaining <= 0) {
                 this.burstState = null;
             } else {
                 state.readyCycle = this.cycle + this.burstBeatLatency;
             }
         } else {
-            // Simple Burst Write logic (assumes master sends data one by one, which our DMA actually does natively anyway)
-            // Properly, DMA would send multiple PutFullData requests, so this branch might be unused if DMA never sends a Get size > 2.
-            // But we keep it as a placeholder.
             this.burstState = null;
         }
     }

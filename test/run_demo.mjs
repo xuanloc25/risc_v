@@ -13,10 +13,10 @@ function makeProgram() {
     };
 }
 
-function dumpBytes(bus, addr, len) {
+function dumpBytes(tilelink, addr, len) {
     const out = [];
     for (let i = 0; i < len; i++) {
-        const b = bus.peekByte(addr + i) & 0xFF;
+        const b = tilelink.peekByte(addr + i) & 0xFF;
         out.push(`0x${b.toString(16).padStart(2, '0')}`);
     }
     return out.join(' ');
@@ -25,11 +25,11 @@ function dumpBytes(bus, addr, len) {
 simulator.reset();
 simulator.loadProgram(makeProgram());
 
-[1, 2, 3, 4].forEach((b, i) => simulator.bus.pokeByte(0x200 + i, b));
+[1, 2, 3, 4].forEach((b, i) => simulator.tilelink_UH.pokeByte(0x200 + i, b));
 
 console.log('Before DMA:');
-console.log('src 0x200:', dumpBytes(simulator.bus, 0x200, 4));
-console.log('dst 0x300:', dumpBytes(simulator.bus, 0x300, 4));
+console.log('src 0x200:', dumpBytes(simulator.tilelink_UH, 0x200, 4));
+console.log('dst 0x300:', dumpBytes(simulator.tilelink_UH, 0x300, 4));
 
 simulator.dma.start(0x200, 0x300, 4);
 
@@ -40,5 +40,5 @@ while ((simulator.cpu.isRunning || simulator.dma.isBusy) && cycles < 64) {
 }
 
 console.log('After DMA:');
-console.log('src 0x200:', dumpBytes(simulator.bus, 0x200, 4));
-console.log('dst 0x300:', dumpBytes(simulator.bus, 0x300, 4));
+console.log('src 0x200:', dumpBytes(simulator.tilelink_UH, 0x200, 4));
+console.log('dst 0x300:', dumpBytes(simulator.tilelink_UH, 0x300, 4));

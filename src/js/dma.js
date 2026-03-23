@@ -1,4 +1,4 @@
-﻿import { TL_A_Opcode, TL_D_Opcode } from './tilelink.js';
+import { TL_A_Opcode, TL_D_Opcode } from './tilelink.js';
 
 // DMA descriptor and controller implementation
 export class DMADescriptor {
@@ -97,14 +97,14 @@ export class DMARegisters {
     }
 
     writeDescriptor(word) {
-        console.log(`[DMA DESC] Writing descriptor word: 0x${word.toString(16)}, currentWords=${this.currentDescriptorWords.length}`);
+        console.log(`[DMA DESC] Writing descriptor word: 0x${(word >>> 0).toString(16)}, currentWords=${this.currentDescriptorWords.length}`);
         if (this.fifoFull) {
             console.warn('[DMA] Cannot write descriptor: FIFO is full');
             return false;
         }
 
         this.currentDescriptorWords.push(word);
-        console.log(`[DMA] Descriptor word ${this.currentDescriptorWords.length}/3: 0x${word.toString(16)}`);
+        console.log(`[DMA] Descriptor word ${this.currentDescriptorWords.length}/3: 0x${(word >>> 0).toString(16)}`);
 
         if (this.currentDescriptorWords.length === 3) {
             const descriptor = new DMADescriptor(
@@ -130,7 +130,6 @@ export class DMARegisters {
         if (this.fifoEmpty) return null;
 
         const descriptor = this.descriptorFifo.shift();
-
         this.fifoEmpty = (this.descriptorFifo.length === 0);
         this.fifoFull = false;
 
@@ -157,9 +156,29 @@ export class DMARegisters {
     }
 }
 
+function isTileLinkPort(value) {
+    return !!value && typeof value.sendRequest === 'function' && typeof value.sendResponse === 'function';
+}
+
 export class DMAController {
-    constructor(bus) {
-        this.bus = bus;
+    constructor(tileLinkOrPorts = null) {
+        if (isTileLinkPort(tileLinkOrPorts)) {
+            this.tilelink_UH = tileLinkOrPorts;
+            this.tilelink_UL = tileLinkOrPorts;
+            this.registerLink = tileLinkOrPorts;
+            this.selectLinkForAddress = () => tileLinkOrPorts;
+        } else {
+            const ports = tileLinkOrPorts ?? {};
+            this.tilelink_UH = ports.tilelink_UH ?? null;
+            this.tilelink_UL = ports.tilelink_UL ?? ports.tilelink_UH ?? null;
+            this.registerLink = ports.registerLink ?? ports.tilelink_UH ?? ports.tilelink_UL ?? null;
+            this.selectLinkForAddress = ports.selectLinkForAddress ?? ((address) => {
+                void address;
+                return this.tilelink_UH ?? this.tilelink_UL ?? this.registerLink;
+            });
+        }
+
+        this.defaultLink = this.registerLink ?? this.tilelink_UH ?? this.tilelink_UL;
         this.registers = new DMARegisters();
 
         this.currentDescriptor = null;
@@ -174,30 +193,44 @@ export class DMAController {
 
         this.callback = null;
 
-        // Async bus state
         this.waitingRequest = null;
         this.pendingResponse = null;
+        this.activeRequestLink = null;
         this.latchedData = 0;
         this.latchedSrcAddr = 0;
         this.latchedDstAddr = 0;
         this.burstRemainingReads = 0;
         this.burstRemainingWrites = 0;
         this.burstDataBuffer = [];
+        this.pendingRegReq = null;
 
         console.log('[DMA] Controller initialized');
     }
-    
-    // Handle memory-mapped register accesses as a bus slave
+
+    setBuses({
+        tilelink_UH = this.tilelink_UH,
+        tilelink_UL = this.tilelink_UL,
+        registerLink = this.registerLink,
+        selectLinkForAddress = this.selectLinkForAddress
+    } = {}) {
+        this.tilelink_UH = tilelink_UH;
+        this.tilelink_UL = tilelink_UL ?? tilelink_UH;
+        this.registerLink = registerLink ?? tilelink_UH ?? tilelink_UL;
+        this.selectLinkForAddress = selectLinkForAddress;
+        this.defaultLink = this.registerLink ?? this.tilelink_UH ?? this.tilelink_UL;
+    }
+
     receiveRequest(req) {
         this.pendingRegReq = req;
     }
 
     readRegister(address) {
         switch (address) {
-            case 0xFFED0000:
+            case 0xFFED0000: {
                 const ctrl = this.registers.readCtrl();
                 console.log(`[DMA] Read CTRL: 0x${ctrl.toString(16)}`);
                 return ctrl;
+            }
             case 0xFFED0004:
                 console.warn('[DMA] DESC register is write-only');
                 return 0;
@@ -227,11 +260,9 @@ export class DMAController {
         this.registers.writeCtrl(1);
 
         const config = DMADescriptor.createConfig(length, 0, 2, 2);
-
         this.registers.writeDescriptor(src);
         this.registers.writeDescriptor(dst);
         this.registers.writeDescriptor(config);
-
         this.registers.writeCtrl(3);
 
         this.callback = callback;
@@ -247,12 +278,12 @@ export class DMAController {
         if (this.registers.busy && this.currentDescriptor) {
             this.performTransferStep();
         }
-        
-        // Service register accesses from bus
+
         if (this.pendingRegReq) {
             const { address, type, value } = this.pendingRegReq;
             let data = 0;
             let responseType = TL_D_Opcode.AccessAck;
+
             if (address === 0xFFED0000) {
                 if (type === TL_A_Opcode.Get || type === 'read') {
                     data = this.registers.readCtrl();
@@ -269,8 +300,10 @@ export class DMAController {
             } else {
                 console.warn(`[DMA] Unknown register access at 0x${address.toString(16)}`);
             }
-            if (this.bus) {
-                this.bus.sendResponse({
+
+            const registerLink = this.registerLink ?? this.defaultLink;
+            if (registerLink) {
+                registerLink.sendResponse({
                     from: 'dma-regs',
                     to: this.pendingRegReq.from,
                     type: responseType,
@@ -279,8 +312,9 @@ export class DMAController {
                     size: this.pendingRegReq.size
                 });
             }
+
             this.pendingRegReq = null;
-            return; // Only one register op per tick
+            return;
         }
     }
 
@@ -303,6 +337,7 @@ export class DMAController {
         this.transferStage = null;
         this.waitingRequest = null;
         this.pendingResponse = null;
+        this.activeRequestLink = null;
         this.latchedData = 0;
         this.burstRemainingReads = 0;
         this.burstRemainingWrites = 0;
@@ -314,7 +349,6 @@ export class DMAController {
 
         console.log(`[DMA] Transfer started: ${this.currentDescriptor.toString()}`);
         console.log(`[DMA] Config: elements=${this.numElements}, bswap=${this.bswap}, srcMode=${this.srcMode}, dstMode=${this.dstMode}`);
-
         return true;
     }
 
@@ -335,8 +369,10 @@ export class DMAController {
             if (this.transferStage === 'read') {
                 if (!this.waitingRequest && !this.pendingResponse) {
                     const readReq = this.buildReadRequest(this.latchedSrcAddr, this.srcMode);
+                    const requestLink = this._resolveLink(this.latchedSrcAddr);
                     this.waitingRequest = readReq;
-                    this.bus.sendRequest('dma', readReq);
+                    this.activeRequestLink = requestLink;
+                    requestLink.sendRequest('dma', readReq);
                     return;
                 }
 
@@ -348,6 +384,7 @@ export class DMAController {
                     this.latchedData = data;
                     this.pendingResponse = null;
                     this.waitingRequest = null;
+                    this.activeRequestLink = null;
                     this.transferStage = 'write';
                 }
                 return;
@@ -356,14 +393,17 @@ export class DMAController {
             if (this.transferStage === 'write') {
                 if (!this.waitingRequest && !this.pendingResponse) {
                     const writeReq = this.buildWriteRequest(this.latchedDstAddr, this.latchedData, this.dstMode);
+                    const requestLink = this._resolveLink(this.latchedDstAddr);
                     this.waitingRequest = writeReq;
-                    this.bus.sendRequest('dma', writeReq);
+                    this.activeRequestLink = requestLink;
+                    requestLink.sendRequest('dma', writeReq);
                     return;
                 }
 
                 if (this.pendingResponse) {
                     this.pendingResponse = null;
                     this.waitingRequest = null;
+                    this.activeRequestLink = null;
                     this.transferProgress++;
                     this.transferStage = null;
                     console.log(`[DMA] Progress: ${this.transferProgress}/${this.numElements}`);
@@ -372,7 +412,6 @@ export class DMAController {
                     }
                 }
             }
-
         } catch (error) {
             console.error(`[DMA] Transfer error: ${error.message}`);
             this.registers.error = true;
@@ -410,11 +449,11 @@ export class DMAController {
 
     buildReadRequest(address, mode) {
         switch (mode) {
-            case 0: // constant byte
-            case 2: // incrementing byte
+            case 0:
+            case 2:
                 return { type: TL_A_Opcode.Get, address, size: 0 };
-            case 1: // constant word
-            case 3: // incrementing word
+            case 1:
+            case 3:
                 return { type: TL_A_Opcode.Get, address, size: 2 };
             default:
                 throw new Error(`Invalid read mode: ${mode}`);
@@ -423,11 +462,11 @@ export class DMAController {
 
     buildWriteRequest(address, data, mode) {
         switch (mode) {
-            case 0: // constant byte
-            case 2: // incrementing byte
+            case 0:
+            case 2:
                 return { type: TL_A_Opcode.PutPartialData, address, value: data & 0xFF, size: 0 };
-            case 1: // constant word
-            case 3: // incrementing word
+            case 1:
+            case 3:
                 return { type: TL_A_Opcode.PutFullData, address, value: data >>> 0, size: 2 };
             default:
                 throw new Error(`Invalid write mode: ${mode}`);
@@ -441,7 +480,8 @@ export class DMAController {
     swapBytes(data, size) {
         if (size === 1) {
             return data;
-        } else if (size === 4) {
+        }
+        if (size === 4) {
             return ((data & 0xFF) << 24) |
                 (((data >> 8) & 0xFF) << 16) |
                 (((data >> 16) & 0xFF) << 8) |
@@ -454,10 +494,10 @@ export class DMAController {
         this.registers.busy = false;
         this.registers.done = true;
 
-        // Clear in-flight DMA bus state
         this.transferStage = null;
         this.waitingRequest = null;
         this.pendingResponse = null;
+        this.activeRequestLink = null;
 
         console.log(`[DMA] Transfer completed successfully: ${this.transferProgress} elements transferred`);
 
@@ -495,5 +535,15 @@ export class DMAController {
     get isBusy() {
         return this.registers.busy;
     }
-}
 
+    _resolveLink(address) {
+        const selected = typeof this.selectLinkForAddress === 'function'
+            ? this.selectLinkForAddress(address)
+            : null;
+        const tileLink = selected ?? this.tilelink_UH ?? this.tilelink_UL ?? this.registerLink;
+        if (!tileLink) {
+            throw new Error('DMA has no available TileLink link');
+        }
+        return tileLink;
+    }
+}

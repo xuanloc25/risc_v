@@ -1,22 +1,89 @@
-// simulator.js rebuilt to only expose simulator and import modular components
 import { LEDMatrix } from './led_matrix.js';
 import { UART } from './uart.js';
 import { MousePeripheral } from './mouse.js';
 import { Keyboard } from './keyboard.js';
-import { Bus } from './bus.js';
+import { TileLink_UH } from './tilelink_UH.js';
+import { TileLink_UL } from './tilelink_UL.js';
+import { TileLinkBridge } from './tilelink_bridge.js';
 import { Mem } from './mem.js';
 import { CPU } from './cpu.js';
 import { DMAController } from './dma.js';
 import { Cache } from './cache.js';
-import { TL_A_Opcode, TL_D_Opcode, getOpcodeName } from './tilelink.js';
+import { MMU } from './mmu.js';
+import {
+    TL_D_Opcode,
+    applyTileLinkAtomic,
+    getTransferSizeLog2,
+    isTileLinkAtomic,
+    isTileLinkRead,
+    isTileLinkWrite
+} from './tilelink.js';
 
-// --- Simulator ---
+const LED_BASE_ADDRESS = 0xFF000000;
+const LED_SIZE_BYTES = 32 * 32 * 4;
+const UART_BASE_ADDRESS = 0x10000000;
+const MOUSE_BASE_ADDRESS = 0xFF100000;
+const KEYBOARD_BASE_ADDRESS = 0xFFFF0000;
+const DMA_REG_BASE_ADDRESS = 0xFFED0000;
+
+function inRange(addr, base, size) {
+    const address = addr >>> 0;
+    const start = base >>> 0;
+    return address >= start && address < (start + size);
+}
+
+function createMMIOEndpoint(bus, name, { read, write }) {
+    return {
+        directRead(address, size, accessType) {
+            void accessType;
+            return typeof read === 'function' ? (read(address, size) ?? 0) : 0;
+        },
+        directWrite(address, value, size, accessType) {
+            void size;
+            void accessType;
+            if (typeof write === 'function') write(address, value);
+        },
+        receiveRequest(req) {
+            const size = getTransferSizeLog2(req, 2);
+            let data = 0;
+            let responseType = TL_D_Opcode.AccessAck;
+
+            if (isTileLinkRead(req.type)) {
+                data = this.directRead(req.address, size, req.type);
+                responseType = TL_D_Opcode.AccessAckData;
+            } else if (isTileLinkWrite(req.type)) {
+                this.directWrite(req.address, req.value ?? 0, size, req.type);
+            } else if (isTileLinkAtomic(req.type)) {
+                data = this.directRead(req.address, size, req.type);
+                const nextValue = applyTileLinkAtomic(req, data, size);
+                this.directWrite(req.address, nextValue, size, req.type);
+                responseType = TL_D_Opcode.AccessAckData;
+            } else {
+                console.warn(`[SoC] Unsupported request type ${req.type} for ${name}`);
+            }
+
+            bus.sendResponse({
+                from: name,
+                to: req.from,
+                type: responseType,
+                data,
+                address: req.address >>> 0,
+                size
+            });
+        }
+    };
+}
+
 export const simulator = {
     cpu: null,
-    bus: null,
-    mem: null,
+    mmu: null,
     cache: null,
-    dma: null, // Thêm DMA controller
+    mem: null,
+    dma: null,
+    tilelink_UH: null,
+    tilelink_UL: null,
+    uhToUlBridge: null,
+    ulToUhBridge: null,
     ledMatrix: null,
     uart: null,
     mouse: null,
@@ -30,16 +97,15 @@ export const simulator = {
     },
 
     reset() {
-        // Khởi tạo ngoại vi và gắn lên simulator để dễ truy cập bên ngoài
         const isBrowser = typeof document !== 'undefined';
 
         let ledMatrix = null;
-        let keyboard = null;
-
         if (isBrowser) {
-            ledMatrix = new LEDMatrix('ledMatrixCanvas', 32, 32, 0xFF000000);
-            keyboard = new Keyboard(0xFFFF0000);
+            ledMatrix = new LEDMatrix('ledMatrixCanvas', 32, 32, LED_BASE_ADDRESS);
+        }
 
+        const keyboard = new Keyboard(KEYBOARD_BASE_ADDRESS);
+        if (isBrowser) {
             const kbInput = document.getElementById('keyboardInput');
             if (kbInput) {
                 kbInput.addEventListener('keydown', (e) => {
@@ -47,7 +113,7 @@ export const simulator = {
                     if (e.key.length === 1) {
                         keyboard.pressKey(e.key.charCodeAt(0));
                     } else if (e.key === 'Enter') {
-                        keyboard.pressKey(10); // \n
+                        keyboard.pressKey(10);
                     }
                 });
 
@@ -61,99 +127,107 @@ export const simulator = {
             }
         }
 
-        const uart = new UART(0x10000000);
-        const mouse = new MousePeripheral(0xFF100000);
+        const uart = new UART(UART_BASE_ADDRESS);
+        const mouse = new MousePeripheral(MOUSE_BASE_ADDRESS);
 
         this.cpu = new CPU();
-        this.bus = new Bus();
+        this.tilelink_UH = new TileLink_UH();
+        this.tilelink_UL = new TileLink_UL();
+
         const mainMemoryLatency = 5;
-        // Main memory remains slower than a cache hit; cache miss latency mirrors this cost.
         this.mem = new Mem({ latency: mainMemoryLatency });
-        // CPU connects to Cache, Cache connects to Bus Master
-        const cacheConfig = { cacheSize: 1024, blockSize: 16, associativity: 2, numSets: 32, hitLatency: 1, missLatency: mainMemoryLatency };
-        this.cache = new Cache(this.mem, cacheConfig, null, { writeBack: false, writeAllocate: false });
-        this.bus.registerMaster('cache', this.cache);
 
-        // Map bus so CPU can peek for debugging, but true accesses go through cache
-        this.cpu.bus = this.bus;
-        this.dma = new DMAController(this.bus); // DMA now issues transfers through the bus
+        const uartRange = (addr) => inRange(addr, UART_BASE_ADDRESS, 0x14);
+        const mouseRange = (addr) => inRange(addr, MOUSE_BASE_ADDRESS, 0x14);
+        const keyboardRange = (addr) => inRange(addr, KEYBOARD_BASE_ADDRESS, 0x08);
+        const ledRange = (addr) => inRange(addr, LED_BASE_ADDRESS, LED_SIZE_BYTES);
+        const dmaRegRange = (addr) => inRange(addr, DMA_REG_BASE_ADDRESS, 0x08);
 
-        // Helpers for address decode and MMIO registration
-        const bus = this.bus;
-        const inRange = (addr, base, size) => {
-            const a = addr >>> 0;
-            const b = base >>> 0;
-            return a >= b && a < (b + size);
-        };
-
-        const uartRange = (addr) => inRange(addr, uart.baseAddress, 0x14);
-        const mouseRange = (addr) => inRange(addr, mouse.baseAddress, 0x14);
-        const keyboardRange = (addr) => keyboard ? inRange(addr, keyboard.baseAddress, 0x08) : false;
-        const ledRange = (addr) => ledMatrix ? inRange(addr, ledMatrix.baseAddress, ledMatrix.sizeInBytes) : false;
-        const dmaRegRange = (addr) => inRange(addr, 0xFFED0000, 0x8);
-
-        const isPeripheralAddress = (addr) =>
+        const isUlPeripheralAddress = (addr) =>
             uartRange(addr) ||
             mouseRange(addr) ||
             keyboardRange(addr) ||
-            ledRange(addr) ||
-            dmaRegRange(addr);
+            ledRange(addr);
 
-        //cheat ready/valid, will update later
-        const registerMMIOSlave = (name, matchFn, { read, write }) => {
-            bus.registerSlave(name, {
-                receiveRequest: (req) => {
-                    let data = 0;
-                    let responseType = TL_D_Opcode.AccessAck;
-                    if (req.type === TL_A_Opcode.Get || req.type === 'read' || req.type === 'fetch' || req.type === 'readByte' || req.type === 'readHalf') {
-                        data = typeof read === 'function' ? read(req.address, req.type, req.size) : 0;
-                        responseType = TL_D_Opcode.AccessAckData;
-                    } else if (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData || req.type === 'write' || req.type === 'writeByte' || req.type === 'writeHalf') {
-                        if (typeof write === 'function') write(req.address, req.value, req.type, req.size);
-                    } else {
-                        console.warn(`[SoC] Unsupported request type ${req.type} for ${name}`);
-                    }
-                    bus.sendResponse({ from: name, to: req.from, type: responseType, data, address: req.address, size: req.size });
-                }
-            }, matchFn);
+        const isCacheableAddress = (addr) =>
+            !isUlPeripheralAddress(addr) && !dmaRegRange(addr);
+
+        const cacheConfig = {
+            cacheSize: 1024,
+            blockSize: 16,
+            associativity: 2,
+            numSets: 32,
+            hitLatency: 1,
+            missLatency: mainMemoryLatency
         };
 
-        // Bus nắm quyền truy cập bộ nhớ, CPU chỉ đi qua bus
-        if (this.useCache) {
-            this.bus.registerSlave('cache', this.cache, (addr) => !isPeripheralAddress(addr));
-        } else {
-            this.bus.registerSlave('mem', this.mem, (addr) => !isPeripheralAddress(addr));
-        }
-        this.bus.registerSlave('dma-regs', this.dma, dmaRegRange);
+        this.cache = new Cache(this.tilelink_UH, cacheConfig, null, {
+            writeBack: false,
+            writeAllocate: false,
+            isCacheable: isCacheableAddress
+        });
+        this.cache.setEnabled(this.useCache);
 
-        registerMMIOSlave('uart', uartRange, {
+        this.mmu = new MMU(this.cpu, this.cache, {
+            cacheabilityPredicate: isCacheableAddress
+        });
+
+        this.dma = new DMAController({
+            tilelink_UH: this.tilelink_UH,
+            tilelink_UL: this.tilelink_UL,
+            registerLink: this.tilelink_UH,
+            selectLinkForAddress: (addr) => isUlPeripheralAddress(addr) ? this.tilelink_UL : this.tilelink_UH
+        });
+
+        this.uhToUlBridge = new TileLinkBridge(this.tilelink_UH, this.tilelink_UL, {
+            name: 'uh-to-ul-bridge'
+        });
+        this.ulToUhBridge = new TileLinkBridge(this.tilelink_UL, this.tilelink_UH, {
+            name: 'ul-to-uh-bridge'
+        });
+
+        const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'uart', {
             read: (addr) => uart.readRegister(addr),
-            write: (addr, val) => uart.writeRegister(addr, val)
+            write: (addr, value) => uart.writeRegister(addr, value)
         });
 
-        registerMMIOSlave('mouse', mouseRange, {
+        const mouseEndpoint = createMMIOEndpoint(this.tilelink_UL, 'mouse', {
             read: (addr) => mouse.readRegister(addr),
-            write: (addr, val) => mouse.writeRegister(addr, val)
+            write: (addr, value) => mouse.writeRegister(addr, value)
         });
 
-        if (keyboard) {
-            registerMMIOSlave('keyboard', keyboardRange, {
-                read: (addr) => keyboard.readRegister(addr),
-                write: (addr, val) => keyboard.writeRegister(addr, val)
-            });
-        }
+        const keyboardEndpoint = createMMIOEndpoint(this.tilelink_UL, 'keyboard', {
+            read: (addr) => keyboard.readRegister(addr),
+            write: (addr, value) => keyboard.writeRegister(addr, value)
+        });
 
-        if (ledMatrix) {
-            registerMMIOSlave('led-matrix', ledRange, {
-                read: () => 0,
-                write: (addr, val, type) => {
-                    if (type === TL_A_Opcode.PutFullData || type === 'write') ledMatrix.writeWord(addr, val);
+        const ledEndpoint = createMMIOEndpoint(this.tilelink_UL, 'led-matrix', {
+            read: () => 0,
+            write: (addr, value) => {
+                if (ledMatrix) {
+                    ledMatrix.writeWord(addr, value >>> 0);
                 }
-            });
-        }
+            }
+        });
 
-        this.bus.registerMaster('cpu', this.cpu);
-        this.bus.registerMaster('dma', this.dma);
+        this.tilelink_UH.registerSlave('main-memory', this.mem, (addr) => isCacheableAddress(addr));
+        this.tilelink_UH.registerSlave('dma-regs', this.dma, (addr) => dmaRegRange(addr));
+        this.tilelink_UH.registerSlave('uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr));
+        this.tilelink_UH.attachMemoryTarget(this.mem);
+
+        this.tilelink_UL.registerSlave('uart', uartEndpoint, uartRange);
+        this.tilelink_UL.registerSlave('mouse', mouseEndpoint, mouseRange);
+        this.tilelink_UL.registerSlave('keyboard', keyboardEndpoint, keyboardRange);
+        this.tilelink_UL.registerSlave('led-matrix', ledEndpoint, ledRange);
+        this.tilelink_UL.registerSlave('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr));
+        this.tilelink_UL.attachMemoryTarget(this.mem);
+
+        this.tilelink_UH.registerMaster('dma', this.dma);
+        this.tilelink_UL.registerMaster('dma', this.dma);
+
+        this.cpu.bus = this.mmu;
+        this.mmu.attachCPU(this.cpu);
+        this.mmu.attachLowerPort(this.cache);
 
         this.ledMatrix = ledMatrix;
         this.uart = uart;
@@ -161,17 +235,23 @@ export const simulator = {
         this.keyboard = keyboard;
         this.cycleCount = 0;
 
-        // Ensure fresh peripheral state
         if (this.ledMatrix) this.ledMatrix.reset();
         if (this.uart) this.uart.reset();
         if (this.mouse) this.mouse.reset();
         if (this.keyboard) this.keyboard.reset();
         if (this.cache) this.cache.reset();
+        if (this.mmu) this.mmu.reset();
 
-        console.info('[IO MAP] LED Matrix: 0xFF000000-0xFF000FFF (write VRAM)');
-        console.info('[IO MAP] Mouse:      0xFF100000-0xFF100013 (X/Y/BTN/STATUS/CTRL)');
-        console.info('[IO MAP] UART:       0x10000000-0x10000013 (TX/RX/STATUS/CTRL/BAUD)');
+        console.info('[ARCH] CPU -> MMU -> L1 Cache -> TileLink-UH');
+        console.info('[ARCH] TileLink-UH <-> TileLink-UL through bus bridge');
+        console.info('[ARCH] DMA Controller attached to both TileLink-UH and TileLink-UL');
+        console.info('[IO MAP] LED Matrix: 0xFF000000-0xFF000FFF');
+        console.info('[IO MAP] Mouse:      0xFF100000-0xFF100013');
+        console.info('[IO MAP] UART:       0x10000000-0x10000013');
+        console.info('[IO MAP] Keyboard:   0xFFFF0000-0xFFFF0007');
+        console.info('[IO MAP] DMA Regs:   0xFFED0000-0xFFED0007');
     },
+
     loadProgram(programData) {
         if (programData.memory) {
             this.mem.loadMemoryMap(programData.memory);
@@ -179,44 +259,42 @@ export const simulator = {
         this.cpu.loadProgram(programData);
         this.cpu.isRunning = true;
     },
+
     tick() {
         const cpuActive = this.cpu.isRunning;
         const dmaActive = this.dma?.registers?.busy;
 
         if (!cpuActive && !dmaActive) {
-            console.log("Simulation halted.");
+            console.log('Simulation halted.');
             return;
         }
 
         try {
             if (cpuActive) {
-                this.cpu.tick(this.bus);
+                this.cpu.tick(this.mmu);
             }
         } catch (e) {
             this.cpu.isRunning = false;
             console.error(e);
         }
 
-        // DMA produces bus traffic even when CPU is idle
         if (this.dma) {
             this.dma.tick();
         }
 
-        // First arbitration/issue stage
-        this.bus.tick();
-        // Memory path: via cache or direct mem depending on flag
-        if (this.useCache) {
-            this.cache.tick(this.bus);
-        } else {
-            this.mem.tick(this.bus);
-        }
-        // Route memory response back to masters in the same cycle if available
-        this.bus.tick();
+        this.tilelink_UH.tick();
+        this.tilelink_UL.tick();
+        this.mem.tick(this.tilelink_UH);
+        this.cache.tick();
+        this.tilelink_UH.tick();
+        this.tilelink_UL.tick();
 
-        // Simple cycle log showing CPU and DMA status
-        console.log(`[Cycle ${this.cycleCount + 1}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} | DMA busy=${this.dma?.registers?.busy ?? false} progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`);
+        console.log(
+            `[Cycle ${this.cycleCount + 1}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} ` +
+            `| DMA busy=${this.dma?.registers?.busy ?? false} ` +
+            `progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`
+        );
 
-        // Peripheral timing (UART)
         if (this.uart) {
             this.uart.tick();
         }
