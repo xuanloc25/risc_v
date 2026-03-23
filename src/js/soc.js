@@ -163,7 +163,7 @@ export const simulator = {
 
         this.cache = new Cache(this.tilelink_UH, cacheConfig, null, {
             writeBack: false,
-            writeAllocate: false,
+            writeAllocate: true,
             isCacheable: isCacheableAddress
         });
         this.cache.setEnabled(this.useCache);

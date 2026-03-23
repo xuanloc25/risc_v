@@ -11,6 +11,12 @@ import {
     writeSizedValue
 } from './tilelink.js';
 
+function formatLogNumber(value) {
+    if (value === null || value === undefined || value === '') return '';
+    if (typeof value !== 'number' || Number.isNaN(value)) return String(value);
+    return `${value} (0x${(value >>> 0).toString(16)})`;
+}
+
 // Cache simulator modeled after cache.h: set-associative, optional write-back/write-allocate,
 // blocking (one outstanding request), with simple LRU.
 export class Cache {
@@ -79,7 +85,7 @@ export class Cache {
         const reqAddress = (req.virtualAddress ?? req.address) >>> 0;
         console.log(
             `[Cache] REQ type=${typeof req.type === 'number' ? getOpcodeName(TL_A_Opcode, req.type) : req.type} ` +
-            `addr=0x${reqAddress.toString(16)} value=${req.value ?? ''}`
+            `addr=0x${reqAddress.toString(16)} value=${formatLogNumber(req.value)}`
         );
 
         const cacheable = this.enabled && req.cacheable !== false && this.isCacheable(req.address >>> 0);
@@ -122,7 +128,7 @@ export class Cache {
 
         console.log(
             `[Cache] RESP type=${getOpcodeName(TL_D_Opcode, this.pending.req.type)} ` +
-            `addr=0x${(this.pending.req.address >>> 0).toString(16)} data=${this.pending.req.data ?? ''}`
+            `addr=0x${(this.pending.req.address >>> 0).toString(16)} data=${formatLogNumber(this.pending.req.data)}`
         );
 
         if (this.pending.req.replyTo && typeof this.pending.req.replyTo.receiveResponse === 'function') {
