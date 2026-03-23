@@ -20,8 +20,9 @@ function formatLogNumber(value) {
 // Cache simulator modeled after cache.h: set-associative, optional write-back/write-allocate,
 // blocking (one outstanding request), with simple LRU.
 export class Cache {
-    constructor(lowerLevel, policy = {}, lowerCache = null, { writeBack = true, writeAllocate = true, isCacheable = () => true } = {}) {
-        this.lowerLevel = lowerLevel;
+    constructor(lowerPort = null, policy = {}, lowerCache = null, { writeBack = true, writeAllocate = true, isCacheable = () => true } = {}) {
+        this.upperPort = null;
+        this.lowerPort = lowerPort;
         this.lowerCache = lowerCache;
         this.policy = this._normalizePolicy(policy);
         this.writeBack = writeBack;
@@ -47,9 +48,17 @@ export class Cache {
 
     get mem() {
         if (this.lowerCache?.mem) return this.lowerCache.mem;
-        if (this.lowerLevel?.mem) return this.lowerLevel.mem;
-        if (typeof this.lowerLevel?.memBytes === 'function') return this.lowerLevel.memBytes();
+        if (this.lowerPort?.mem) return this.lowerPort.mem;
+        if (typeof this.lowerPort?.memBytes === 'function') return this.lowerPort.memBytes();
         return {};
+    }
+
+    attachUpperPort(upperPort) {
+        this.upperPort = upperPort;
+    }
+
+    attachLowerPort(lowerPort) {
+        this.lowerPort = lowerPort;
     }
 
     setEnabled(enabled) {
@@ -376,9 +385,9 @@ export class Cache {
 
     _readLowerValue(addr, size) {
         if (this.lowerCache) return this.lowerCache._readValueBySize(addr, size);
-        if (typeof this.lowerLevel?.directRead === 'function') return this.lowerLevel.directRead(addr, size, 'cache');
-        if (this.lowerLevel?.mem) return readSizedValue(this.lowerLevel.mem, addr, size);
-        if (typeof this.lowerLevel?.memBytes === 'function') return readSizedValue(this.lowerLevel.memBytes(), addr, size);
+        if (typeof this.lowerPort?.directRead === 'function') return this.lowerPort.directRead(addr, size, 'cache');
+        if (this.lowerPort?.mem) return readSizedValue(this.lowerPort.mem, addr, size);
+        if (typeof this.lowerPort?.memBytes === 'function') return readSizedValue(this.lowerPort.memBytes(), addr, size);
         return 0;
     }
 
@@ -388,18 +397,18 @@ export class Cache {
             return;
         }
 
-        if (typeof this.lowerLevel?.directWrite === 'function') {
-            this.lowerLevel.directWrite(addr, value, size, 'cache');
+        if (typeof this.lowerPort?.directWrite === 'function') {
+            this.lowerPort.directWrite(addr, value, size, 'cache');
             return;
         }
 
-        if (this.lowerLevel?.mem) {
-            writeSizedValue(this.lowerLevel.mem, addr, value, size);
+        if (this.lowerPort?.mem) {
+            writeSizedValue(this.lowerPort.mem, addr, value, size);
             return;
         }
 
-        if (typeof this.lowerLevel?.memBytes === 'function') {
-            writeSizedValue(this.lowerLevel.memBytes(), addr, value, size);
+        if (typeof this.lowerPort?.memBytes === 'function') {
+            writeSizedValue(this.lowerPort.memBytes(), addr, value, size);
         }
     }
 

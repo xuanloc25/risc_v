@@ -22,7 +22,15 @@ function readBytes(memMap, addr, len) {
 
 function makeMaster() {
     return {
+        upperPort: null,
+        lowerPort: null,
         responses: [],
+        attachUpperPort(upperPort) {
+            this.upperPort = upperPort;
+        },
+        attachLowerPort(lowerPort) {
+            this.lowerPort = lowerPort;
+        },
         receiveResponse(resp) {
             this.responses.push({ ...resp });
         }
@@ -58,7 +66,8 @@ function tickCacheUntil(cache, predicate, maxTicks = 16) {
 function testUlReadWriteThroughCache() {
     const tilelink_UH = new TileLink_UH();
     const mem = new Mem();
-    const cache = new Cache(mem, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
+    const cache = new Cache(null, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
+    cache.attachLowerPort(mem);
     const master = makeMaster();
 
     tilelink_UH.registerMaster('m', master);
@@ -78,7 +87,8 @@ function testUlReadWriteThroughCache() {
 function testUlPartialWrite() {
     const tilelink_UH = new TileLink_UH();
     const mem = new Mem();
-    const cache = new Cache(mem, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
+    const cache = new Cache(null, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
+    cache.attachLowerPort(mem);
     const master = makeMaster();
 
     mem.loadMemoryMap({
@@ -103,7 +113,8 @@ function testUlPartialWrite() {
 function testUhAtomicsThroughCache() {
     const tilelink_UH = new TileLink_UH();
     const mem = new Mem();
-    const cache = new Cache(mem, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
+    const cache = new Cache(null, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
+    cache.attachLowerPort(mem);
     const master = makeMaster();
 
     mem.loadMemoryMap({
@@ -131,7 +142,8 @@ function testUhAtomicsThroughCache() {
 function testDmaByteTransfer() {
     const tilelink_UH = new TileLink_UH();
     const mem = new Mem();
-    const cache = new Cache(mem, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
+    const cache = new Cache(null, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
+    cache.attachLowerPort(mem);
     const dma = new DMAController(tilelink_UH);
 
     mem.loadMemoryMap({
@@ -160,7 +172,8 @@ function testDmaByteTransfer() {
 function testDmaWordIncrementingTransfer() {
     const tilelink_UH = new TileLink_UH();
     const mem = new Mem();
-    const cache = new Cache(mem, { cacheSize: 128, blockSize: 16, associativity: 1, numSets: 8, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
+    const cache = new Cache(null, { cacheSize: 128, blockSize: 16, associativity: 1, numSets: 8, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
+    cache.attachLowerPort(mem);
     const dma = new DMAController(tilelink_UH);
 
     mem.loadMemoryMap({
@@ -215,7 +228,8 @@ function testDmaRegisterMmio() {
 function testWriteBackDirtyEviction() {
     const tilelink_UH = new TileLink_UH();
     const mem = new Mem();
-    const cache = new Cache(mem, { cacheSize: 32, blockSize: 16, associativity: 1, numSets: 2, hitLatency: 1, missLatency: 2 }, null, { writeBack: true, writeAllocate: true });
+    const cache = new Cache(null, { cacheSize: 32, blockSize: 16, associativity: 1, numSets: 2, hitLatency: 1, missLatency: 2 }, null, { writeBack: true, writeAllocate: true });
+    cache.attachLowerPort(mem);
     const master = makeMaster();
 
     tilelink_UH.registerMaster('m', master);
@@ -323,12 +337,17 @@ function testMmuAndSplitBusRouting() {
     tilelink_UL.registerSlave('ul-to-uh-bridge', ulToUhBridge, (addr) => !uartRange(addr));
     tilelink_UL.attachMemoryTarget(mem);
 
-    const cache = new Cache(tilelink_UH, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, {
+    const cache = new Cache(null, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, {
         writeBack: false,
         writeAllocate: false,
         isCacheable: (addr) => !uartRange(addr)
     });
-    const mmu = new MMU(cpu, cache, { cacheabilityPredicate: (addr) => !uartRange(addr) });
+    const mmu = new MMU(null, null, { cacheabilityPredicate: (addr) => !uartRange(addr) });
+    cpu.attachLowerPort(mmu);
+    cache.attachUpperPort(mmu);
+    cache.attachLowerPort(tilelink_UH);
+    mmu.attachUpperPort(cpu);
+    mmu.attachLowerPort(cache);
 
     mmu.sendRequest('cpu', { type: TL_A_Opcode.Get, address: 0x40, size: 2 });
     tickCacheUntil(cache, () => cpu.responses.length === 1);

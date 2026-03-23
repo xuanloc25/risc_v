@@ -6,6 +6,8 @@ export class CPU {
         this.registers = new Int32Array(32);
         this.fregisters = new Float32Array(32);
         this.pc = 0;
+        this.upperPort = null;
+        this.lowerPort = null;
         this.isRunning = false;
         this.instructionCount = 0;
         this.maxSteps = 1000000;
@@ -35,6 +37,19 @@ export class CPU {
     loadProgram(programData) {
         this.reset();
         this.pc = programData.startAddress || 0;
+    }
+
+    attachUpperPort(upperPort) {
+        this.upperPort = upperPort;
+    }
+
+    attachLowerPort(lowerPort) {
+        this.lowerPort = lowerPort;
+    }
+
+    _resolveBus(bus = this.lowerPort) {
+        if (!bus) throw new Error('CPU has no attached lower port');
+        return bus;
     }
 
     decode(instructionWord) {
@@ -701,7 +716,8 @@ export class CPU {
         }
     }
 
-    tick(bus) {
+    tick(bus = this.lowerPort) {
+        bus = this._resolveBus(bus);
         if (this.waitingRequest && !this.pendingResponse) {
             return;
         }
@@ -733,7 +749,8 @@ export class CPU {
         }
     }
 
-    readInstructionAsync(address, bus) {
+    readInstructionAsync(address, bus = this.lowerPort) {
+        bus = this._resolveBus(bus);
         this.fetchWaiting = true;
         bus.sendRequest('cpu', { type: 'fetch', address: address | 0 });
     }
@@ -751,42 +768,50 @@ export class CPU {
         }
     }
 
-    getMemBytes(bus) {
+    getMemBytes(bus = this.lowerPort) {
+        bus = this._resolveBus(bus);
         if (!bus || typeof bus.memBytes !== 'function') throw new Error('Bus has no attached memory');
         return bus.memBytes();
     }
 
-    readWordAsync(address, bus) {
+    readWordAsync(address, bus = this.lowerPort) {
+        bus = this._resolveBus(bus);
         this.waitingRequest = { type: TL_A_Opcode.Get, address: address | 0, size: 2 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
-    readByteAsync(address, bus) {
+    readByteAsync(address, bus = this.lowerPort) {
+        bus = this._resolveBus(bus);
         this.waitingRequest = { type: TL_A_Opcode.Get, address: address | 0, size: 0 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
-    readHalfAsync(address, bus) {
+    readHalfAsync(address, bus = this.lowerPort) {
+        bus = this._resolveBus(bus);
         this.waitingRequest = { type: TL_A_Opcode.Get, address: address | 0, size: 1 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
-    writeWordAsync(address, value, bus) {
+    writeWordAsync(address, value, bus = this.lowerPort) {
+        bus = this._resolveBus(bus);
         this.waitingRequest = { type: TL_A_Opcode.PutFullData, address: address | 0, value, size: 2 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
-    writeByteAsync(address, value, bus) {
+    writeByteAsync(address, value, bus = this.lowerPort) {
+        bus = this._resolveBus(bus);
         this.waitingRequest = { type: TL_A_Opcode.PutPartialData, address: address | 0, value, size: 0 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
-    writeHalfAsync(address, value, bus) {
+    writeHalfAsync(address, value, bus = this.lowerPort) {
+        bus = this._resolveBus(bus);
         this.waitingRequest = { type: TL_A_Opcode.PutPartialData, address: address | 0, value, size: 1 };
         bus.sendRequest('cpu', this.waitingRequest);
     }
 
-    amoAddAsync(address, value, bus) {
+    amoAddAsync(address, value, bus = this.lowerPort) {
+        bus = this._resolveBus(bus);
         this.waitingRequest = {
             type: TL_A_Opcode.ArithmeticData,
             param: TL_Param_Arithmetic.ADD,

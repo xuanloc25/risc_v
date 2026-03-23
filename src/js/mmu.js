@@ -1,5 +1,8 @@
 import { getTransferSizeLog2, isTileLinkAtomic, isTileLinkRead, isTileLinkWrite } from './tilelink.js';
 
+// Translate the bus operation into the permission domain checked by the MMU.
+// In this simulator, instruction fetches use execute permission, loads use read,
+// and stores/atomics use write.
 function classifyAccess(type) {
     if (type === 'fetch') return 'execute';
     if (isTileLinkRead(type)) return 'read';
@@ -8,8 +11,11 @@ function classifyAccess(type) {
 }
 
 export class MMU {
-    constructor(cpu = null, lowerPort = null, { pageSize = 4096, cacheabilityPredicate = () => true } = {}) {
-        this.cpu = cpu;
+    constructor(upperPort = null, lowerPort = null, { pageSize = 4096, cacheabilityPredicate = () => true } = {}) {
+        // The MMU sits between the CPU and the cache/lower memory system.
+        // It translates virtual addresses, enforces permissions, and tags
+        // requests with cacheability information for lower levels.
+        this.upperPort = upperPort;
         this.lowerPort = lowerPort;
         this.pageSize = pageSize;
         this.cacheabilityPredicate = cacheabilityPredicate;
@@ -24,12 +30,16 @@ export class MMU {
         };
     }
 
-    attachCPU(cpu) {
-        this.cpu = cpu;
+    attachUpperPort(upperPort) {
+        this.upperPort = upperPort;
     }
 
     attachLowerPort(lowerPort) {
         this.lowerPort = lowerPort;
+    }
+
+    attachCPU(cpu) {
+        this.attachUpperPort(cpu);
     }
 
     setCacheabilityPredicate(predicate) {
@@ -37,6 +47,8 @@ export class MMU {
     }
 
     mapPage(virtualBase, physicalBase, permissions = {}) {
+        // This simulator keeps a very small software-managed page table and TLB.
+        // A new mapping is inserted into both for immediate use.
         const entry = {
             virtualBase: virtualBase >>> 0,
             physicalBase: physicalBase >>> 0,
@@ -77,6 +89,9 @@ export class MMU {
             throw new Error('MMU has no attached lower port');
         }
 
+        // CPU-visible requests arrive with a virtual address. After translation,
+        // the lower port sees a physical address, while the original VA is kept
+        // so the response path can still report the CPU-facing address.
         const accessType = classifyAccess(req.type);
         const translated = this.translateAddress(req.address, accessType);
 
@@ -93,11 +108,13 @@ export class MMU {
     }
 
     receiveResponse(resp) {
-        if (!this.cpu || typeof this.cpu.receiveResponse !== 'function') {
+        if (!this.upperPort || typeof this.upperPort.receiveResponse !== 'function') {
             throw new Error('MMU has no attached CPU');
         }
 
-        this.cpu.receiveResponse({
+        // Lower levels may respond using the translated physical address; the CPU
+        // should keep reasoning in terms of the original virtual address.
+        this.upperPort.receiveResponse({
             ...resp,
             address: resp.virtualAddress ?? resp.address
         });
@@ -116,12 +133,15 @@ export class MMU {
         } else {
             entry = this.pageTable.get(vpn);
             if (entry) {
+                // A software page-table hit refills the tiny TLB.
                 this.stats.pageTableHits++;
                 this.tlb.set(vpn, entry);
             }
         }
 
         if (!entry) {
+            // Bare-metal programs in this project can run without setting up page
+            // tables. Unmapped addresses therefore fall back to VA == PA.
             this.stats.identityFallbacks++;
             return {
                 virtualAddress: va,
@@ -141,9 +161,10 @@ export class MMU {
     }
 
     memBytes() {
+        // Helper for debug views/tests that want to inspect the backing memory
+        // through the MMU/cache stack.
         if (this.lowerPort?.mem) return this.lowerPort.mem;
         if (typeof this.lowerPort?.memBytes === 'function') return this.lowerPort.memBytes();
-        if (this.lowerPort?.lowerLevel?.mem) return this.lowerPort.lowerLevel.mem;
         throw new Error('MMU cannot expose backing memory bytes');
     }
 
