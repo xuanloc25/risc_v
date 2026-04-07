@@ -1,4 +1,5 @@
 import { getTransferSizeLog2, isTileLinkAtomic, isTileLinkRead, isTileLinkWrite } from './tilelink.js';
+import { connectPorts } from './port_link.js';
 
 // Translate the bus operation into the permission domain checked by the MMU.
 // In this simulator, instruction fetches use execute permission, loads use read,
@@ -39,7 +40,7 @@ export class MMU {
     }
 
     attachCPU(cpu) {
-        this.attachUpperPort(cpu);
+        connectPorts(cpu, this);
     }
 
     setCacheabilityPredicate(predicate) {

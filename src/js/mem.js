@@ -15,11 +15,18 @@ export class Mem {
         this.mem = {};
         this.pendingRequest = null;
         this.cycle = 0;
+        this.upperPorts = [];
         this._pendingDMA = null;
         this.latency = latency;
         this.burstBeatLatency = burstBeatLatency;
 
         this.burstState = null;
+    }
+
+    attachUpperPort(upperPort) {
+        if (upperPort && !this.upperPorts.includes(upperPort)) {
+            this.upperPorts.push(upperPort);
+        }
     }
 
     receiveRequest(req) {

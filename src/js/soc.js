@@ -10,6 +10,7 @@ import { UART } from './uart.js';
 import { LEDMatrix } from './led_matrix.js';
 import { Keyboard } from './keyboard.js';
 import { MousePeripheral } from './mouse.js';
+import { attachPorts, connectPorts } from './port_link.js';
 import {
     TL_D_Opcode,
     applyTileLinkAtomic,
@@ -186,11 +187,9 @@ export const simulator = {
             name: 'ul-to-uh-bridge'
         });
 
-        this.cpu.attachLowerPort(this.mmu);
-        this.mmu.attachUpperPort(this.cpu);
-        this.mmu.attachLowerPort(this.cache);
-        this.cache.attachUpperPort(this.mmu);
-        this.cache.attachLowerPort(this.tilelink_UH);
+        connectPorts(this.cpu, this.mmu);
+        connectPorts(this.mmu, this.cache);
+        connectPorts(this.cache, this.tilelink_UH);
 
         const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'uart', {
             read: (addr) => uart.readRegister(addr),
@@ -216,20 +215,31 @@ export const simulator = {
             write: (addr, value) => mouse.writeRegister(addr, value)
         });
 
-        this.tilelink_UH.registerSlave('main-memory', this.mem, (addr) => isCacheableAddress(addr));
-        this.tilelink_UH.registerSlave('dma-regs', this.dma, (addr) => dmaRegRange(addr));
-        this.tilelink_UH.registerSlave('uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr));
-        this.tilelink_UH.attachMemoryTarget(this.mem);
+        attachPorts(this.tilelink_UH, {
+            upper: [
+                ['dma', this.dma]
+            ],
+            lower: [
+                ['main-memory', this.mem, (addr) => isCacheableAddress(addr)],
+                ['dma-regs', this.dma, (addr) => dmaRegRange(addr)],
+                ['uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr)]
+            ],
+            memory: this.mem
+        });
 
-        this.tilelink_UL.registerSlave('uart', uartEndpoint, uartRange);
-        this.tilelink_UL.registerSlave('led-matrix', ledEndpoint, ledRange);
-        this.tilelink_UL.registerSlave('keyboard', keyboardEndpoint, keyboardRange);
-        this.tilelink_UL.registerSlave('mouse', mouseEndpoint, mouseRange);
-        this.tilelink_UL.registerSlave('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr));
-        this.tilelink_UL.attachMemoryTarget(this.mem);
-
-        this.tilelink_UH.registerMaster('dma', this.dma);
-        this.tilelink_UL.registerMaster('dma', this.dma);
+        attachPorts(this.tilelink_UL, {
+            upper: [
+                ['dma', this.dma]
+            ],
+            lower: [
+                ['uart', uartEndpoint, uartRange],
+                ['led-matrix', ledEndpoint, ledRange],
+                ['keyboard', keyboardEndpoint, keyboardRange],
+                ['mouse', mouseEndpoint, mouseRange],
+                ['ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr)]
+            ],
+            memory: this.mem
+        });
 
         this.uart = uart;
         this.ledMatrix = ledMatrix;
