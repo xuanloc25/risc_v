@@ -77,6 +77,9 @@ function createMMIOEndpoint(bus, name, { read, write }) {
 export const simulator = {
     cpu: null,
     mmu: null,
+    iCache: null,
+    dCache: null,
+    l2Cache: null,
     cache: null,
     tilelink_UH: null,
     mem: null,
@@ -146,30 +149,54 @@ export const simulator = {
         const isCacheableAddress = (addr) =>
             !isUlPeripheralAddress(addr) && !dmaRegRange(addr);
 
-        const cacheConfig = {
-            cacheSize: 1024,
+        const l1CacheConfig = {
+            cacheSize: 16 * 4 * 16,
             blockSize: 16,
-            associativity: 2,
-            numSets: 32,
+            associativity: 4,
+            numSets: 16,
             hitLatency: 1,
+            missLatency: 2
+        };
+
+        const l2CacheConfig = {
+            cacheSize: 64 * 4 * 16,
+            blockSize: 16,
+            associativity: 4,
+            numSets: 64,
+            hitLatency: 2,
             missLatency: mainMemoryLatency
         };
 
-        // Core datapath: CPU -> MMU -> L1 Cache -> TileLink-UH.
+        // Core datapath: CPU -> MMU -> split L1 I$/D$ -> shared L2 -> TileLink-UH.
         this.cpu = new CPU();
         this.mmu = new MMU(null, null, {
             cacheabilityPredicate: isCacheableAddress
         });
-        this.cache = new Cache(null, cacheConfig, null, {
+        this.l2Cache = new Cache(null, l2CacheConfig, null, {
             writeBack: false,
             writeAllocate: true,
             isCacheable: isCacheableAddress
         });
-        this.cache.setEnabled(this.useCache);
+        this.iCache = new Cache(null, l1CacheConfig, this.l2Cache, {
+            writeBack: false,
+            writeAllocate: true,
+            isCacheable: isCacheableAddress
+        });
+        this.dCache = new Cache(null, l1CacheConfig, this.l2Cache, {
+            writeBack: false,
+            writeAllocate: true,
+            isCacheable: isCacheableAddress
+        });
+        this.cache = this.l2Cache;
+
+        this.l2Cache.setEnabled(this.useCache);
+        this.iCache.setEnabled(this.useCache);
+        this.dCache.setEnabled(this.useCache);
 
         this.tilelink_UH = new TileLink_UH();
         this.mem = new Mem({ latency: mainMemoryLatency });
         this.tilelink_UL = new TileLink_UL();
+        this.l2Cache.attachLowerPort(this.tilelink_UH);
 
         // DMA and bridge sit beside the core path and connect into both fabrics.
         this.dma = new DMAController({
@@ -188,9 +215,10 @@ export const simulator = {
 
         this.cpu.attachLowerPort(this.mmu);
         this.mmu.attachUpperPort(this.cpu);
-        this.mmu.attachLowerPort(this.cache);
-        this.cache.attachUpperPort(this.mmu);
-        this.cache.attachLowerPort(this.tilelink_UH);
+        this.mmu.attachInstructionLowerPort(this.iCache);
+        this.mmu.attachDataLowerPort(this.dCache);
+        this.iCache.attachUpperPort(this.mmu);
+        this.dCache.attachUpperPort(this.mmu);
 
         const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'uart', {
             read: (addr) => uart.readRegister(addr),
@@ -241,10 +269,13 @@ export const simulator = {
         if (this.uart) this.uart.reset();
         if (this.mouse) this.mouse.reset();
         if (this.keyboard) this.keyboard.reset();
-        if (this.cache) this.cache.reset();
+        if (this.iCache) this.iCache.reset();
+        if (this.dCache) this.dCache.reset();
+        if (this.l2Cache) this.l2Cache.reset();
         if (this.mmu) this.mmu.reset();
 
-        console.info('[ARCH] CPU -> MMU -> L1 Cache -> TileLink-UH');
+        console.info('[ARCH] CPU -> MMU -> L1 I$/D$ -> shared L2 -> TileLink-UH');
+        console.info('[CACHE] L1I: 16 sets x 4 ways, L1D: 16 sets x 4 ways, L2: 64 sets x 4 ways');
         console.info('[ARCH] TileLink-UH <-> TileLink-UL through bus bridge');
         console.info('[ARCH] DMA Controller attached to both TileLink-UH and TileLink-UL');
         console.info('[IO MAP] LED Matrix: 0xFF000000-0xFF000FFF');
@@ -287,7 +318,9 @@ export const simulator = {
         this.tilelink_UH.tick();
         this.tilelink_UL.tick();
         this.mem.tick(this.tilelink_UH);
-        this.cache.tick();
+        this.iCache.tick();
+        this.dCache.tick();
+        this.l2Cache.tick();
         this.tilelink_UH.tick();
         this.tilelink_UL.tick();
 

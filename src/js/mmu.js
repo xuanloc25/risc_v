@@ -17,6 +17,8 @@ export class MMU {
         // requests with cacheability information for lower levels.
         this.upperPort = upperPort;
         this.lowerPort = lowerPort;
+        this.instructionLowerPort = lowerPort;
+        this.dataLowerPort = lowerPort;
         this.pageSize = pageSize;
         this.cacheabilityPredicate = cacheabilityPredicate;
 
@@ -36,6 +38,16 @@ export class MMU {
 
     attachLowerPort(lowerPort) {
         this.lowerPort = lowerPort;
+        this.instructionLowerPort = lowerPort;
+        this.dataLowerPort = lowerPort;
+    }
+
+    attachInstructionLowerPort(lowerPort) {
+        this.instructionLowerPort = lowerPort;
+    }
+
+    attachDataLowerPort(lowerPort) {
+        this.dataLowerPort = lowerPort;
     }
 
     attachCPU(cpu) {
@@ -85,7 +97,8 @@ export class MMU {
     }
 
     sendRequest(from, req) {
-        if (!this.lowerPort || typeof this.lowerPort.receiveRequest !== 'function') {
+        const lowerPort = this._resolveLowerPort(req.type);
+        if (!lowerPort || typeof lowerPort.receiveRequest !== 'function') {
             throw new Error('MMU has no attached lower port');
         }
 
@@ -95,7 +108,7 @@ export class MMU {
         const accessType = classifyAccess(req.type);
         const translated = this.translateAddress(req.address, accessType);
 
-        this.lowerPort.receiveRequest({
+        lowerPort.receiveRequest({
             ...req,
             from,
             replyTo: this,
@@ -163,9 +176,18 @@ export class MMU {
     memBytes() {
         // Helper for debug views/tests that want to inspect the backing memory
         // through the MMU/cache stack.
-        if (this.lowerPort?.mem) return this.lowerPort.mem;
-        if (typeof this.lowerPort?.memBytes === 'function') return this.lowerPort.memBytes();
+        const lowerPort = this.dataLowerPort ?? this.instructionLowerPort ?? this.lowerPort;
+        if (lowerPort?.mem) return lowerPort.mem;
+        if (typeof lowerPort?.memBytes === 'function') return lowerPort.memBytes();
         throw new Error('MMU cannot expose backing memory bytes');
+    }
+
+    _resolveLowerPort(type) {
+        if (type === 'fetch') {
+            return this.instructionLowerPort ?? this.lowerPort ?? this.dataLowerPort;
+        }
+
+        return this.dataLowerPort ?? this.lowerPort ?? this.instructionLowerPort;
     }
 
     _getPageNumber(address) {
