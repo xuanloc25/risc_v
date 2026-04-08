@@ -95,10 +95,10 @@ export const simulator = {
 
     setCacheEnabled(enabled) {
         this.useCache = !!enabled;
-        this.reset();
+        this.init();
     },
 
-    reset() {
+    init() {
         const isBrowser = typeof document !== 'undefined';
 
         let ledMatrix = null;
@@ -235,6 +235,7 @@ export const simulator = {
         this.mouse = mouse;
         this.cycleCount = 0;
 
+        // Khôi phục trạng thái ban đầu cho các module và thiết bị ngoại vi
         if (this.ledMatrix) this.ledMatrix.reset();
         if (this.uart) this.uart.reset();
         if (this.mouse) this.mouse.reset();
@@ -303,4 +304,4 @@ export const simulator = {
     }
 };
 
-simulator.reset();
+simulator.init();

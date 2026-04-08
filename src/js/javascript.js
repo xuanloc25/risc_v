@@ -585,7 +585,7 @@ function handleAssemble() {
     binaryOutput.textContent = "Assembling...";
 
     if (instructionViewBody) instructionViewBody.innerHTML = '';
-    simulator.reset();
+    simulator.init();
     setupUARTCallbacks(); // Setup lại UART callbacks sau reset
 
     setTimeout(() => {
@@ -753,7 +753,7 @@ function handleStep() {
 function handleReset() {
     if (!simulator || !instructionInput) return;
 
-    simulator.reset();
+    simulator.init();
 
     if (assembler && typeof assembler._reset === 'function') {
         assembler._reset();
@@ -861,7 +861,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (typeof simulator !== 'undefined') {
-        simulator.reset();
+        simulator.init();
         setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`);
         setRegisterView('integer');
         updateUIGlobally();
