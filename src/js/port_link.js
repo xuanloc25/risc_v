@@ -10,6 +10,8 @@ function isPortDescriptor(value) {
 
 export class Port {
     constructor(name, { kind = 'link', upper = null, lower = null, target = null, match = () => true } = {}) {
+        // Port la doi tuong trung gian dung de noi 2 thanh phan voi nhau,
+        // hoac dang ky mot endpoint vao bus/interconnect.
         this.name = name ?? '';
         this.kind = kind;
         this.upper = upper;
@@ -50,6 +52,8 @@ export class Port {
 
     attach(host = null) {
         if (this.kind === 'link') {
+            // Noi truc tiep 2 module point-to-point:
+            // upper giu tham chieu xuong lower thong qua Port nay.
             requireMethod(this.upper, 'attachLowerPort', 'Port.link expects the upper component to implement attachLowerPort()');
             requireMethod(this.lower, 'attachUpperPort', 'Port.link expects the lower component to implement attachUpperPort()');
 
@@ -63,18 +67,22 @@ export class Port {
         }
 
         if (this.kind === 'upper') {
+            // Dang ky mot master / requester len host bus.
             requireMethod(host, 'attachUpperPort', 'Port.upper expects the host to implement attachUpperPort()');
             host.attachUpperPort(this.name, this.target);
             return this;
         }
 
         if (this.kind === 'lower') {
+            // Dang ky mot slave / target xuong host bus, kem ham match
+            // de host quyet dinh dia chi nao se duoc route vao target nay.
             requireMethod(host, 'attachLowerPort', 'Port.lower expects the host to implement attachLowerPort()');
             host.attachLowerPort(this.name, this.target, this.match);
             return this;
         }
 
         if (this.kind === 'memory') {
+            // Mot so bus can giu "memory view" rieng de debug hoac truy cap truc tiep.
             requireMethod(host, 'attachMemoryPort', 'Port.memory expects the host to implement attachMemoryPort()');
             host.attachMemoryPort(this.target);
             return this;
@@ -84,6 +92,9 @@ export class Port {
     }
 
     sendRequest(from, req) {
+        // Day request tu phia upper xuong lower. Neu lower dung API
+        // sendRequest() thi goi truc tiep; neu lower chi co receiveRequest()
+        // thi bo sung truong from de lower biet nguon gui.
         if (typeof this.lower?.sendRequest === 'function') {
             return this.lower.sendRequest(from, req);
         }
@@ -97,6 +108,7 @@ export class Port {
     }
 
     receiveRequest(req) {
+        // Cho phep Port dong vai tro adaptor khi host goi vao theo kieu receiveRequest().
         if (typeof this.lower?.receiveRequest === 'function') {
             return this.lower.receiveRequest(req);
         }
@@ -107,6 +119,7 @@ export class Port {
     }
 
     receiveResponse(resp) {
+        // Dua response nguoc tro lai phia upper.
         if (typeof this.upper?.receiveResponse === 'function') {
             return this.upper.receiveResponse(resp);
         }
@@ -117,6 +130,8 @@ export class Port {
     }
 
     sendResponse(resp) {
+        // Mot so module tra response bang sendResponse(), so khac bang
+        // receiveResponse(); Port co gang noi duoc ca hai kieu API.
         if (typeof this.upper?.sendResponse === 'function') {
             return this.upper.sendResponse(resp);
         }
@@ -130,6 +145,7 @@ export class Port {
     }
 
     directRead(address, size = 2, accessType = 'port') {
+        // Forward helper cho cac endpoint MMIO / memory truy cap truc tiep.
         if (typeof this.lower?.directRead === 'function') {
             return this.lower.directRead(address, size, accessType);
         }
@@ -145,6 +161,7 @@ export class Port {
     }
 
     memBytes() {
+        // Tra ve backing store de test/debug co the nhin thay bo nho that phia duoi.
         if (typeof this.lower?.memBytes === 'function') return this.lower.memBytes();
         if (this.lower?.mem) return this.lower.mem;
         throw new Error(`Port "${this.name}" cannot expose memory bytes`);
@@ -153,9 +170,11 @@ export class Port {
 
 export function attachPort(hostOrUpper, portOrLower, name = '') {
     if (isPortDescriptor(portOrLower)) {
+        // Truong hop host + mo ta Port da duoc tao san.
         return portOrLower.attach(hostOrUpper);
     }
 
+    // Truong hop don gian: noi truc tiep 2 module voi nhau.
     return Port.link(name, hostOrUpper, portOrLower).attach();
 }
 
