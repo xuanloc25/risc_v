@@ -152,8 +152,10 @@ function testAttachCpuConnectsBothDirections() {
 
     mmu.attachCPU(cpu);
 
-    assert.equal(cpu.lowerPort, mmu);
-    assert.equal(mmu.upperPort, cpu);
+    assert.ok(cpu.lowerPort);
+    assert.equal(cpu.lowerPort.lower, mmu);
+    assert.equal(mmu.upperPort, cpu.lowerPort);
+    assert.equal(mmu.upperPort.upper, cpu);
 
     console.log('[MMU] attachCPU bi-directional wiring test passed');
 }

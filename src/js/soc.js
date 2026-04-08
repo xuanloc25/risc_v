@@ -10,7 +10,7 @@ import { UART } from './uart.js';
 import { LEDMatrix } from './led_matrix.js';
 import { Keyboard } from './keyboard.js';
 import { MousePeripheral } from './mouse.js';
-import { attachPorts, connectPorts } from './port_link.js';
+import { Port, attachPort } from './port_link.js';
 import {
     TL_D_Opcode,
     applyTileLinkAtomic,
@@ -89,6 +89,7 @@ export const simulator = {
     ledMatrix: null,
     keyboard: null,
     mouse: null,
+    ports: null,
     cycleCount: 0,
     useCache: true,
 
@@ -187,10 +188,6 @@ export const simulator = {
             name: 'ul-to-uh-bridge'
         });
 
-        connectPorts(this.cpu, this.mmu);
-        connectPorts(this.mmu, this.cache);
-        connectPorts(this.cache, this.tilelink_UH);
-
         const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'uart', {
             read: (addr) => uart.readRegister(addr),
             write: (addr, value) => uart.writeRegister(addr, value)
@@ -215,31 +212,22 @@ export const simulator = {
             write: (addr, value) => mouse.writeRegister(addr, value)
         });
 
-        attachPorts(this.tilelink_UH, {
-            upper: [
-                ['dma', this.dma]
-            ],
-            lower: [
-                ['main-memory', this.mem, (addr) => isCacheableAddress(addr)],
-                ['dma-regs', this.dma, (addr) => dmaRegRange(addr)],
-                ['uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr)]
-            ],
-            memory: this.mem
-        });
-
-        attachPorts(this.tilelink_UL, {
-            upper: [
-                ['dma', this.dma]
-            ],
-            lower: [
-                ['uart', uartEndpoint, uartRange],
-                ['led-matrix', ledEndpoint, ledRange],
-                ['keyboard', keyboardEndpoint, keyboardRange],
-                ['mouse', mouseEndpoint, mouseRange],
-                ['ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr)]
-            ],
-            memory: this.mem
-        });
+        this.ports = {
+            cpuToMmu: attachPort(this.cpu, this.mmu, 'cpu-to-mmu'),
+            mmuToCache: attachPort(this.mmu, this.cache, 'mmu-to-cache'),
+            cacheToUh: attachPort(this.cache, this.tilelink_UH, 'cache-to-uh'),
+            uhToMainMemory: attachPort(this.tilelink_UH, Port.lower('main-memory', this.mem, (addr) => isCacheableAddress(addr))),
+            uhToDmaRegs: attachPort(this.tilelink_UH, Port.lower('dma-regs', this.dma, (addr) => dmaRegRange(addr))),
+            uhToUlBridge: attachPort(this.tilelink_UH, Port.lower('uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr))),
+            uhToDma: attachPort(this.tilelink_UH, Port.upper('dma', this.dma)),
+            uhMemoryView: attachPort(this.tilelink_UH, Port.memory('main-memory-view', this.mem)),
+            ulToUart: attachPort(this.tilelink_UL, Port.lower('uart', uartEndpoint, uartRange)),
+            ulToLedMatrix: attachPort(this.tilelink_UL, Port.lower('led-matrix', ledEndpoint, ledRange)),
+            ulToKeyboard: attachPort(this.tilelink_UL, Port.lower('keyboard', keyboardEndpoint, keyboardRange)),
+            ulToMouse: attachPort(this.tilelink_UL, Port.lower('mouse', mouseEndpoint, mouseRange)),
+            ulToUhBridge: attachPort(this.tilelink_UL, Port.lower('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr))),
+            ulToDma: attachPort(this.tilelink_UL, Port.upper('dma', this.dma))
+        };
 
         this.uart = uart;
         this.ledMatrix = ledMatrix;
