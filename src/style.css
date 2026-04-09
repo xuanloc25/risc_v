@@ -552,8 +552,40 @@ body, html {
 
 .cache-layout {
     display: flex;
-    gap: 15px;
     height: 100%;
+}
+
+.cache-detail-layout {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    width: 100%;
+}
+
+.cache-panel {
+    min-width: 0;
+    display: none;
+    overflow: hidden;
+}
+
+.cache-panel.active-cache-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.cache-tabs {
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-white);
+    flex-shrink: 0;
+}
+
+.cache-panel .table-scroll-container {
+    max-height: calc(100vh - 310px);
 }
 
 .cache-stats {
@@ -561,6 +593,18 @@ body, html {
     font-family: 'Consolas', monospace;
     font-size: 0.9rem;
     line-height: 1.4;
+}
+
+.cache-stats-inline {
+    border-bottom: 1px solid #eef1f4;
+    background: #fbfcfd;
+    font-size: 0.8rem;
+}
+
+@media (max-width: 1400px) {
+    .cache-panel .table-scroll-container {
+        max-height: 360px;
+    }
 }
 
 /* ==========================================================================
@@ -685,3 +729,4 @@ body, html {
 .log-warn { color: #ffa502; }
 .log-info { color: #00ff00; }
 .log-debug { color: #a4b0be; }
+.log-cycle { color: #2ecc71; }

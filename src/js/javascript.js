@@ -47,8 +47,18 @@ const speedValueLabel = document.getElementById('speedValue');
 const clockRateDisplay = document.getElementById('clockRateDisplay');
 const cacheToggleButton = document.getElementById('cacheToggleButton');
 const cacheToggleLabel = document.getElementById('cacheToggleLabel');
-const cacheTableBody = document.getElementById('cacheTableBody');
-const cacheStats = document.getElementById('cacheStats');
+const l1iCacheTableBody = document.getElementById('l1iCacheTableBody');
+const l1dCacheTableBody = document.getElementById('l1dCacheTableBody');
+const l2CacheTableBody = document.getElementById('l2CacheTableBody');
+const l1iCacheStats = document.getElementById('l1iCacheStats');
+const l1dCacheStats = document.getElementById('l1dCacheStats');
+const l2CacheStats = document.getElementById('l2CacheStats');
+const cacheTabL1i = document.getElementById('cache-tab-l1i');
+const cacheTabL1d = document.getElementById('cache-tab-l1d');
+const cacheTabL2 = document.getElementById('cache-tab-l2');
+const cachePanelL1i = document.getElementById('cache-panel-l1i');
+const cachePanelL1d = document.getElementById('cache-panel-l1d');
+const cachePanelL2 = document.getElementById('cache-panel-l2');
 // Data Segment Controls
 const dataSegmentAddressInput = document.getElementById('dataSegmentAddressInput');
 const goToDataSegmentAddressButton = document.getElementById('goToDataSegmentAddress');
@@ -63,6 +73,7 @@ const dataSegmentRows = 8;
 const bytesPerRow = 32;
 const wordsPerRow = 8;
 let currentRegisterView = 'integer';
+let currentCacheView = 'l1i';
 let activeBreakpoints = new Set();
 
 // --- SYSTEM LOG TERMINAL LOGIC ---
@@ -102,6 +113,7 @@ function createLogLine(entry) {
     if (entry.level === 'error') line.classList.add('log-error');
     if (entry.level === 'warn') line.classList.add('log-warn');
     if (entry.level === 'info') line.classList.add('log-info');
+    if (entry.text.startsWith('[Cycle ')) line.classList.add('log-cycle');
 
     line.textContent = entry.text;
     return line;
@@ -506,49 +518,79 @@ function updateCacheToggleUI() {
 }
 
 function renderCacheView() {
-    if (!cacheTableBody) return;
-    cacheTableBody.innerHTML = '';
+    if (!l1iCacheTableBody || !l1dCacheTableBody || !l2CacheTableBody) return;
 
-    if (!simulator.useCache) {
-        cacheTableBody.innerHTML = '<tr><td colspan="7">Cache disabled. Toggle cache ON to view lines.</td></tr>';
-        if (cacheStats) cacheStats.textContent = 'Cache disabled';
-        return;
-    }
+    const panels = [
+        { cache: simulator.iCache, tableBody: l1iCacheTableBody, statsNode: l1iCacheStats, label: 'L1I' },
+        { cache: simulator.dCache, tableBody: l1dCacheTableBody, statsNode: l1dCacheStats, label: 'L1D' },
+        { cache: simulator.l2Cache, tableBody: l2CacheTableBody, statsNode: l2CacheStats, label: 'L2' }
+    ];
 
-    const cache = simulator.cache;
-    if (!cache) {
-        cacheTableBody.innerHTML = '<tr><td colspan="7">Cache not initialized.</td></tr>';
-        if (cacheStats) cacheStats.textContent = 'Cache not initialized';
-        return;
-    }
-
-    const assoc = cache.policy?.associativity ?? 1;
     const formatHex = (v, pad = 0) => '0x' + (v >>> 0).toString(16).padStart(pad, '0');
 
-    cache.blocks.forEach(block => {
-        const row = cacheTableBody.insertRow();
-        const set = Math.floor(block.id / assoc);
-        const way = block.id % assoc;
-        const bytesPreview = Array.from(block.data.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+    function renderCachePanel({ cache, tableBody, statsNode, label }) {
+        tableBody.innerHTML = '';
 
-        row.insertCell().textContent = set;
-        row.insertCell().textContent = way;
-        row.insertCell().textContent = block.valid ? '1' : '0';
-        row.insertCell().textContent = block.modified ? '1' : '0';
-        row.insertCell().textContent = formatHex(block.tag);
-        row.insertCell().textContent = block.lastReference;
-        row.insertCell().textContent = block.valid ? bytesPreview : '';
-    });
+        if (!simulator.useCache) {
+            tableBody.innerHTML = '<tr><td colspan="7">Cache disabled. Toggle cache ON to inspect lines.</td></tr>';
+            if (statsNode) statsNode.textContent = `${label} disabled`;
+            return;
+        }
 
-    if (cacheStats) {
-        const s = cache.statistics;
-        cacheStats.innerHTML = `
-            <div>Reads: ${s.numRead} | Writes: ${s.numWrite}</div>
-            <div>Hits: ${s.numHit} | Misses: ${s.numMiss}</div>
-            <div>Total Cycles: ${s.totalCycles}</div>
-        `;
+        if (!cache) {
+            tableBody.innerHTML = '<tr><td colspan="7">Cache not initialized.</td></tr>';
+            if (statsNode) statsNode.textContent = `${label} not initialized`;
+            return;
+        }
+
+        const assoc = cache.policy?.associativity ?? 1;
+        cache.blocks.forEach(block => {
+            const row = tableBody.insertRow();
+            const set = Math.floor(block.id / assoc);
+            const way = block.id % assoc;
+            const bytesPreview = Array.from(block.data.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+
+            row.insertCell().textContent = set;
+            row.insertCell().textContent = way;
+            row.insertCell().textContent = block.valid ? '1' : '0';
+            row.insertCell().textContent = block.modified ? '1' : '0';
+            row.insertCell().textContent = formatHex(block.tag);
+            row.insertCell().textContent = block.lastReference;
+            row.insertCell().textContent = block.valid ? bytesPreview : '';
+        });
+
+        if (statsNode) {
+            const s = cache.statistics;
+            statsNode.innerHTML = `
+                <div>Reads: ${s.numRead} | Writes: ${s.numWrite}</div>
+                <div>Hits: ${s.numHit} | Misses: ${s.numMiss}</div>
+                <div>Total Cycles: ${s.totalCycles}</div>
+            `;
+        }
     }
+
+    panels.forEach(renderCachePanel);
 }
+
+function setCacheView(view) {
+    currentCacheView = view;
+
+    const tabs = [
+        { node: cacheTabL1i, active: view === 'l1i' },
+        { node: cacheTabL1d, active: view === 'l1d' },
+        { node: cacheTabL2, active: view === 'l2' }
+    ];
+    tabs.forEach(({ node, active }) => node?.classList.toggle('active', active));
+
+    cachePanelL1i?.classList.toggle('active-cache-panel', view === 'l1i');
+    cachePanelL1d?.classList.toggle('active-cache-panel', view === 'l1d');
+    cachePanelL2?.classList.toggle('active-cache-panel', view === 'l2');
+}
+
+if (cacheTabL1i) cacheTabL1i.addEventListener('click', () => setCacheView('l1i'));
+if (cacheTabL1d) cacheTabL1d.addEventListener('click', () => setCacheView('l1d'));
+if (cacheTabL2) cacheTabL2.addEventListener('click', () => setCacheView('l2'));
+setCacheView(currentCacheView);
 
 window.updateUIGlobally = updateUIGlobally;
 

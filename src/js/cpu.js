@@ -16,6 +16,7 @@ export class CPU {
         this.resolve = null;
         this.fetchPending = null;
         this.fetchWaiting = false;
+        this.replayInstruction = null;
     }
 
     resetRegisters() {
@@ -32,6 +33,7 @@ export class CPU {
         this.resolve = null;
         this.fetchPending = null;
         this.fetchWaiting = false;
+        this.replayInstruction = null;
     }
 
     loadProgram(programData) {
@@ -722,22 +724,34 @@ export class CPU {
             return;
         }
 
-        // Issue instruction fetch if none in flight and no pending inst
-        if (!this.fetchWaiting && !this.fetchPending) {
-            this.readInstructionAsync(this.pc, bus);
-            return;
-        }
+        const shouldReplayInstruction = !!(this.waitingRequest && this.pendingResponse && this.replayInstruction);
 
-        // Wait for instruction fetch
-        if (!this.fetchPending) return;
+        if (!shouldReplayInstruction) {
+            // Issue instruction fetch if none in flight and no pending inst
+            if (!this.fetchWaiting && !this.fetchPending) {
+                this.readInstructionAsync(this.pc, bus);
+                return;
+            }
+
+            // Wait for instruction fetch
+            if (!this.fetchPending) return;
+        }
 
         const oldPc = this.pc;
         const pc = this.pc;
-        const inst = this.fetchPending.data;
-        this.fetchPending = null;
+        const inst = shouldReplayInstruction ? this.replayInstruction.data : this.fetchPending.data;
+        if (!shouldReplayInstruction) {
+            this.fetchPending = null;
+        }
 
         const decoded = this.decode(inst);
         const { nextPc } = this.execute(decoded, bus);
+
+        if (this.waitingRequest) {
+            this.replayInstruction = { pc, data: inst };
+        } else {
+            this.replayInstruction = null;
+        }
 
         if (nextPc !== undefined) {
             this.pc = nextPc;

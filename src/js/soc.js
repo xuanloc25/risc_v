@@ -1,6 +1,6 @@
 import { CPU } from './cpu.js';
 import { MMU } from './mmu.js';
-import { Cache } from './cache.js';
+import SimpleCache from './SimpleCache.js';
 import { TileLink_UH } from './tilelink_UH.js';
 import { Mem } from './mem.js';
 import { TileLink_UL } from './tilelink_UL.js';
@@ -74,6 +74,170 @@ function createMMIOEndpoint(bus, name, { read, write }) {
     };
 }
 
+function createSimpleCacheLowerPort(cache, cacheName = 'cache', upperCacheName = null) {
+    const REFILL_TRANSFER_LATENCY = 1;
+    const isRefillAccess = (accessType) => accessType === 'fill' || accessType === 'fill-bypass';
+    const pushRefillEvent = (events, targetName, cycle, blockBase) => {
+        if (!targetName) return;
+        events.push({
+            cycle,
+            message: `[${targetName}] REFILL(fill) addr=0x${blockBase.toString(16)}`
+        });
+    };
+    const pushForwardEvent = (events, targetName, cycle, blockBase, bypassLatency) => {
+        if (!targetName) return;
+        events.push({
+            cycle,
+            message: `[${targetName}] FORWARD(fill) addr=0x${blockBase.toString(16)} (+${bypassLatency}cy refill latency)`
+        });
+    };
+
+    return {
+        get mem() {
+            return cache.memBytes();
+        },
+        memBytes: () => cache.memBytes(),
+        // Build an async fill plan for a lower cache.
+        // The caller provides the absolute cycle when this lower cache is first consulted.
+        beginBlockFill(blockBase, startCycle) {
+            const setIndex = cache._getSetIndex(blockBase);
+            const tag = cache._getTag(blockBase);
+            const block = cache._findBlock(setIndex, tag);
+            const plan = {
+                blockBase,
+                setIndex,
+                tag,
+                startCycle,
+                totalLatency: 0,
+                hit: !!block,
+                lowerPlan: null,
+                events: [],
+                bypassLatency: REFILL_TRANSFER_LATENCY
+            };
+
+            const checkCycle = startCycle + 1;
+
+            cache.statistics.numRead++;
+
+            if (block) {
+                cache.statistics.numHit++;
+                cache.statistics.totalCycles += cache.hitLatency;
+                plan.totalLatency = 1;
+                plan.events.push({
+                    cycle: checkCycle,
+                    message: `[${cacheName}] HIT(fill) addr=0x${blockBase.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`
+                });
+                pushRefillEvent(plan.events, upperCacheName, startCycle + plan.totalLatency + REFILL_TRANSFER_LATENCY, blockBase);
+                return plan;
+            }
+
+            cache.statistics.numMiss++;
+            cache.statistics.totalCycles += cache.missLatency;
+            plan.events.push({
+                cycle: checkCycle,
+                message: `[${cacheName}] MISS(fill) addr=0x${blockBase.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`
+            });
+
+            if (typeof cache.lowerPort?.beginBlockFill === 'function') {
+                const lowerStartCycle = checkCycle + cache.missLatency;
+                plan.lowerPlan = cache.lowerPort.beginBlockFill(blockBase, lowerStartCycle);
+                // totalLatency excludes the final hop to the upper cache.
+                plan.totalLatency = (lowerStartCycle - startCycle)
+                    + plan.lowerPlan.totalLatency
+                    + (plan.lowerPlan.bypassLatency ?? 0);
+                plan.events.push(...plan.lowerPlan.events);
+                pushRefillEvent(plan.events, cacheName, startCycle + plan.totalLatency - REFILL_TRANSFER_LATENCY, blockBase);
+                plan.events.push({
+                    cycle: startCycle + plan.totalLatency,
+                    message: `[${cacheName}] FORWARD(fill) addr=0x${blockBase.toString(16)} (+${REFILL_TRANSFER_LATENCY}cy refill latency)`
+                });
+                pushRefillEvent(plan.events, upperCacheName, startCycle + plan.totalLatency + REFILL_TRANSFER_LATENCY, blockBase);
+                return plan;
+            }
+
+            const ramLatency = cache.lowerPort?.memoryTarget?.latency ?? cache.lowerPort?.latency ?? 20;
+            const ramRequestCycle = checkCycle + cache.missLatency;
+            const ramReturnCycle = ramRequestCycle + ramLatency;
+            plan.totalLatency = (ramRequestCycle - startCycle) + ramLatency + REFILL_TRANSFER_LATENCY;
+            plan.events.push({
+                cycle: ramReturnCycle,
+                message: `[RAM] RETURN addr=0x${blockBase.toString(16)} (+${ramLatency}cy)`
+            });
+            pushRefillEvent(plan.events, cacheName, startCycle + plan.totalLatency - REFILL_TRANSFER_LATENCY, blockBase);
+            plan.events.push({
+                cycle: startCycle + plan.totalLatency,
+                message: `[${cacheName}] FORWARD(fill) addr=0x${blockBase.toString(16)} (+${REFILL_TRANSFER_LATENCY}cy refill latency)`
+            });
+            pushRefillEvent(plan.events, upperCacheName, startCycle + plan.totalLatency + REFILL_TRANSFER_LATENCY, blockBase);
+            return plan;
+        },
+        // Finish the refill only when the async plan reaches its ready cycle.
+        finishBlockFill(plan) {
+            if (!plan) return null;
+
+            let block = cache._findBlock(plan.setIndex, plan.tag);
+            if (!block) {
+                block = cache._selectVictim(plan.setIndex);
+
+                if (plan.lowerPlan && typeof cache.lowerPort?.finishBlockFill === 'function') {
+                    const lowerBlockData = cache.lowerPort.finishBlockFill(plan.lowerPlan);
+                    cache._installBlockData(block, plan.tag, lowerBlockData);
+                } else {
+                    cache._fillBlock(block, plan.blockBase, plan.tag);
+                }
+            }
+
+            cache._touchBlock(block);
+            const blockCopy = new Uint8Array(cache.blockSize);
+            blockCopy.set(block.data);
+            return blockCopy;
+        },
+        directRead(address, size, accessType) {
+            // All timed cache behaviour is modeled through receiveRequest()/beginBlockFill().
+            // directRead should not allocate or satisfy cacheable accesses synchronously.
+            return cache.lowerPort.directRead(address >>> 0, size, accessType);
+        },
+        directWrite(address, value, size, accessType) {
+            const physicalAddress = address >>> 0;
+            const shouldLogWrite = !isRefillAccess(accessType) && accessType !== 'write-through';
+            const shouldCache = cache.enabled && cache.isCacheable(physicalAddress);
+            if (!shouldCache) {
+                cache.lowerPort.directWrite(physicalAddress, value, size, accessType);
+                return;
+            }
+
+            cache.statistics.numWrite++;
+
+            const setIndex = cache._getSetIndex(physicalAddress);
+            const tag = cache._getTag(physicalAddress);
+            const blockBase = cache._getBlockBase(physicalAddress);
+            const offset = physicalAddress - blockBase;
+
+            let block = cache._findBlock(setIndex, tag);
+            if (!block) {
+                cache.statistics.numMiss++;
+                cache.statistics.totalCycles += cache.missLatency;
+                block = cache._selectVictim(setIndex);
+                cache._fillBlock(block, blockBase, tag);
+                if (shouldLogWrite) {
+                    console.log(`[${cacheName}] MISS WR addr=0x${physicalAddress.toString(16)} set=${setIndex} tag=0x${tag.toString(16)} val=0x${(value >>> 0).toString(16)}`);
+                }
+            } else {
+                cache.statistics.numHit++;
+                cache.statistics.totalCycles += cache.hitLatency;
+                if (shouldLogWrite) {
+                    console.log(`[${cacheName}] HIT  WR addr=0x${physicalAddress.toString(16)} set=${setIndex} tag=0x${tag.toString(16)} val=0x${(value >>> 0).toString(16)}`);
+                }
+            }
+
+            cache._touchBlock(block);
+            cache._writeBlockValue(block, offset, value ?? 0, size);
+            block.modified = true;
+            cache.lowerPort.directWrite(physicalAddress, value ?? 0, size, accessType);
+        }
+    };
+}
+
 export const simulator = {
     cpu: null,
     mmu: null,
@@ -133,7 +297,7 @@ export const simulator = {
             }
         }
 
-        const mainMemoryLatency = 5;
+        const mainMemoryLatency = 20;
         const uartRange = (addr) => inRange(addr, UART_BASE_ADDRESS, 0x14);
         const ledRange = (addr) => inRange(addr, LED_BASE_ADDRESS, LED_SIZE_BYTES);
         const keyboardRange = (addr) => inRange(addr, KEYBOARD_BASE_ADDRESS, 0x08);
@@ -149,54 +313,9 @@ export const simulator = {
         const isCacheableAddress = (addr) =>
             !isUlPeripheralAddress(addr) && !dmaRegRange(addr);
 
-        const l1CacheConfig = {
-            cacheSize: 16 * 4 * 16,
-            blockSize: 16,
-            associativity: 4,
-            numSets: 16,
-            hitLatency: 1,
-            missLatency: 2
-        };
-
-        const l2CacheConfig = {
-            cacheSize: 64 * 4 * 16,
-            blockSize: 16,
-            associativity: 4,
-            numSets: 64,
-            hitLatency: 2,
-            missLatency: mainMemoryLatency
-        };
-
-        // Core datapath: CPU -> MMU -> split L1 I$/D$ -> shared L2 -> TileLink-UH.
-        this.cpu = new CPU();
-        this.mmu = new MMU(null, null, {
-            cacheabilityPredicate: isCacheableAddress
-        });
-        this.l2Cache = new Cache(null, l2CacheConfig, null, {
-            writeBack: false,
-            writeAllocate: true,
-            isCacheable: isCacheableAddress
-        });
-        this.iCache = new Cache(null, l1CacheConfig, this.l2Cache, {
-            writeBack: false,
-            writeAllocate: true,
-            isCacheable: isCacheableAddress
-        });
-        this.dCache = new Cache(null, l1CacheConfig, this.l2Cache, {
-            writeBack: false,
-            writeAllocate: true,
-            isCacheable: isCacheableAddress
-        });
-        this.cache = this.l2Cache;
-
-        this.l2Cache.setEnabled(this.useCache);
-        this.iCache.setEnabled(this.useCache);
-        this.dCache.setEnabled(this.useCache);
-
         this.tilelink_UH = new TileLink_UH();
         this.mem = new Mem({ latency: mainMemoryLatency });
         this.tilelink_UL = new TileLink_UL();
-        this.l2Cache.attachLowerPort(this.tilelink_UH);
 
         // DMA and bridge sit beside the core path and connect into both fabrics.
         this.dma = new DMAController({
@@ -213,12 +332,49 @@ export const simulator = {
             name: 'ul-to-uh-bridge'
         });
 
+        this.cpu = new CPU();
+        this.mmu = new MMU(null, null, {
+            cacheabilityPredicate: isCacheableAddress
+        });
+        const CacheConfigL1 = {
+            numSets: 16,
+            numWays: 4,
+            blockSize: 16,
+            hitLatency: 1,
+            missLatency: 5,
+            isCacheable: isCacheableAddress
+        };
+        const CacheConfigL2 = {
+            numSets: 64,
+            numWays: 4,
+            blockSize: 16,
+            hitLatency: 2,
+            missLatency: 10,
+            isCacheable: isCacheableAddress
+        };
+        this.cache = new SimpleCache({
+            ...CacheConfigL1,
+            name: 'l1-cache'
+        });
+        this.l2Cache = new SimpleCache({
+            ...CacheConfigL2,
+            name: 'l2-cache'
+        });
+
+        this.l2Cache.attachLowerPort(this.tilelink_UH);
+        this.cache.attachLowerPort(createSimpleCacheLowerPort(this.l2Cache, 'L2-cache', 'l1-cache'));
+        this.cache.attachUpperPort(this.mmu);
+        this.cache.setEnabled(this.useCache);
+        this.l2Cache.setEnabled(this.useCache);
+
         this.cpu.attachLowerPort(this.mmu);
         this.mmu.attachUpperPort(this.cpu);
-        this.mmu.attachInstructionLowerPort(this.iCache);
-        this.mmu.attachDataLowerPort(this.dCache);
-        this.iCache.attachUpperPort(this.mmu);
-        this.dCache.attachUpperPort(this.mmu);
+        this.mmu.attachInstructionLowerPort(this.cache);
+        this.mmu.attachDataLowerPort(this.cache);
+
+        // Giữ alias để UI cũ không bị vỡ.
+        this.iCache = this.cache;
+        this.dCache = this.cache;
 
         const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'uart', {
             read: (addr) => uart.readRegister(addr),
@@ -236,6 +392,7 @@ export const simulator = {
 
         const keyboardEndpoint = createMMIOEndpoint(this.tilelink_UL, 'keyboard', {
             read: (addr) => keyboard.readRegister(addr),
+           
             write: (addr, value) => keyboard.writeRegister(addr, value)
         });
 
@@ -269,13 +426,12 @@ export const simulator = {
         if (this.uart) this.uart.reset();
         if (this.mouse) this.mouse.reset();
         if (this.keyboard) this.keyboard.reset();
-        if (this.iCache) this.iCache.reset();
-        if (this.dCache) this.dCache.reset();
+        if (this.cache) this.cache.reset();
         if (this.l2Cache) this.l2Cache.reset();
         if (this.mmu) this.mmu.reset();
 
-        console.info('[ARCH] CPU -> MMU -> L1 I$/D$ -> shared L2 -> TileLink-UH');
-        console.info('[CACHE] L1I: 16 sets x 4 ways, L1D: 16 sets x 4 ways, L2: 64 sets x 4 ways');
+        console.info('[ARCH] CPU -> MMU -> L1 cache -> L2 cache -> memory/MMIO');
+        console.info('[CACHE] L1: 16 sets x 4 ways, L2: 16 sets x 4 ways');
         console.info('[ARCH] TileLink-UH <-> TileLink-UL through bus bridge');
         console.info('[ARCH] DMA Controller attached to both TileLink-UH and TileLink-UL');
         console.info('[IO MAP] LED Matrix: 0xFF000000-0xFF000FFF');
@@ -296,11 +452,18 @@ export const simulator = {
     tick() {
         const cpuActive = this.cpu.isRunning;
         const dmaActive = this.dma?.registers?.busy;
+        const currentCycle = this.cycleCount + 1;
 
         if (!cpuActive && !dmaActive) {
             console.log('Simulation halted.');
             return;
         }
+
+        console.log(
+            `[Cycle ${currentCycle}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} ` +
+            `| DMA busy=${this.dma?.registers?.busy ?? false} ` +
+            `progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`
+        );
 
         try {
             if (cpuActive) {
@@ -318,17 +481,10 @@ export const simulator = {
         this.tilelink_UH.tick();
         this.tilelink_UL.tick();
         this.mem.tick(this.tilelink_UH);
-        this.iCache.tick();
-        this.dCache.tick();
+        this.cache.tick();
         this.l2Cache.tick();
         this.tilelink_UH.tick();
         this.tilelink_UL.tick();
-
-        console.log(
-            `[Cycle ${this.cycleCount + 1}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} ` +
-            `| DMA busy=${this.dma?.registers?.busy ?? false} ` +
-            `progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`
-        );
 
         if (this.uart) {
             this.uart.tick();

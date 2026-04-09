@@ -213,29 +213,74 @@
             <!-- VIEW 4: CACHE -->
             <div id="view-cache" class="view-section">
                 <div class="cache-layout">
-                    <div class="memory-panel" style="flex:1;">
-                        <div class="panel-header">Cache Lines</div>
-                        <div class="table-scroll-container">
-                            <table class="simple-table" id="cacheTable">
-                                <thead>
-                                    <tr>
-                                        <th>Set</th>
-                                        <th>Way</th>
-                                        <th>Valid</th>
-                                        <th>Dirty</th>
-                                        <th>Tag</th>
-                                        <th>Last Ref</th>
-                                        <th>Bytes (first 8)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="cacheTableBody"></tbody>
-                            </table>
+                    <div class="cache-detail-layout">
+                        <div class="register-tabs cache-tabs">
+                            <div class="tab-item active" id="cache-tab-l1i">L1I</div>
+                            <div class="tab-item" id="cache-tab-l1d">L1D</div>
+                            <div class="tab-item" id="cache-tab-l2">L2</div>
                         </div>
-                    </div>
-                    <div class="memory-panel" style="flex:0.4;">
-                        <div class="panel-header">Cache Stats</div>
-                        <div class="cache-stats" id="cacheStats">
-                            <p>Cache disabled.</p>
+
+                        <div class="memory-panel cache-panel active-cache-panel" id="cache-panel-l1i">
+                            <div class="panel-header">L1 Instruction Cache</div>
+                            <div class="cache-stats cache-stats-inline" id="l1iCacheStats"></div>
+                            <div class="table-scroll-container">
+                                <table class="simple-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Set</th>
+                                            <th>Way</th>
+                                            <th>Valid</th>
+                                            <th>Dirty</th>
+                                            <th>Tag</th>
+                                            <th>Last Ref</th>
+                                            <th>Bytes (first 8)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="l1iCacheTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="memory-panel cache-panel" id="cache-panel-l1d">
+                            <div class="panel-header">L1 Data Cache</div>
+                            <div class="cache-stats cache-stats-inline" id="l1dCacheStats"></div>
+                            <div class="table-scroll-container">
+                                <table class="simple-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Set</th>
+                                            <th>Way</th>
+                                            <th>Valid</th>
+                                            <th>Dirty</th>
+                                            <th>Tag</th>
+                                            <th>Last Ref</th>
+                                            <th>Bytes (first 8)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="l1dCacheTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="memory-panel cache-panel" id="cache-panel-l2">
+                            <div class="panel-header">L2 Shared Cache</div>
+                            <div class="cache-stats cache-stats-inline" id="l2CacheStats"></div>
+                            <div class="table-scroll-container">
+                                <table class="simple-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Set</th>
+                                            <th>Way</th>
+                                            <th>Valid</th>
+                                            <th>Dirty</th>
+                                            <th>Tag</th>
+                                            <th>Last Ref</th>
+                                            <th>Bytes (first 8)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="l2CacheTableBody"></tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>

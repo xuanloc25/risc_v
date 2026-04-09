@@ -17,10 +17,19 @@ function formatLogNumber(value) {
     return `${value} (0x${(value >>> 0).toString(16)})`;
 }
 
-// Cache simulator modeled after cache.h: set-associative, optional write-back/write-allocate,
-// blocking (one outstanding request), with simple LRU.
+function createEmptyStatistics() {
+    return {
+        numRead: 0,
+        numWrite: 0,
+        numHit: 0,
+        numMiss: 0,
+        totalCycles: 0
+    };
+}
+
 export class Cache {
-    constructor(lowerPort = null, policy = {}, lowerCache = null, { writeBack = true, writeAllocate = true, isCacheable = () => true } = {}) {
+    constructor(lowerPort = null, policy = {}, lowerCache = null, { name = 'cache', writeBack = true, writeAllocate = true, isCacheable = () => true } = {}) {
+        this.name = name;
         this.upperPort = null;
         this.lowerPort = lowerPort;
         this.lowerCache = lowerCache;
@@ -32,18 +41,12 @@ export class Cache {
 
         this.blocks = [];
         this.referenceCounter = 0;
-        this.statistics = {
-            numRead: 0,
-            numWrite: 0,
-            numHit: 0,
-            numMiss: 0,
-            totalCycles: 0
-        };
+        this.statistics = createEmptyStatistics();
 
         this.pending = null;
         this.cycle = 0;
 
-        this._initCache();
+        this._initializeBlocks();
     }
 
     get mem() {
@@ -74,69 +77,295 @@ export class Cache {
         }
 
         this.referenceCounter = 0;
-        this.statistics = {
-            numRead: 0,
-            numWrite: 0,
-            numHit: 0,
-            numMiss: 0,
-            totalCycles: 0
-        };
+        this.statistics = createEmptyStatistics();
         this.pending = null;
         this.cycle = 0;
     }
 
     receiveRequest(req) {
         if (this.pending) {
-            console.warn('[Cache] Busy; request dropped');
+            console.warn(`[Cache:${this.name}] Busy; request dropped`);
             return;
         }
 
-        const reqAddress = (req.virtualAddress ?? req.address) >>> 0;
-        console.log(
-            `[Cache] REQ type=${typeof req.type === 'number' ? getOpcodeName(TL_A_Opcode, req.type) : req.type} ` +
-            `addr=0x${reqAddress.toString(16)} value=${formatLogNumber(req.value)}`
-        );
+        const requestAddress = (req.virtualAddress ?? req.address) >>> 0;
+        const requestType = typeof req.type === 'number' ? getOpcodeName(TL_A_Opcode, req.type) : req.type;
+        console.log(`[Cache:${this.name}] REQ type=${requestType} addr=0x${requestAddress.toString(16)} value=${formatLogNumber(req.value)}`);
 
-        const cacheable = this.enabled && req.cacheable !== false && this.isCacheable(req.address >>> 0);
-        if (!cacheable) {
-            const bypass = this._handleBypass(req);
-            this.pending = {
-                req: this._buildResponse(req, bypass.responseType, bypass.data),
-                readyCycle: this.cycle + bypass.cycles
-            };
+        if (!this.enabled) {
+            this._forwardWithoutCaching(req);
+            return;
+        }
+
+        if (!this._shouldCacheRequest(req)) {
+            this._completeLocally(this._serveBypassRequest(req));
             return;
         }
 
         if (isTileLinkRead(req.type)) {
-            const { data, cycles } = this._handleRead(req);
-            this.pending = {
-                req: this._buildResponse(req, TL_D_Opcode.AccessAckData, data),
-                readyCycle: this.cycle + cycles
-            };
-        } else if (isTileLinkWrite(req.type)) {
-            const cycles = this._handleWrite(req);
-            this.pending = {
-                req: this._buildResponse(req, TL_D_Opcode.AccessAck, null),
-                readyCycle: this.cycle + cycles
-            };
-        } else if (isTileLinkAtomic(req.type)) {
-            const { data, cycles } = this._handleAtomic(req);
-            this.pending = {
-                req: this._buildResponse(req, TL_D_Opcode.AccessAckData, data),
-                readyCycle: this.cycle + cycles
-            };
-        } else {
-            console.warn(`[Cache] Unsupported request type ${req.type}`);
+            this._handleReadRequest(req);
+            return;
         }
+
+        if (isTileLinkWrite(req.type)) {
+            this._handleWriteRequest(req);
+            return;
+        }
+
+        if (isTileLinkAtomic(req.type)) {
+            this._handleAtomicRequest(req);
+            return;
+        }
+
+        console.warn(`[Cache:${this.name}] Unsupported request type ${req.type}`);
     }
 
     tick(bus = null) {
         this.cycle++;
         if (!this.pending) return;
+
+        if (this.pending.kind === 'miss') {
+            this._advanceMissTransaction();
+            if (!this.pending || this.pending.kind === 'miss') return;
+        }
+
+        if (this.pending.waitingForLowerResponse) return;
         if (this.cycle < this.pending.readyCycle) return;
 
+        this._emitPendingResponse(bus);
+    }
+
+    receiveResponse(resp) {
+        if (!this.pending?.waitingForLowerResponse) {
+            console.warn(`[Cache:${this.name}] Unexpected lower-level response`);
+            return;
+        }
+
+        if (this.pending.kind === 'miss') {
+            this._finishMissTransaction(resp);
+            return;
+        }
+
+        const originalReq = this.pending.originalReq;
+        this.pending = {
+            req: this._buildResponse(originalReq, resp.type, resp.data),
+            readyCycle: this.cycle
+        };
+    }
+
+    inCache(addr) {
+        return this._findBlock(addr) !== null;
+    }
+
+    _shouldCacheRequest(req) {
+        return req.cacheable !== false && this.isCacheable((req.address ?? 0) >>> 0);
+    }
+
+    _handleReadRequest(req) {
+        this.statistics.numRead++;
+
+        const address = req.address >>> 0;
+        const block = this._findBlock(address);
+        if (block) {
+            this.statistics.numHit++;
+            this._logHit('R', address, this.policy.hitLatency);
+            this._touchBlock(block);
+
+            const size = getTransferSizeLog2(req, 2);
+            const data = this._readValueForRequest(req.type, address, size);
+            this.statistics.totalCycles += this.policy.hitLatency;
+            this._completeLocally({
+                req,
+                responseType: TL_D_Opcode.AccessAckData,
+                data,
+                cycles: this.policy.hitLatency
+            });
+            return;
+        }
+
+        this.statistics.numMiss++;
+        const localCycles = this.policy.hitLatency + this.policy.missLatency;
+        this._logMiss('R', address, localCycles);
+        this._beginMissTransaction(req, {
+            responseType: TL_D_Opcode.AccessAckData,
+            refillCycles: this.policy.missLatency,
+            finalizeResponse: () => {
+                const size = getTransferSizeLog2(req, 2);
+                return this._readValueForRequest(req.type, address, size);
+            }
+        });
+    }
+
+    _handleWriteRequest(req) {
+        this.statistics.numWrite++;
+
+        const address = req.address >>> 0;
+        const block = this._findBlock(address);
+        if (block) {
+            this.statistics.numHit++;
+            this._logHit('W', address, this.policy.hitLatency, req.value);
+            this._writeByRequest(req);
+            this.statistics.totalCycles += this.policy.hitLatency;
+            this._completeLocally({
+                req,
+                responseType: TL_D_Opcode.AccessAck,
+                data: null,
+                cycles: this.policy.hitLatency
+            });
+            return;
+        }
+
+        this.statistics.numMiss++;
+        const localCycles = this.policy.hitLatency + this.policy.missLatency;
+        this._logMiss('W', address, localCycles, req.value);
+
+        if (!this.writeAllocate) {
+            this._writeThroughLower(req);
+            this.statistics.totalCycles += localCycles;
+            this._completeLocally({
+                req,
+                responseType: TL_D_Opcode.AccessAck,
+                data: null,
+                cycles: localCycles
+            });
+            return;
+        }
+
+        this._beginMissTransaction(req, {
+            responseType: TL_D_Opcode.AccessAck,
+            refillCycles: this.policy.missLatency,
+            finalizeResponse: () => {
+                this._writeByRequest(req);
+                return null;
+            }
+        });
+    }
+
+    _handleAtomicRequest(req) {
+        this.statistics.numRead++;
+        this.statistics.numWrite++;
+
+        const address = req.address >>> 0;
+        const block = this._findBlock(address);
+        if (block) {
+            this.statistics.numHit++;
+            this._touchBlock(block);
+
+            const size = getTransferSizeLog2(req, 2);
+            const oldValue = this._readValueBySize(address, size);
+            const newValue = applyTileLinkAtomic(req, oldValue, size);
+            this._writeValueBySize(address, newValue, size);
+            this.statistics.totalCycles += this.policy.hitLatency;
+            this._completeLocally({
+                req,
+                responseType: TL_D_Opcode.AccessAckData,
+                data: oldValue,
+                cycles: this.policy.hitLatency
+            });
+            return;
+        }
+
+        this.statistics.numMiss++;
+        const localCycles = this.policy.hitLatency + this.policy.missLatency;
+        this._logMiss('A', address, localCycles, req.value);
+        this._beginMissTransaction(req, {
+            responseType: TL_D_Opcode.AccessAckData,
+            refillCycles: this.policy.missLatency,
+            finalizeResponse: () => {
+                const size = getTransferSizeLog2(req, 2);
+                const oldValue = this._readValueBySize(address, size);
+                const newValue = applyTileLinkAtomic(req, oldValue, size);
+                this._writeValueBySize(address, newValue, size);
+                return oldValue;
+            }
+        });
+    }
+
+    _serveBypassRequest(req) {
+        const size = getTransferSizeLog2(req, 2);
+        let responseType = TL_D_Opcode.AccessAck;
+        let data = 0;
+
+        if (isTileLinkRead(req.type)) {
+            data = this._readLowerByRequest(req.address >>> 0, req.type, size);
+            responseType = TL_D_Opcode.AccessAckData;
+        } else if (isTileLinkWrite(req.type)) {
+            this._writeLowerByRequest(req.address >>> 0, req.value ?? 0, req.type, size);
+        } else if (isTileLinkAtomic(req.type)) {
+            data = this._readLowerValue(req.address >>> 0, size);
+            const newValue = applyTileLinkAtomic(req, data, size);
+            this._writeLowerValue(req.address >>> 0, newValue, size);
+            responseType = TL_D_Opcode.AccessAckData;
+        }
+
+        return {
+            req,
+            responseType,
+            data,
+            cycles: this.policy.hitLatency
+        };
+    }
+
+    _forwardWithoutCaching(req) {
+        const forwardedReq = this._buildForwardedRequest(req);
+        this.pending = {
+            originalReq: req,
+            waitingForLowerResponse: true
+        };
+
+        this._dispatchToLower(forwardedReq, 'cache-off forwarding');
+    }
+
+    _beginMissTransaction(req, { responseType, refillCycles, finalizeResponse }) {
+        this.pending = {
+            kind: 'miss',
+            originalReq: req,
+            forwardedReq: this._buildForwardedRequest(req),
+            responseType,
+            finalizeResponse,
+            startCycle: this.cycle,
+            lookupReadyCycle: this.cycle + this.policy.hitLatency + 1,
+            refillCycles,
+            phase: 'lookup',
+            waitingForLowerResponse: false
+        };
+    }
+
+    _advanceMissTransaction() {
+        const miss = this.pending;
+        if (!miss || miss.kind !== 'miss') return;
+        if (miss.phase !== 'lookup') return;
+        if (this.cycle < miss.lookupReadyCycle) return;
+
+        this._dispatchToLower(miss.forwardedReq, 'hierarchy miss');
+        miss.phase = 'waiting-lower';
+        miss.waitingForLowerResponse = true;
+    }
+
+    _finishMissTransaction(resp) {
+        const miss = this.pending;
+        const originalReq = miss.originalReq;
+
+        this._ensureBlock(originalReq.address >>> 0);
+        const data = miss.finalizeResponse(resp);
+
+        this.pending = {
+            req: this._buildResponse(originalReq, miss.responseType, data),
+            readyCycle: this.cycle + miss.refillCycles
+        };
+        this.statistics.totalCycles += this.pending.readyCycle - miss.startCycle;
+    }
+
+    _completeLocally({ req, responseType, data, cycles }) {
+        this.pending = {
+            req: this._buildResponse(req, responseType, data),
+            readyCycle: this.cycle + cycles
+        };
+    }
+
+    _emitPendingResponse(bus) {
         console.log(
-            `[Cache] RESP type=${getOpcodeName(TL_D_Opcode, this.pending.req.type)} ` +
+            `[Cache:${this.name}] RESP type=${getOpcodeName(TL_D_Opcode, this.pending.req.type)} ` +
             `addr=0x${(this.pending.req.address >>> 0).toString(16)} data=${formatLogNumber(this.pending.req.data)}`
         );
 
@@ -151,8 +380,32 @@ export class Cache {
         this.pending = null;
     }
 
-    inCache(addr) {
-        return this._findBlock(addr) !== null;
+    _dispatchToLower(forwardedReq, purpose) {
+        if (this.lowerCache && typeof this.lowerCache.receiveRequest === 'function') {
+            this.lowerCache.receiveRequest(forwardedReq);
+            return;
+        }
+
+        if (this.lowerPort && typeof this.lowerPort.sendRequest === 'function') {
+            this.lowerPort.sendRequest(this.name, forwardedReq);
+            return;
+        }
+
+        if (this.lowerPort && typeof this.lowerPort.receiveRequest === 'function') {
+            this.lowerPort.receiveRequest(forwardedReq);
+            return;
+        }
+
+        this.pending = null;
+        throw new Error(`[Cache:${this.name}] No lower path available for ${purpose}`);
+    }
+
+    _buildForwardedRequest(req) {
+        return {
+            ...req,
+            from: this.name,
+            replyTo: this
+        };
     }
 
     _buildResponse(req, type, data) {
@@ -169,218 +422,80 @@ export class Cache {
         };
     }
 
-    _handleBypass(req) {
-        const cycles = this.policy.hitLatency;
-        const size = getTransferSizeLog2(req, 2);
-        let data = 0;
-        let responseType = TL_D_Opcode.AccessAck;
-
-        if (isTileLinkRead(req.type)) {
-            data = this._readLowerByReq(req.address, req.type, size);
-            responseType = TL_D_Opcode.AccessAckData;
-        } else if (isTileLinkWrite(req.type)) {
-            this._writeLowerByReq(req.address, req.value ?? 0, req.type, size);
-        } else if (isTileLinkAtomic(req.type)) {
-            data = this._readLowerValue(req.address, size);
-            const newValue = applyTileLinkAtomic(req, data, size);
-            this._writeLowerValue(req.address, newValue, size);
-            responseType = TL_D_Opcode.AccessAckData;
-        }
-
-        return { data, cycles, responseType };
-    }
-
-    _normalizePolicy(userPolicy) {
-        const cacheSize = userPolicy.cacheSize ?? 4096;
-        const blockSize = userPolicy.blockSize ?? 32;
-        const associativity = userPolicy.associativity ?? 4;
-        const blockNum = userPolicy.blockNum ?? (cacheSize / blockSize);
-        const numSets = blockNum / associativity;
-        return {
-            cacheSize,
-            blockSize,
-            blockNum,
-            associativity,
-            numSets,
-            hitLatency: userPolicy.hitLatency ?? 1,
-            missLatency: userPolicy.missLatency ?? 10
-        };
-    }
-
-    _initCache() {
-        if (!this._isPolicyValid()) throw new Error('Invalid cache policy');
-
-        this.blocks = Array.from({ length: this.policy.blockNum }, (_, index) => ({
-            valid: false,
-            modified: false,
-            tag: 0,
-            id: index,
-            size: this.policy.blockSize,
-            lastReference: 0,
-            data: new Uint8Array(this.policy.blockSize)
-        }));
-    }
-
-    _handleRead(req) {
-        this.statistics.numRead++;
-        const addr = req.address >>> 0;
-        const block = this._findBlock(addr);
-        let cycles = this.policy.hitLatency;
-
-        if (block) {
-            this.statistics.numHit++;
-            console.log(
-                `[Cache] HIT R addr=0x${addr.toString(16)} set=${this._getSetIndex(addr)} ` +
-                `tag=0x${this._getTag(addr).toString(16)} cy=${cycles}`
-            );
-            this._touchBlock(block);
-        } else {
-            this.statistics.numMiss++;
-            cycles += this.policy.missLatency;
-            console.log(
-                `[Cache] MISS R addr=0x${addr.toString(16)} set=${this._getSetIndex(addr)} ` +
-                `tag=0x${this._getTag(addr).toString(16)} cy=${cycles}`
-            );
-            cycles += this._loadBlock(addr);
-        }
-
-        const data = this._readValueByReqType(req.type, addr, getTransferSizeLog2(req, 2));
-        this.statistics.totalCycles += cycles;
-        return { data, cycles };
-    }
-
-    _handleWrite(req) {
-        this.statistics.numWrite++;
-        const addr = req.address >>> 0;
-        const isHit = this._findBlock(addr) !== null;
-        let cycles = this.policy.hitLatency;
-
-        if (isHit) {
-            this.statistics.numHit++;
-            console.log(
-                `[Cache] HIT W addr=0x${addr.toString(16)} set=${this._getSetIndex(addr)} ` +
-                `tag=0x${this._getTag(addr).toString(16)} val=0x${(req.value >>> 0).toString(16)} cy=${cycles}`
-            );
-            this._writeByType(req);
-        } else {
-            this.statistics.numMiss++;
-            cycles += this.policy.missLatency;
-            console.log(
-                `[Cache] MISS W addr=0x${addr.toString(16)} set=${this._getSetIndex(addr)} ` +
-                `tag=0x${this._getTag(addr).toString(16)} val=0x${(req.value >>> 0).toString(16)} cy=${cycles}`
-            );
-            if (this.writeAllocate) {
-                cycles += this._loadBlock(addr);
-                this._writeByType(req);
-            } else {
-                this._writeThroughLower(req);
-            }
-        }
-
-        this.statistics.totalCycles += cycles;
-        return cycles;
-    }
-
-    _handleAtomic(req) {
-        this.statistics.numRead++;
-        this.statistics.numWrite++;
-
-        const addr = req.address >>> 0;
-        const block = this._findBlock(addr);
-        let cycles = this.policy.hitLatency;
-
-        if (block) {
-            this.statistics.numHit++;
-            this._touchBlock(block);
-        } else {
-            this.statistics.numMiss++;
-            cycles += this.policy.missLatency;
-            cycles += this._loadBlock(addr);
-        }
-
-        const size = getTransferSizeLog2(req, 2);
-        const oldValue = this._readValueBySize(addr, size);
-        const newValue = applyTileLinkAtomic(req, oldValue, size);
-        this._writeValueBySize(addr, newValue, size);
-
-        this.statistics.totalCycles += cycles;
-        return { data: oldValue, cycles };
-    }
-
     _findBlock(addr) {
-        const tag = this._getTag(addr);
-        const set = this._getSetIndex(addr);
-        const begin = set * this.policy.associativity;
-        const end = begin + this.policy.associativity;
+        const { setIndex, tag } = this._decodeAddress(addr);
+        const { begin, end } = this._getSetBounds(setIndex);
 
-        for (let i = begin; i < end; i++) {
-            const block = this.blocks[i];
+        for (let index = begin; index < end; index++) {
+            const block = this.blocks[index];
             if (block.valid && block.tag === tag) return block;
         }
 
         return null;
     }
 
-    _loadBlock(addr) {
-        const set = this._getSetIndex(addr);
-        const begin = set * this.policy.associativity;
-        const end = begin + this.policy.associativity;
-        const victimId = this._getReplacementBlockId(begin, end);
-        const victim = this.blocks[victimId];
-        let extraCycles = 0;
-
-        if (victim.valid && victim.modified && this.writeBack) {
-            console.log(`[Cache] EVICT dirty set=${set} way=${victimId - begin} tag=0x${victim.tag.toString(16)}`);
-            this._writeBlockToLowerLevel(victim);
-            extraCycles += this.policy.missLatency;
+    _ensureBlock(addr) {
+        const existingBlock = this._findBlock(addr);
+        if (existingBlock) {
+            this._touchBlock(existingBlock);
+            return existingBlock;
         }
 
-        const base = this._getBlockBase(addr);
+        return this._fillBlockFromLower(addr, 'DEMAND FILL');
+    }
+
+    _fillBlockFromLower(addr, fillLabel) {
+        const decoded = this._decodeAddress(addr);
+        const victim = this._selectVictim(decoded.setIndex);
+
+        if (victim.valid && victim.modified && this.writeBack) {
+            console.log(`[Cache:${this.name}] EVICT dirty set=${decoded.setIndex} way=${this._getWayIndex(victim.id)} tag=0x${victim.tag.toString(16)}`);
+            this._writeBlockToLowerLevel(victim);
+        }
+
+        const baseAddress = this._getBlockBase(addr);
         console.log(
-            `[Cache] FILL set=${set} way=${victimId - begin} tag=0x${this._getTag(addr).toString(16)} ` +
-            `base=0x${base.toString(16)}`
+            `[Cache:${this.name}] ${fillLabel} set=${decoded.setIndex} way=${this._getWayIndex(victim.id)} ` +
+            `tag=0x${decoded.tag.toString(16)} base=0x${baseAddress.toString(16)}`
         );
 
-        for (let i = 0; i < this.policy.blockSize; i++) {
-            victim.data[i] = this._readByteLower(base + i);
+        for (let offset = 0; offset < this.policy.blockSize; offset++) {
+            victim.data[offset] = this._readByteLower(baseAddress + offset);
         }
 
         victim.valid = true;
         victim.modified = false;
-        victim.tag = this._getTag(addr);
+        victim.tag = decoded.tag;
         this._touchBlock(victim);
-
-        return extraCycles;
+        return victim;
     }
 
-    _writeBlockToLowerLevel(block) {
-        const baseAddr = this._getAddr(block);
-        console.log(`[Cache] WRITEBACK base=0x${baseAddr.toString(16)} tag=0x${block.tag.toString(16)}`);
+    _selectVictim(setIndex) {
+        const { begin, end } = this._getSetBounds(setIndex);
 
-        for (let i = 0; i < block.size; i++) {
-            this._writeByteLower(baseAddr + i, block.data[i]);
+        for (let index = begin; index < end; index++) {
+            if (!this.blocks[index].valid) return this.blocks[index];
         }
 
-        block.modified = false;
-    }
-
-    _getReplacementBlockId(begin, end) {
-        for (let i = begin; i < end; i++) {
-            if (!this.blocks[i].valid) return i;
-        }
-
-        let oldest = begin;
-        for (let i = begin + 1; i < end; i++) {
-            if (this.blocks[i].lastReference < this.blocks[oldest].lastReference) {
-                oldest = i;
+        let oldestIndex = begin;
+        for (let index = begin + 1; index < end; index++) {
+            if (this.blocks[index].lastReference < this.blocks[oldestIndex].lastReference) {
+                oldestIndex = index;
             }
         }
 
-        return oldest;
+        return this.blocks[oldestIndex];
     }
 
-    _touchBlock(block) {
-        block.lastReference = ++this.referenceCounter;
+    _writeBlockToLowerLevel(block) {
+        const baseAddress = this._getAddressFromBlock(block);
+        console.log(`[Cache:${this.name}] WRITEBACK base=0x${baseAddress.toString(16)} tag=0x${block.tag.toString(16)}`);
+
+        for (let offset = 0; offset < block.size; offset++) {
+            this._writeByteLower(baseAddress + offset, block.data[offset]);
+        }
+
+        block.modified = false;
     }
 
     _readLowerValue(addr, size) {
@@ -412,16 +527,24 @@ export class Cache {
         }
     }
 
-    _readLowerByReq(address, type, size) {
+    _readLowerByRequest(address, type, size) {
         if (type === 'readByte') return this._readLowerValue(address, 0);
         if (type === 'readHalf') return this._readLowerValue(address, 1);
         return this._readLowerValue(address, size);
     }
 
-    _writeLowerByReq(address, value, type, size) {
-        if (type === 'writeByte') this._writeLowerValue(address, value, 0);
-        else if (type === 'writeHalf') this._writeLowerValue(address, value, 1);
-        else this._writeLowerValue(address, value, size);
+    _writeLowerByRequest(address, value, type, size) {
+        if (type === 'writeByte') {
+            this._writeLowerValue(address, value, 0);
+            return;
+        }
+
+        if (type === 'writeHalf') {
+            this._writeLowerValue(address, value, 1);
+            return;
+        }
+
+        this._writeLowerValue(address, value, size);
     }
 
     _readByteLower(addr) {
@@ -432,6 +555,45 @@ export class Cache {
         this._writeLowerValue(addr, value & 0xFF, 0);
     }
 
+    _readValueForRequest(type, addr, size) {
+        if (type === 'readByte') return this._readByte(addr);
+        if (type === 'readHalf') return this._readHalf(addr);
+        if (type === 'fetch' || type === 'read') return this._readWord(addr);
+        if (type === TL_A_Opcode.Get) return this._readValueBySize(addr, size);
+        return this._readWord(addr);
+    }
+
+    _writeByRequest(req) {
+        const address = req.address >>> 0;
+        const size = getTransferSizeLog2(req, 2);
+        const value = req.value ?? 0;
+
+        if (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData) {
+            this._writeValueBySize(address, value, size);
+            return;
+        }
+
+        if (req.type === 'write') {
+            this._writeWord(address, value);
+            return;
+        }
+
+        if (req.type === 'writeHalf') {
+            this._writeHalf(address, value);
+            return;
+        }
+
+        if (req.type === 'writeByte') {
+            this._writeByte(address, value);
+        }
+    }
+
+    _writeThroughLower(req) {
+        const address = req.address >>> 0;
+        const size = getTransferSizeLog2(req, 2);
+        this._writeLowerByRequest(address, req.value ?? 0, req.type, size);
+    }
+
     _readByte(addr) {
         const block = this._ensureBlock(addr);
         const offset = this._getOffset(addr);
@@ -440,17 +602,17 @@ export class Cache {
     }
 
     _readHalf(addr) {
-        const b0 = this._readByte(addr);
-        const b1 = this._readByte(addr + 1);
-        return ((b1 << 8) | b0) & 0xFFFF;
+        const byte0 = this._readByte(addr);
+        const byte1 = this._readByte(addr + 1);
+        return ((byte1 << 8) | byte0) & 0xFFFF;
     }
 
     _readWord(addr) {
-        const b0 = this._readByte(addr);
-        const b1 = this._readByte(addr + 1);
-        const b2 = this._readByte(addr + 2);
-        const b3 = this._readByte(addr + 3);
-        return ((b3 << 24) | (b2 << 16) | (b1 << 8) | b0) >>> 0;
+        const byte0 = this._readByte(addr);
+        const byte1 = this._readByte(addr + 1);
+        const byte2 = this._readByte(addr + 2);
+        const byte3 = this._readByte(addr + 3);
+        return ((byte3 << 24) | (byte2 << 16) | (byte1 << 8) | byte0) >>> 0;
     }
 
     _readValueBySize(addr, size) {
@@ -459,39 +621,18 @@ export class Cache {
         return this._readWord(addr);
     }
 
-    _readValueByReqType(type, addr, size) {
-        if (type === 'readByte') return this._readByte(addr);
-        if (type === 'readHalf') return this._readHalf(addr);
-        if (type === 'fetch' || type === 'read') return this._readWord(addr);
-        if (type === TL_A_Opcode.Get) return this._readValueBySize(addr, size);
-        return this._readWord(addr);
-    }
-
     _writeValueBySize(addr, value, size) {
-        if (size === 0) this._writeByte(addr, value);
-        else if (size === 1) this._writeHalf(addr, value);
-        else this._writeWord(addr, value);
-    }
-
-    _writeByType(req) {
-        const addr = req.address >>> 0;
-        const size = getTransferSizeLog2(req, 2);
-
-        if (req.type === TL_A_Opcode.PutFullData || req.type === TL_A_Opcode.PutPartialData) {
-            this._writeValueBySize(addr, req.value ?? 0, size);
-        } else if (req.type === 'write') {
-            this._writeWord(addr, req.value ?? 0);
-        } else if (req.type === 'writeHalf') {
-            this._writeHalf(addr, req.value ?? 0);
-        } else if (req.type === 'writeByte') {
-            this._writeByte(addr, req.value ?? 0);
+        if (size === 0) {
+            this._writeByte(addr, value);
+            return;
         }
-    }
 
-    _writeThroughLower(req) {
-        const addr = req.address >>> 0;
-        const size = getTransferSizeLog2(req, 2);
-        this._writeLowerByReq(addr, req.value ?? 0, req.type, size);
+        if (size === 1) {
+            this._writeHalf(addr, value);
+            return;
+        }
+
+        this._writeWord(addr, value);
     }
 
     _writeByte(addr, value) {
@@ -520,59 +661,93 @@ export class Cache {
         this._writeByte(addr + 3, (value >> 24) & 0xFF);
     }
 
-    _ensureBlock(addr) {
-        let block = this._findBlock(addr);
-        if (block) {
-            this._touchBlock(block);
-            return block;
-        }
+    _touchBlock(block) {
+        block.lastReference = ++this.referenceCounter;
+    }
 
-        const set = this._getSetIndex(addr);
-        const begin = set * this.policy.associativity;
-        const end = begin + this.policy.associativity;
-        const victimId = this._getReplacementBlockId(begin, end);
-        block = this.blocks[victimId];
+    _logHit(kind, address, cycles, value = null) {
+        const decoded = this._decodeAddress(address);
+        const valueFragment = value === null || value === undefined ? '' : ` val=0x${(value >>> 0).toString(16)}`;
+        console.log(`[Cache:${this.name}] HIT ${kind} addr=0x${address.toString(16)} set=${decoded.setIndex} tag=0x${decoded.tag.toString(16)}${valueFragment} cy=${cycles}`);
+    }
 
-        if (block.valid && block.modified && this.writeBack) {
-            this._writeBlockToLowerLevel(block);
-        }
+    _logMiss(kind, address, cycles, value = null) {
+        const decoded = this._decodeAddress(address);
+        const valueFragment = value === null || value === undefined ? '' : ` val=0x${(value >>> 0).toString(16)}`;
+        console.log(`[Cache:${this.name}] MISS ${kind} addr=0x${address.toString(16)} set=${decoded.setIndex} tag=0x${decoded.tag.toString(16)}${valueFragment} cy=${cycles}`);
+    }
 
-        const base = this._getBlockBase(addr);
-        console.log(
-            `[Cache] DEMAND FILL set=${set} way=${victimId - begin} tag=0x${this._getTag(addr).toString(16)} ` +
-            `base=0x${base.toString(16)}`
-        );
+    _normalizePolicy(userPolicy) {
+        const cacheSize = userPolicy.cacheSize ?? 4096;
+        const blockSize = userPolicy.blockSize ?? 32;
+        const associativity = userPolicy.associativity ?? 4;
+        const blockNum = userPolicy.blockNum ?? (cacheSize / blockSize);
+        const numSets = userPolicy.numSets ?? (blockNum / associativity);
 
-        for (let i = 0; i < this.policy.blockSize; i++) {
-            block.data[i] = this._readByteLower(base + i);
-        }
+        return {
+            cacheSize,
+            blockSize,
+            associativity,
+            blockNum,
+            numSets,
+            hitLatency: userPolicy.hitLatency ?? 1,
+            missLatency: userPolicy.missLatency ?? 10
+        };
+    }
 
-        block.valid = true;
-        block.modified = false;
-        block.tag = this._getTag(addr);
-        this._touchBlock(block);
-        return block;
+    _initializeBlocks() {
+        if (!this._isPolicyValid()) throw new Error('Invalid cache policy');
+
+        this.blocks = Array.from({ length: this.policy.blockNum }, (_, index) => ({
+            valid: false,
+            modified: false,
+            tag: 0,
+            id: index,
+            size: this.policy.blockSize,
+            lastReference: 0,
+            data: new Uint8Array(this.policy.blockSize)
+        }));
+    }
+
+    _decodeAddress(addr) {
+        return {
+            tag: this._getTag(addr),
+            setIndex: this._getSetIndex(addr),
+            offset: this._getOffset(addr)
+        };
+    }
+
+    _getSetBounds(setIndex) {
+        const begin = setIndex * this.policy.associativity;
+        return {
+            begin,
+            end: begin + this.policy.associativity
+        };
+    }
+
+    _getWayIndex(blockId) {
+        return blockId % this.policy.associativity;
     }
 
     _getTag(addr) {
-        return addr >>> (this._offsetBits() + this._indexBits());
+        return (addr >>> 0) >>> (this._offsetBits() + this._indexBits());
     }
 
     _getSetIndex(addr) {
-        return (addr >>> this._offsetBits()) & (this.policy.numSets - 1);
+        return ((addr >>> 0) >>> this._offsetBits()) & (this.policy.numSets - 1);
     }
 
     _getOffset(addr) {
-        return addr & (this.policy.blockSize - 1);
+        return (addr >>> 0) & (this.policy.blockSize - 1);
     }
 
     _getBlockBase(addr) {
-        return addr & ~(this.policy.blockSize - 1);
+        return (addr >>> 0) & ~(this.policy.blockSize - 1);
     }
 
-    _getAddr(block) {
-        const set = Math.floor(block.id / this.policy.associativity);
-        return (block.tag << (this._indexBits() + this._offsetBits())) | (set << this._offsetBits());
+    _getAddressFromBlock(block) {
+        const setIndex = Math.floor(block.id / this.policy.associativity);
+        return (block.tag << (this._indexBits() + this._offsetBits())) | (setIndex << this._offsetBits());
     }
 
     _offsetBits() {
@@ -584,13 +759,14 @@ export class Cache {
     }
 
     _isPolicyValid() {
-        const p = this.policy;
-        const isPow2 = (n) => (n & (n - 1)) === 0;
-        return isPow2(p.cacheSize) &&
-            isPow2(p.blockSize) &&
-            isPow2(p.associativity) &&
-            isPow2(p.numSets) &&
-            p.cacheSize === p.blockSize * p.blockNum &&
-            p.blockNum === p.numSets * p.associativity;
+        const policy = this.policy;
+        const isPowerOfTwo = (value) => value > 0 && (value & (value - 1)) === 0;
+
+        return isPowerOfTwo(policy.cacheSize) &&
+            isPowerOfTwo(policy.blockSize) &&
+            isPowerOfTwo(policy.associativity) &&
+            isPowerOfTwo(policy.numSets) &&
+            policy.cacheSize === policy.blockSize * policy.blockNum &&
+            policy.blockNum === policy.numSets * policy.associativity;
     }
 }
