@@ -10,8 +10,12 @@
         log: global.console.log.bind(global.console),
         warn: global.console.warn.bind(global.console),
         error: global.console.error.bind(global.console),
-        info: global.console.info.bind(global.console)
+        info: global.console.info.bind(global.console),
+        group: typeof global.console.group === 'function' ? global.console.group.bind(global.console) : null,
+        groupCollapsed: typeof global.console.groupCollapsed === 'function' ? global.console.groupCollapsed.bind(global.console) : null,
+        groupEnd: typeof global.console.groupEnd === 'function' ? global.console.groupEnd.bind(global.console) : null
     };
+    let groupDepth = 0;
 
     function formatArg(arg) {
         if (arg instanceof Error) {
@@ -38,9 +42,11 @@
         if (level === 'error') prefix = '[ERROR] ';
         if (level === 'warn') prefix = '[WARN] ';
 
+        const indent = '  '.repeat(groupDepth);
+
         const entry = {
             level,
-            text: prefix + Array.from(args).map(formatArg).join(' ')
+            text: indent + prefix + Array.from(args).map(formatArg).join(' ')
         };
 
         history.push(entry);
@@ -79,4 +85,34 @@
             pushEntry(level, args);
         };
     });
+
+    const pushGroupHeader = (args, collapsed = false) => {
+        const label = Array.from(args).map(formatArg).join(' ');
+        const marker = collapsed ? '[+] ' : '[-] ';
+        const entry = {
+            level: 'info',
+            text: '  '.repeat(groupDepth) + marker + label
+        };
+
+        history.push(entry);
+        trimHistoryIfNeeded();
+        subscribers.forEach((notify) => notify({ type: 'entry', entry }));
+        groupDepth++;
+    };
+
+    global.console.group = function (...args) {
+        if (originalConsole.group) originalConsole.group(...args);
+        pushGroupHeader(args, false);
+    };
+
+    global.console.groupCollapsed = function (...args) {
+        if (originalConsole.groupCollapsed) originalConsole.groupCollapsed(...args);
+        else if (originalConsole.group) originalConsole.group(...args);
+        pushGroupHeader(args, true);
+    };
+
+    global.console.groupEnd = function () {
+        if (originalConsole.groupEnd) originalConsole.groupEnd();
+        groupDepth = Math.max(0, groupDepth - 1);
+    };
 })(window);
