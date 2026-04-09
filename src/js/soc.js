@@ -160,6 +160,10 @@ function createSimpleCacheLowerPort(cache, cacheName = 'cache', upperCacheName =
             const ramReturnCycle = ramRequestCycle + ramLatency;
             plan.totalLatency = (ramRequestCycle - startCycle) + ramLatency + REFILL_TRANSFER_LATENCY;
             plan.events.push({
+                cycle: ramRequestCycle,
+                message: `[RAM] REQUEST addr=0x${blockBase.toString(16)}`
+            });
+            plan.events.push({
                 cycle: ramReturnCycle,
                 message: `[RAM] RETURN addr=0x${blockBase.toString(16)} (+${ramLatency}cy)`
             });
