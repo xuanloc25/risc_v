@@ -10,6 +10,7 @@ import { UART } from './uart.js';
 import { LEDMatrix } from './led_matrix.js';
 import { Keyboard } from './keyboard.js';
 import { MousePeripheral } from './mouse.js';
+import { Port, attachPort } from './port_link.js';
 import {
     TL_D_Opcode,
     applyTileLinkAtomic,
@@ -259,15 +260,16 @@ export const simulator = {
     ledMatrix: null,
     keyboard: null,
     mouse: null,
+    ports: null,
     cycleCount: 0,
     useCache: true,
 
     setCacheEnabled(enabled) {
         this.useCache = !!enabled;
-        this.reset();
+        this.init();
     },
 
-    reset() {
+    init() {
         const isBrowser = typeof document !== 'undefined';
 
         let ledMatrix = null;
@@ -336,6 +338,7 @@ export const simulator = {
             name: 'ul-to-uh-bridge'
         });
 
+<<<<<<< HEAD
         this.cpu = new CPU();
         this.mmu = new MMU(null, null, {
             cacheabilityPredicate: isCacheableAddress
@@ -380,6 +383,8 @@ export const simulator = {
         this.iCache = this.cache;
         this.dCache = this.cache;
 
+=======
+>>>>>>> origin/main
         const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'uart', {
             read: (addr) => uart.readRegister(addr),
             write: (addr, value) => uart.writeRegister(addr, value)
@@ -405,20 +410,22 @@ export const simulator = {
             write: (addr, value) => mouse.writeRegister(addr, value)
         });
 
-        this.tilelink_UH.registerSlave('main-memory', this.mem, (addr) => isCacheableAddress(addr));
-        this.tilelink_UH.registerSlave('dma-regs', this.dma, (addr) => dmaRegRange(addr));
-        this.tilelink_UH.registerSlave('uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr));
-        this.tilelink_UH.attachMemoryTarget(this.mem);
-
-        this.tilelink_UL.registerSlave('uart', uartEndpoint, uartRange);
-        this.tilelink_UL.registerSlave('led-matrix', ledEndpoint, ledRange);
-        this.tilelink_UL.registerSlave('keyboard', keyboardEndpoint, keyboardRange);
-        this.tilelink_UL.registerSlave('mouse', mouseEndpoint, mouseRange);
-        this.tilelink_UL.registerSlave('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr));
-        this.tilelink_UL.attachMemoryTarget(this.mem);
-
-        this.tilelink_UH.registerMaster('dma', this.dma);
-        this.tilelink_UL.registerMaster('dma', this.dma);
+        this.ports = {
+            cpuToMmu: attachPort(this.cpu, this.mmu, 'cpu-to-mmu'),
+            mmuToCache: attachPort(this.mmu, this.cache, 'mmu-to-cache'),
+            cacheToUh: attachPort(this.cache, this.tilelink_UH, 'cache-to-uh'),
+            uhToMainMemory: attachPort(this.tilelink_UH, Port.lower('main-memory', this.mem, (addr) => isCacheableAddress(addr))),
+            uhToDmaRegs: attachPort(this.tilelink_UH, Port.lower('dma-regs', this.dma, (addr) => dmaRegRange(addr))),
+            uhToUlBridge: attachPort(this.tilelink_UH, Port.lower('uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr))),
+            uhToDma: attachPort(this.tilelink_UH, Port.upper('dma', this.dma)),
+            uhMemoryView: attachPort(this.tilelink_UH, Port.memory('main-memory-view', this.mem)),
+            ulToUart: attachPort(this.tilelink_UL, Port.lower('uart', uartEndpoint, uartRange)),
+            ulToLedMatrix: attachPort(this.tilelink_UL, Port.lower('led-matrix', ledEndpoint, ledRange)),
+            ulToKeyboard: attachPort(this.tilelink_UL, Port.lower('keyboard', keyboardEndpoint, keyboardRange)),
+            ulToMouse: attachPort(this.tilelink_UL, Port.lower('mouse', mouseEndpoint, mouseRange)),
+            ulToUhBridge: attachPort(this.tilelink_UL, Port.lower('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr))),
+            ulToDma: attachPort(this.tilelink_UL, Port.upper('dma', this.dma))
+        };
 
         this.uart = uart;
         this.ledMatrix = ledMatrix;
@@ -426,6 +433,7 @@ export const simulator = {
         this.mouse = mouse;
         this.cycleCount = 0;
 
+        // Khôi phục trạng thái ban đầu cho các module và thiết bị ngoại vi
         if (this.ledMatrix) this.ledMatrix.reset();
         if (this.uart) this.uart.reset();
         if (this.mouse) this.mouse.reset();
@@ -498,4 +506,4 @@ export const simulator = {
     }
 };
 
-simulator.reset();
+simulator.init();

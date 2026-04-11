@@ -38,25 +38,48 @@ export class TileLinkBase {
         this.responseQueue = [];
         this.masters = {};
         this.slaves = [];
+        this.upperPorts = [];
 
         this.signals = createTileLinkSignals(`${name} (${variant})`);
         this.signalDefaults = makeChannelDefaults(this.signals);
         this.memoryTarget = null;
     }
 
-    registerMaster(name, target) {
-        this.masters[name] = target;
+    attachUpperPort(nameOrTarget, target = null) {
+        // For point-to-point helpers, TileLink can remember which upstream
+        // component is connected to it even though requests still use named
+        // master registration internally.
+        if (typeof nameOrTarget !== 'string') {
+            if (nameOrTarget && !this.upperPorts.includes(nameOrTarget)) {
+                this.upperPorts.push(nameOrTarget);
+            }
+            return;
+        }
+
+        this.masters[nameOrTarget] = target;
     }
 
-    registerSlave(name, target, matchFn = () => true) {
+    registerMaster(name, target) {
+        this.attachUpperPort(name, target);
+    }
+
+    attachLowerPort(name, target, matchFn = () => true) {
         this.slaves.push({ name, target, match: matchFn });
         if (!this.memoryTarget && (target?.mem || typeof target?.memBytes === 'function')) {
             this.memoryTarget = target;
         }
     }
 
-    attachMemoryTarget(target) {
+    registerSlave(name, target, matchFn = () => true) {
+        this.attachLowerPort(name, target, matchFn);
+    }
+
+    attachMemoryPort(target) {
         this.memoryTarget = target;
+    }
+
+    attachMemoryTarget(target) {
+        this.attachMemoryPort(target);
     }
 
     tick() {

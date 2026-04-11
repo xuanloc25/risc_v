@@ -1,8 +1,9 @@
 import { getTransferSizeLog2, isTileLinkAtomic, isTileLinkRead, isTileLinkWrite } from './tilelink.js';
+import { attachPort } from './port_link.js';
 
-// Translate the bus operation into the permission domain checked by the MMU.
-// In this simulator, instruction fetches use execute permission, loads use read,
-// and stores/atomics use write.
+// Chuyển đổi thao tác bus sang miền quyền được kiểm tra bởi MMU.
+// Trong trình giả lập này, lấy lệnh dùng quyền execute, tải dùng read,
+// và lưu trữ/nguyên tử (atomics) dùng write.
 function classifyAccess(type) {
     if (type === 'fetch') return 'execute';
     if (isTileLinkRead(type)) return 'read';
@@ -12,9 +13,9 @@ function classifyAccess(type) {
 
 export class MMU {
     constructor(upperPort = null, lowerPort = null, { pageSize = 4096, cacheabilityPredicate = () => true } = {}) {
-        // The MMU sits between the CPU and the cache/lower memory system.
-        // It translates virtual addresses, enforces permissions, and tags
-        // requests with cacheability information for lower levels.
+        // MMU nằm giữa CPU và hệ thống cache/bộ nhớ cấp thấp.
+        // Nó biên dịch địa chỉ ảo, thực thi các quyền, và gắn thẻ
+        // yêu cầu với thông tin khả năng lưu đệm (cacheability) cho các cấp thấp hơn.
         this.upperPort = upperPort;
         this.lowerPort = lowerPort;
         this.instructionLowerPort = lowerPort;
@@ -51,7 +52,7 @@ export class MMU {
     }
 
     attachCPU(cpu) {
-        this.attachUpperPort(cpu);
+        attachPort(cpu, this, 'cpu-to-mmu');
     }
 
     setCacheabilityPredicate(predicate) {
@@ -59,8 +60,8 @@ export class MMU {
     }
 
     mapPage(virtualBase, physicalBase, permissions = {}) {
-        // This simulator keeps a very small software-managed page table and TLB.
-        // A new mapping is inserted into both for immediate use.
+        // Trình giả lập này giữ một bảng phân trang và TLB rất nhỏ được quản lý bằng phần mềm.
+        // Một ánh xạ mới được chèn vào cả hai để sử dụng ngay lập tức.
         const entry = {
             virtualBase: virtualBase >>> 0,
             physicalBase: physicalBase >>> 0,
@@ -102,9 +103,9 @@ export class MMU {
             throw new Error('MMU has no attached lower port');
         }
 
-        // CPU-visible requests arrive with a virtual address. After translation,
-        // the lower port sees a physical address, while the original VA is kept
-        // so the response path can still report the CPU-facing address.
+        // Các yêu cầu từ CPU đến với một địa chỉ ảo. Sau khi biên dịch,
+        // cổng cấp thấp nhận một địa chỉ vật lý, trong khi VA gốc được giữ lại
+        // để đường dẫn phản hồi vẫn có thể trả về đúng địa chỉ lúc đầu của CPU.
         const accessType = classifyAccess(req.type);
         const translated = this.translateAddress(req.address, accessType);
 
@@ -125,8 +126,8 @@ export class MMU {
             throw new Error('MMU has no attached CPU');
         }
 
-        // Lower levels may respond using the translated physical address; the CPU
-        // should keep reasoning in terms of the original virtual address.
+        // Các cấp thấp hơn có thể phản hồi bằng địa chỉ vật lý đã được biên dịch; CPU
+        // nên tiếp tục xử lý dựa trên địa chỉ ảo gốc.
         this.upperPort.receiveResponse({
             ...resp,
             address: resp.virtualAddress ?? resp.address
@@ -146,15 +147,15 @@ export class MMU {
         } else {
             entry = this.pageTable.get(vpn);
             if (entry) {
-                // A software page-table hit refills the tiny TLB.
+                // Lượt hit bảng phân trang phần mềm sẽ được nạp lại vào TLB nhỏ.
                 this.stats.pageTableHits++;
                 this.tlb.set(vpn, entry);
             }
         }
 
         if (!entry) {
-            // Bare-metal programs in this project can run without setting up page
-            // tables. Unmapped addresses therefore fall back to VA == PA.
+            // Các chương trình bare-metal trong dự án này có thể chạy mà không cần thiết lập
+            // bảng phân trang. Địa chỉ không được ánh xạ do đó sẽ chuyển về VA == PA.
             this.stats.identityFallbacks++;
             return {
                 virtualAddress: va,
@@ -174,11 +175,18 @@ export class MMU {
     }
 
     memBytes() {
+<<<<<<< HEAD
         // Helper for debug views/tests that want to inspect the backing memory
         // through the MMU/cache stack.
         const lowerPort = this.dataLowerPort ?? this.instructionLowerPort ?? this.lowerPort;
         if (lowerPort?.mem) return lowerPort.mem;
         if (typeof lowerPort?.memBytes === 'function') return lowerPort.memBytes();
+=======
+        // Hàm hỗ trợ cho các chế độ xem gỡ lỗi/kiểm tra muốn kiểm tra bộ nhớ đệm
+        // thông qua ngăn xếp MMU/cache.
+        if (this.lowerPort?.mem) return this.lowerPort.mem;
+        if (typeof this.lowerPort?.memBytes === 'function') return this.lowerPort.memBytes();
+>>>>>>> origin/main
         throw new Error('MMU cannot expose backing memory bytes');
     }
 
