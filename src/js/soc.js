@@ -338,7 +338,6 @@ export const simulator = {
             name: 'ul-to-uh-bridge'
         });
 
-<<<<<<< HEAD
         this.cpu = new CPU();
         this.mmu = new MMU(null, null, {
             cacheabilityPredicate: isCacheableAddress
@@ -383,8 +382,6 @@ export const simulator = {
         this.iCache = this.cache;
         this.dCache = this.cache;
 
-=======
->>>>>>> origin/main
         const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'uart', {
             read: (addr) => uart.readRegister(addr),
             write: (addr, value) => uart.writeRegister(addr, value)

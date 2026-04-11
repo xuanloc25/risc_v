@@ -175,18 +175,11 @@ export class MMU {
     }
 
     memBytes() {
-<<<<<<< HEAD
         // Helper for debug views/tests that want to inspect the backing memory
         // through the MMU/cache stack.
         const lowerPort = this.dataLowerPort ?? this.instructionLowerPort ?? this.lowerPort;
         if (lowerPort?.mem) return lowerPort.mem;
         if (typeof lowerPort?.memBytes === 'function') return lowerPort.memBytes();
-=======
-        // Hàm hỗ trợ cho các chế độ xem gỡ lỗi/kiểm tra muốn kiểm tra bộ nhớ đệm
-        // thông qua ngăn xếp MMU/cache.
-        if (this.lowerPort?.mem) return this.lowerPort.mem;
-        if (typeof this.lowerPort?.memBytes === 'function') return this.lowerPort.memBytes();
->>>>>>> origin/main
         throw new Error('MMU cannot expose backing memory bytes');
     }
 
