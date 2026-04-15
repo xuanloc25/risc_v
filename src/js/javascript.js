@@ -548,7 +548,7 @@ function renderCacheView() {
             const row = tableBody.insertRow();
             const set = Math.floor(block.id / assoc);
             const way = block.id % assoc;
-            const bytesPreview = Array.from(block.data.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            const bytesPreview = Array.from(block.data.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' ');
 
             row.insertCell().textContent = set;
             row.insertCell().textContent = way;

@@ -56,7 +56,7 @@ export class SimpleCache {
         this.pendingFill = null; // pendingFill: request đang trong quá trình refill từ lower level.
         this.statistics = createStats();
         this.policy = {
-            associativity: numWays,
+            numWays,
             numSets,
             blockSize
         };
@@ -107,7 +107,7 @@ export class SimpleCache {
     memBytes() {
         if (this.lowerPort?.mem) return this.lowerPort.mem;
         if (typeof this.lowerPort?.memBytes === 'function') return this.lowerPort.memBytes();
-        return {};
+        return  new Uint8Array(0);
     }
 
     // Nhận request từ upper level; cache chỉ xử lý một request tại một thời điểm.
@@ -124,11 +124,6 @@ export class SimpleCache {
             req,
             readyCycle: this.cycle + latency
         };
-    }
-
-    // SimpleCache không có cơ chế forward response từ lower level.
-    receiveResponse(resp) {
-        void resp;
     }
 
     // Mỗi tick tiến trạng thái refill và trả response khi sẵn sàng.
@@ -218,7 +213,7 @@ export class SimpleCache {
             console.log(events[fill.loggedEvents].message);
             fill.loggedEvents++;
         }
-
+        // Nạp block
         if (!fill.installed && this.cycle >= fill.installCycle) {
             let blockData = null;
             if (fill.refillPlan && typeof this.lowerPort?.finishBlockFill === 'function') {
@@ -237,22 +232,6 @@ export class SimpleCache {
 
         if (this.cycle < fill.readyCycle) return;
 
-        if (!fill.installed) {
-            let blockData = null;
-            if (fill.refillPlan && typeof this.lowerPort?.finishBlockFill === 'function') {
-                blockData = this.lowerPort.finishBlockFill(fill.refillPlan);
-            }
-
-            if (blockData) {
-                this._installBlockData(fill.victim, fill.tag, blockData);
-            } else {
-                // Fallback: directRead từ lower level từng byte nếu không có async plan.
-                this._fillBlock(fill.victim, fill.blockBase, fill.tag);
-            }
-
-            fill.installed = true;
-        }
-
         this._touchBlock(fill.victim);
         console.log(`[CPU] RECEIVE(fill) addr=0x${(fill.req.address >>> 0).toString(16)}`);
         this.pendingResponse = this._buildResponse(fill.req, this._serveRequest(fill.victim, fill.offset, fill.size, fill.req));
@@ -263,22 +242,28 @@ export class SimpleCache {
     _handleBypassRequest(req) {
         const address = req.address >>> 0;
         const size = getTransferSizeLog2(req, 2);
+        const lowerLatency = req.cacheable === false ? 0: (this.lowerPort?.memoryTarget?.latency ?? this.lowerPort?.latency );
+        const bypassLatency = this.missLatency + lowerLatency;
         let data = 0;
         let type = TL_D_Opcode.AccessAck;
 
         if (isTileLinkRead(req.type)) {
+            // Log latency breakdown: miss phase + RAM latency
+            console.log(`[${this.name}] BYPASS_READ addr=0x${address.toString(16)} latency=${bypassLatency}cy (miss_phase=${this.missLatency}cy + RAM_latency=${lowerLatency}cy)`);
             data = this.lowerPort.directRead(address, size, req.type) >>> 0;
             type = TL_D_Opcode.AccessAckData;
         } else if (isTileLinkWrite(req.type)) {
+            console.log(`[${this.name}] BYPASS_WRITE addr=0x${address.toString(16)} latency=${bypassLatency}cy (miss_phase=${this.missLatency}cy + RAM_latency=${lowerLatency}cy)`);
             this.lowerPort.directWrite(address, req.value ?? 0, size, req.type);
         } else if (isTileLinkAtomic(req.type)) {
+            console.log(`[${this.name}] BYPASS_ATOMIC addr=0x${address.toString(16)} latency=${bypassLatency}cy (miss_phase=${this.missLatency}cy + RAM_latency=${lowerLatency}cy)`);
             data = this.lowerPort.directRead(address, size, req.type) >>> 0;
             const nextValue = applyTileLinkAtomic(req, data, size);
             this.lowerPort.directWrite(address, nextValue, size, req.type);
             type = TL_D_Opcode.AccessAckData;
         }
 
-        this.statistics.totalCycles += this.missLatency;
+        this.statistics.totalCycles += bypassLatency;
         this.pendingResponse = {
             from: this.name,
             to: req.from,
@@ -288,7 +273,7 @@ export class SimpleCache {
             virtualAddress: req.virtualAddress,
             size
         };
-        return this.missLatency;
+        return bypassLatency;
     }
 
     // Phục vụ dữ liệu từ block: read trả giá trị, write cập nhật block và write-through xuống lower.
@@ -301,7 +286,6 @@ export class SimpleCache {
             this._writeBlockValue(block, offset, req.value ?? 0, size);
             // Write-through: ghi xuống lower level đồng thời.
             this.lowerPort.directWrite(req.address >>> 0, req.value ?? 0, size, 'write-through');
-            block.modified = true;
             return 0;
         }
 
@@ -310,7 +294,6 @@ export class SimpleCache {
             const nextValue = applyTileLinkAtomic(req, oldValue, size);
             this._writeBlockValue(block, offset, nextValue, size);
             this.lowerPort.directWrite(req.address >>> 0, nextValue, size, 'write-through');
-            block.modified = true;
             return oldValue;
         }
 
@@ -400,19 +383,27 @@ export class SimpleCache {
         }
     }
 
-    // Helper địa chỉ: block base = căn lề blockSize.
+    // Cấu trúc địa chỉ nhị phân: [TAG][SET_INDEX][OFFSET]
+    
+    // địa chỉ: block base = căn lề blockSize (xóa offset bits).
     _getBlockBase(address) {
         const addr = address >>> 0;
-        return Math.floor(addr / this.blockSize) * this.blockSize;
+        const offsetMask = ~(this.blockSize - 1);
+        return addr & offsetMask;
     }
 
-    // Helper địa chỉ: set index từ phần giữa của địa chỉ.
+    // địa chỉ: set index = bits giữa (sau offset, trước tag).
     _getSetIndex(address) {
-        return Math.floor((address >>> 0) / this.blockSize) % this.numSets;
+        const addr = address >>> 0;
+        const offsetBits = Math.log2(this.blockSize);  // 4 bits (blockSize=16)
+        return (addr >> offsetBits) & (this.numSets - 1);
     }
 
-    // Helper địa chỉ: tag từ phần cao của địa chỉ.
+    // địa chỉ: tag = bits cao nhất (sau offset + set index).
     _getTag(address) {
-        return Math.floor((address >>> 0) / this.blockSize / this.numSets);
+        const addr = address >>> 0;
+        const offsetBits = Math.log2(this.blockSize);   // 4 bits
+        const setIndexBits = Math.log2(this.numSets);   // 4 bits
+        return addr >> (offsetBits + setIndexBits);
     }
 }

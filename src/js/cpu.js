@@ -316,6 +316,7 @@ export class CPU {
                 memoryAddress = (val1_int + imm) | 0;
                 if (!this.waitingRequest && !this.pendingResponse) {
                     this.readByteAsync(memoryAddress, bus);
+                    this._logLoadWait('LB', memoryAddress, rd);
                     return { nextPc: this.pc };
                 }
                 if (this.pendingResponse) {
@@ -324,7 +325,7 @@ export class CPU {
                     this.pendingResponse = null;
                     result_int = (memoryValue & 0x80) ? (memoryValue | 0xFFFFFF00) : (memoryValue & 0xFF);
                     if (rd !== 0) this.registers[rd] = result_int | 0;
-                    console.log(`[CPU] LB response: PC=0x${this.pc.toString(16)}, rd=x${rd}, value=${result_int | 0}`);
+                    this._logLoadCommit('LB', rd, result_int, memoryAddress);
                     return {};
                 }
                 return { nextPc: this.pc };
@@ -332,6 +333,7 @@ export class CPU {
                 memoryAddress = (val1_int + imm) | 0;
                 if (!this.waitingRequest && !this.pendingResponse) {
                     this.readHalfAsync(memoryAddress, bus);
+                    this._logLoadWait('LH', memoryAddress, rd);
                     return { nextPc: this.pc };
                 }
                 if (this.pendingResponse) {
@@ -340,6 +342,7 @@ export class CPU {
                     this.pendingResponse = null;
                     result_int = (memoryValue & 0x8000) ? (memoryValue | 0xFFFF0000) : memoryValue;
                     if (rd !== 0) this.registers[rd] = result_int | 0;
+                    this._logLoadCommit('LH', rd, result_int, memoryAddress);
                     return {};
                 }
                 return { nextPc: this.pc };
@@ -347,6 +350,7 @@ export class CPU {
                 memoryAddress = (val1_int + imm) | 0;
                 if (!this.waitingRequest && !this.pendingResponse) {
                     this.readWordAsync(memoryAddress, bus);
+                    this._logLoadWait('LW', memoryAddress, rd);
                     return { nextPc: this.pc };
                 }
                 if (this.pendingResponse) {
@@ -354,7 +358,7 @@ export class CPU {
                     this.waitingRequest = null;
                     this.pendingResponse = null;
                     if (rd !== 0) this.registers[rd] = result_int | 0;
-                    console.log(`[CPU] LW response: PC=0x${this.pc.toString(16)}, rd=x${rd}, value=${result_int | 0}`);
+                    this._logLoadCommit('LW', rd, result_int, memoryAddress);
                     return {};
                 }
                 return { nextPc: this.pc };
@@ -362,6 +366,7 @@ export class CPU {
                 memoryAddress = (val1_int + imm) | 0;
                 if (!this.waitingRequest && !this.pendingResponse) {
                     this.readByteAsync(memoryAddress, bus);
+                    this._logLoadWait('LBU', memoryAddress, rd);
                     return { nextPc: this.pc };
                 }
                 if (this.pendingResponse) {
@@ -370,6 +375,7 @@ export class CPU {
                     this.pendingResponse = null;
                     result_int = memoryValue;
                     if (rd !== 0) this.registers[rd] = result_int | 0;
+                    this._logLoadCommit('LBU', rd, result_int, memoryAddress);
                     return {};
                 }
                 return { nextPc: this.pc };
@@ -377,6 +383,7 @@ export class CPU {
                 memoryAddress = (val1_int + imm) | 0;
                 if (!this.waitingRequest && !this.pendingResponse) {
                     this.readHalfAsync(memoryAddress, bus);
+                    this._logLoadWait('LHU', memoryAddress, rd);
                     return { nextPc: this.pc };
                 }
                 if (this.pendingResponse) {
@@ -385,6 +392,7 @@ export class CPU {
                     this.pendingResponse = null;
                     result_int = memoryValue;
                     if (rd !== 0) this.registers[rd] = result_int | 0;
+                    this._logLoadCommit('LHU', rd, result_int, memoryAddress);
                     return {};
                 }
                 return { nextPc: this.pc };
@@ -594,6 +602,7 @@ export class CPU {
                 memoryAddress = val1_int | 0; // rs1 contains address
                 if (!this.waitingRequest && !this.pendingResponse) {
                     this.amoAddAsync(memoryAddress, val2_int, bus);
+                    this._logAtomicWait('AMOADD.W', memoryAddress, rd, val2_int);
                     return { nextPc: this.pc };
                 }
                 if (this.pendingResponse) {
@@ -601,7 +610,7 @@ export class CPU {
                     this.waitingRequest = null;
                     this.pendingResponse = null;
                     if (rd !== 0) this.registers[rd] = result_int | 0;
-                    console.log(`[CPU] AMOADD.W response: PC=0x${this.pc.toString(16)}, rd=x${rd}, old_value=${result_int | 0}`);
+                    this._logAtomicCommit('AMOADD.W', rd, result_int, memoryAddress, val2_int);
                     return {};
                 }
                 return { nextPc: this.pc };
@@ -773,13 +782,35 @@ export class CPU {
         if (resp.type === 'fetch') { // Legacy support if needed
             this.fetchPending = resp;
             this.fetchWaiting = false;
+            this._logFetchReady(resp);
         } else if (this.fetchWaiting && (resp.type === TL_D_Opcode.AccessAckData)) {
             // Assume if fetchWaiting is true, the first incoming Get response is the fetch
             this.fetchPending = resp;
             this.fetchWaiting = false;
+            this._logFetchReady(resp);
         } else {
             this.pendingResponse = resp;
         }
+    }
+
+    _logFetchReady(resp) {
+        console.log(`[CPU] FETCH_READY pc=0x${this.pc.toString(16)} addr=0x${(resp.address >>> 0).toString(16)}`);
+    }
+
+    _logLoadWait(opName, address, rd) {
+        console.log(`[CPU] LOAD_WAIT op=${opName} pc=0x${this.pc.toString(16)} addr=0x${(address >>> 0).toString(16)} rd=x${rd}`);
+    }
+
+    _logLoadCommit(opName, rd, value, address) {
+        console.log(`[CPU] LOAD_COMMIT op=${opName} pc=0x${this.pc.toString(16)} rd=x${rd} addr=0x${(address >>> 0).toString(16)} value=${value | 0}`);
+    }
+
+    _logAtomicWait(opName, address, rd, operand) {
+        console.log(`[CPU] ATOMIC_WAIT op=${opName} pc=0x${this.pc.toString(16)} addr=0x${(address >>> 0).toString(16)} rd=x${rd} operand=${operand | 0}`);
+    }
+
+    _logAtomicCommit(opName, rd, oldValue, address, operand) {
+        console.log(`[CPU] ATOMIC_COMMIT op=${opName} pc=0x${this.pc.toString(16)} rd=x${rd} addr=0x${(address >>> 0).toString(16)} old_value=${oldValue | 0} operand=${operand | 0}`);
     }
 
     getMemBytes(bus = this.lowerPort) {
