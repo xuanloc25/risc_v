@@ -1,6 +1,6 @@
 import { CPU } from './cpu.js';
 import { MMU } from './mmu.js';
-import SimpleCache from './SimpleCache.js';
+import { SimpleCache } from './SimpleCache.js';
 import { TileLink_UH } from './tilelink_UH.js';
 import { Mem } from './mem.js';
 import { TileLink_UL } from './tilelink_UL.js';
@@ -78,19 +78,30 @@ function createMMIOEndpoint(bus, name, { read, write }) {
 function createSimpleCacheLowerPort(cache, cacheName = 'cache', upperCacheName = null) {
     const REFILL_TRANSFER_LATENCY = 1;
     const isRefillAccess = (accessType) => accessType === 'fill' || accessType === 'fill-bypass';
-    const pushRefillEvent = (events, targetName, cycle, blockBase) => {
+    const pushRefillEvent = (events, targetName, cycle, blockBase, action = null) => {
         if (!targetName) return;
         events.push({
             cycle,
-            message: `[${targetName}] REFILL(fill) addr=0x${blockBase.toString(16)}`
+            message: `[${targetName}] REFILL(fill) addr=0x${blockBase.toString(16)}`,
+            action
         });
     };
-    const pushForwardEvent = (events, targetName, cycle, blockBase, bypassLatency) => {
-        if (!targetName) return;
-        events.push({
-            cycle,
-            message: `[${targetName}] FORWARD(fill) addr=0x${blockBase.toString(16)} (+${bypassLatency}cy refill latency)`
-        });
+    const materializePlan = (plan) => {
+        if (!plan || plan.materialized) return;
+
+        let block = cache._findBlock(plan.setIndex, plan.tag);
+        if (!block) {
+            block = cache._selectVictim(plan.setIndex);
+
+            if (plan.lowerPlan && typeof cache.lowerPort?.finishBlockFill === 'function') {
+                const lowerBlockData = cache.lowerPort.finishBlockFill(plan.lowerPlan);
+                cache._installBlockData(block, plan.tag, lowerBlockData);
+            } else {
+                cache._fillBlock(block, plan.blockBase, plan.tag);
+            }
+        }
+
+        plan.materialized = true;
     };
 
     return {
@@ -113,7 +124,8 @@ function createSimpleCacheLowerPort(cache, cacheName = 'cache', upperCacheName =
                 hit: !!block,
                 lowerPlan: null,
                 events: [],
-                bypassLatency: REFILL_TRANSFER_LATENCY
+                bypassLatency: REFILL_TRANSFER_LATENCY,
+                materialized: !!block
             };
 
             const checkCycle = startCycle + 1;
@@ -147,7 +159,13 @@ function createSimpleCacheLowerPort(cache, cacheName = 'cache', upperCacheName =
                     + plan.lowerPlan.totalLatency
                     + (plan.lowerPlan.bypassLatency ?? 0);
                 plan.events.push(...plan.lowerPlan.events);
-                pushRefillEvent(plan.events, cacheName, startCycle + plan.totalLatency - REFILL_TRANSFER_LATENCY, blockBase);
+                pushRefillEvent(
+                    plan.events,
+                    cacheName,
+                    startCycle + plan.totalLatency - REFILL_TRANSFER_LATENCY,
+                    blockBase,
+                    () => materializePlan(plan)
+                );
                 plan.events.push({
                     cycle: startCycle + plan.totalLatency,
                     message: `[${cacheName}] FORWARD(fill) addr=0x${blockBase.toString(16)} (+${REFILL_TRANSFER_LATENCY}cy refill latency)`
@@ -168,7 +186,13 @@ function createSimpleCacheLowerPort(cache, cacheName = 'cache', upperCacheName =
                 cycle: ramReturnCycle,
                 message: `[RAM] RETURN addr=0x${blockBase.toString(16)} (+${ramLatency}cy)`
             });
-            pushRefillEvent(plan.events, cacheName, startCycle + plan.totalLatency - REFILL_TRANSFER_LATENCY, blockBase);
+            pushRefillEvent(
+                plan.events,
+                cacheName,
+                startCycle + plan.totalLatency - REFILL_TRANSFER_LATENCY,
+                blockBase,
+                () => materializePlan(plan)
+            );
             plan.events.push({
                 cycle: startCycle + plan.totalLatency,
                 message: `[${cacheName}] FORWARD(fill) addr=0x${blockBase.toString(16)} (+${REFILL_TRANSFER_LATENCY}cy refill latency)`
@@ -180,17 +204,10 @@ function createSimpleCacheLowerPort(cache, cacheName = 'cache', upperCacheName =
         finishBlockFill(plan) {
             if (!plan) return null;
 
-            let block = cache._findBlock(plan.setIndex, plan.tag);
-            if (!block) {
-                block = cache._selectVictim(plan.setIndex);
+            materializePlan(plan);
 
-                if (plan.lowerPlan && typeof cache.lowerPort?.finishBlockFill === 'function') {
-                    const lowerBlockData = cache.lowerPort.finishBlockFill(plan.lowerPlan);
-                    cache._installBlockData(block, plan.tag, lowerBlockData);
-                } else {
-                    cache._fillBlock(block, plan.blockBase, plan.tag);
-                }
-            }
+            const block = cache._findBlock(plan.setIndex, plan.tag);
+            if (!block) return null;
 
             cache._touchBlock(block);
             const blockCopy = new Uint8Array(cache.blockSize);
@@ -198,8 +215,6 @@ function createSimpleCacheLowerPort(cache, cacheName = 'cache', upperCacheName =
             return blockCopy;
         },
         directRead(address, size, accessType) {
-            // All timed cache behaviour is modeled through receiveRequest()/beginBlockFill().
-            // directRead should not allocate or satisfy cacheable accesses synchronously.
             return cache.lowerPort.directRead(address >>> 0, size, accessType);
         },
         directWrite(address, value, size, accessType) {
@@ -249,7 +264,6 @@ export const simulator = {
     iCache: null,
     dCache: null,
     l2Cache: null,
-    cache: null,
     tilelink_UH: null,
     mem: null,
     tilelink_UL: null,
@@ -358,29 +372,33 @@ export const simulator = {
             missLatency: 10,
             isCacheable: isCacheableAddress
         };
-        this.cache = new SimpleCache({
+        this.iCache = new SimpleCache({
             ...CacheConfigL1,
-            name: 'l1-cache'
+            name: 'l1i-cache'
+        });
+        this.dCache = new SimpleCache({
+            ...CacheConfigL1,
+            name: 'l1d-cache'
         });
         this.l2Cache = new SimpleCache({
             ...CacheConfigL2,
             name: 'l2-cache'
         });
 
-        this.l2Cache.attachLowerPort(this.tilelink_UH);
-        this.cache.attachLowerPort(createSimpleCacheLowerPort(this.l2Cache, 'L2-cache', 'l1-cache'));
-        this.cache.attachUpperPort(this.mmu);
-        this.cache.setEnabled(this.useCache);
+        const l1iToL2Port = createSimpleCacheLowerPort(this.l2Cache, 'L2-cache', 'l1i-cache');
+        const l1dToL2Port = createSimpleCacheLowerPort(this.l2Cache, 'L2-cache', 'l1d-cache');
+        const cpuToMmuPort = attachPort(this.cpu, this.mmu, 'cpu-to-mmu');
+        const l2ToUhPort = attachPort(this.l2Cache, this.tilelink_UH, 'l2-to-uh');
+
+        this.iCache.attachLowerPort(l1iToL2Port);
+        this.dCache.attachLowerPort(l1dToL2Port);
+        this.iCache.setEnabled(this.useCache);
+        this.dCache.setEnabled(this.useCache);
         this.l2Cache.setEnabled(this.useCache);
 
-        this.cpu.attachLowerPort(this.mmu);
-        this.mmu.attachUpperPort(this.cpu);
-        this.mmu.attachInstructionLowerPort(this.cache);
-        this.mmu.attachDataLowerPort(this.cache);
-
-        // Giữ alias để UI cũ không bị vỡ.
-        this.iCache = this.cache;
-        this.dCache = this.cache;
+        // MMU route riêng luồng fetch và data access xuống hai L1 độc lập.
+        this.mmu.attachInstructionLowerPort(this.iCache);
+        this.mmu.attachDataLowerPort(this.dCache);
 
         const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'uart', {
             read: (addr) => uart.readRegister(addr),
@@ -408,9 +426,12 @@ export const simulator = {
         });
 
         this.ports = {
-            cpuToMmu: attachPort(this.cpu, this.mmu, 'cpu-to-mmu'),
-            mmuToCache: attachPort(this.mmu, this.cache, 'mmu-to-cache'),
-            cacheToUh: attachPort(this.cache, this.tilelink_UH, 'cache-to-uh'),
+            cpuToMmu: cpuToMmuPort,
+            mmuToL1I: this.iCache,
+            mmuToL1D: this.dCache,
+            l1iToL2: l1iToL2Port,
+            l1dToL2: l1dToL2Port,
+            l2ToUh: l2ToUhPort,
             uhToMainMemory: attachPort(this.tilelink_UH, Port.lower('main-memory', this.mem, (addr) => isCacheableAddress(addr))),
             uhToDmaRegs: attachPort(this.tilelink_UH, Port.lower('dma-regs', this.dma, (addr) => dmaRegRange(addr))),
             uhToUlBridge: attachPort(this.tilelink_UH, Port.lower('uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr))),
@@ -435,12 +456,13 @@ export const simulator = {
         if (this.uart) this.uart.reset();
         if (this.mouse) this.mouse.reset();
         if (this.keyboard) this.keyboard.reset();
-        if (this.cache) this.cache.reset();
+        if (this.iCache) this.iCache.reset();
+        if (this.dCache) this.dCache.reset();
         if (this.l2Cache) this.l2Cache.reset();
         if (this.mmu) this.mmu.reset();
 
-        console.info('[ARCH] CPU -> MMU -> L1 cache -> L2 cache -> memory/MMIO');
-        console.info('[CACHE] L1: 16 sets x 4 ways, L2: 16 sets x 4 ways');
+        console.info('[ARCH] CPU -> MMU -> L1I/L1D -> L2 cache -> memory/MMIO');
+        console.info('[CACHE] L1I: 16 sets x 4 ways, L1D: 16 sets x 4 ways, L2: 64 sets x 4 ways');
         console.info('[ARCH] TileLink-UH <-> TileLink-UL through bus bridge');
         console.info('[ARCH] DMA Controller attached to both TileLink-UH and TileLink-UL');
         console.info('[IO MAP] LED Matrix: 0xFF000000-0xFF000FFF');
@@ -490,7 +512,8 @@ export const simulator = {
         this.tilelink_UH.tick();
         this.tilelink_UL.tick();
         this.mem.tick(this.tilelink_UH);
-        this.cache.tick();
+        this.iCache.tick();
+        this.dCache.tick();
         this.l2Cache.tick();
         this.tilelink_UH.tick();
         this.tilelink_UL.tick();

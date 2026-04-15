@@ -8,26 +8,13 @@
     addi x17, x0, 93         # a7 = exit syscall
     ecall                    # exit(loaded_value)
 
-//cache 
+//cache atomic
 
-    addi x1, x0, 0x200      # A = 0x200
-    lui  x2, 0x11111
-    addi x2, x2, 0x111
-    sw   x2, 0(x1)          # miss -> nạp block A vào cache
+addi x1, x0, 0x200      # x1 = 0x200
+addi x3, x0, 0x10       # Giá trị ban đầu trong RAM là 16 (0x10)
+sw   x3, 0(x1)          # Lưu 0x10 vào địa chỉ 0x200
 
-    addi x3, x0, 0x400      # B = 0x400
-    lui  x4, 0x22222
-    addi x4, x4, 0x222
-    sw   x4, 0(x3)          # miss -> nạp block B vào cùng set
-
-    addi x5, x0, 0x600      # C = 0x600
-    lui  x6, 0x33333
-    addi x6, x6, 0x333
-    sw   x6, 0(x5)          # miss -> cùng set nữa, gây eviction
-
-    lw   x7, 0(x1)         
-    lw   x8, 0(x3)          
-    lw   x9, 0(x5)          
-
-    addi x17, x0, 93
-    ecall
+addi x2, x0, 0x5        # x2 = 5 (giá trị cộng thêm)
+amoadd.w x4, x2, (x1)   # 1. Đọc giá trị cũ (0x10) từ 0x200 vào x4
+                        # 2. Tính toán: 0x10 + 0x5 = 0x15
+                        # 3. Ghi giá trị mới (0x15) ngược lại 0x200
