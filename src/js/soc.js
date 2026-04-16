@@ -205,6 +205,11 @@ export const simulator = {
         //const l1iToL2Port = this.l2Cache;
         //const l1dToL2Port = this.l2Cache;
         const cpuToMmuPort = attachPort(this.cpu, this.mmu, 'cpu-to-mmu');
+
+        // MMU route riêng luồng fetch và data access xuống hai L1 độc lập.
+        this.mmu.attachInstructionLowerPort(this.iCache);
+        this.mmu.attachDataLowerPort(this.dCache);
+        
         const l2ToUhPort = attachPort(this.l2Cache, this.tilelink_UH, 'l2-to-uh');
 
         this.iCache.attachLowerPort(this.l2Cache);
@@ -213,9 +218,7 @@ export const simulator = {
         this.dCache.setEnabled(this.useCache);
         this.l2Cache.setEnabled(this.useCache);
 
-        // MMU route riêng luồng fetch và data access xuống hai L1 độc lập.
-        this.mmu.attachInstructionLowerPort(this.iCache);
-        this.mmu.attachDataLowerPort(this.dCache);
+
 
         const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'uart', {
             read: (addr) => uart.readRegister(addr),
