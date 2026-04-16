@@ -24,3 +24,16 @@
     addi a0, t1, 0
     li   a7, 93
     ecall
+
+
+
+           events: [
+            { cycle: 1,  message: "[L1] MISS(fill) addr=0x1000..." },
+            { cycle: 6,  message: "[L2] MISS(fill) addr=0x1000..." }, 
+            { cycle: 16,message: "[RAM] REQUEST addr=0x1000" },
+            { cycle: 36, message: "[RAM] RETURN addr=0x1000 (+20cy)" },
+            { cycle: 37, message: "[L2] FORWARD(fill) addr=0x1000..." }
+            { cycle: 38, message: "[L1] REFILL(fill) addr=0x1000..." }
+            { cycle: 39, message: "[L1] FORWARD(fill) addr=0x1000..." }
+            { cycle: 40, message: "CPU EXECUTED "  }
+          ],

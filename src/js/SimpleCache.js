@@ -8,6 +8,7 @@ import {
 } from './tilelink.js';
 
 const REFILL_TRANSFER_LATENCY = 1;
+const REFILL_BEAT_BYTES = 4;
 
 // Kiểm tra xem request là read hay atomic (có trả dữ liệu về).
 function isReadResponse(type) {
@@ -26,15 +27,7 @@ function createStats() {
 }
 
 export class SimpleCache {
-    constructor({
-        numSets = 16,
-        numWays = 4,
-        blockSize = 16,
-        hitLatency = 1,
-        missLatency = 5,
-        name = 'simple-cache',
-        isCacheable = () => true
-    } = {}) {
+    constructor({ numSets, numWays, blockSize, hitLatency, missLatency, name, isCacheable = () => true} = {}) {
         // Thông số cấu hình cache.
         this.name = name;
         this.numSets = numSets;
@@ -54,6 +47,7 @@ export class SimpleCache {
         this.pendingRequest = null; // pendingRequest: request đang chờ hoàn tất (hit/bypass).
         this.pendingResponse = null; // pendingResponse: dữ liệu đã sẵn sàng trả về.
         this.pendingFill = null; // pendingFill: request đang trong quá trình refill từ lower level.
+        this.pendingBurstResponse = null; // pendingBurstResponse: burst line data đang trả về upper cache.
         this.statistics = createStats();
         this.policy = {
             numWays,
@@ -92,6 +86,7 @@ export class SimpleCache {
         this.pendingRequest = null;
         this.pendingResponse = null;
         this.pendingFill = null;
+        this.pendingBurstResponse = null;
         this.statistics = createStats();
 
         for (const block of this.blocks) {
@@ -103,16 +98,57 @@ export class SimpleCache {
         }
     }
 
-    // Expose backing memory từ lower level cho test/debug.
-    memBytes() {
-        if (this.lowerPort?.mem) return this.lowerPort.mem;
-        if (typeof this.lowerPort?.memBytes === 'function') return this.lowerPort.memBytes();
-        return  new Uint8Array(0);
+    directRead(address, size, accessType) {
+        return this.lowerPort.directRead(address >>> 0, size, accessType);
+    }
+
+    directWrite(address, value, size, accessType) {
+        const physicalAddress = address >>> 0;
+        const shouldLogWrite = accessType !== 'fill' && accessType !== 'fill-bypass' && accessType !== 'write-through';
+        const shouldCache = this.enabled && this.isCacheable(physicalAddress);
+        if (!shouldCache) {
+            this.lowerPort.directWrite(physicalAddress, value, size, accessType);
+            return;
+        }
+
+        this.statistics.numWrite++;
+
+        const setIndex = this._getSetIndex(physicalAddress);
+        const tag = this._getTag(physicalAddress);
+        const blockBase = this._getBlockBase(physicalAddress);
+        const offset = physicalAddress - blockBase;
+
+        let block = this._findBlock(setIndex, tag);
+        if (!block) {
+            this.statistics.numMiss++;
+            this.statistics.totalCycles += this.missLatency;
+            block = this._selectVictim(setIndex);
+            this._fillBlock(block, blockBase, tag);
+            if (shouldLogWrite) {
+                console.log(`[${this.name}] MISS WR addr=0x${physicalAddress.toString(16)} set=${setIndex} tag=0x${tag.toString(16)} val=0x${(value >>> 0).toString(16)}`);
+            }
+        } else {
+            this.statistics.numHit++;
+            this.statistics.totalCycles += this.hitLatency;
+            if (shouldLogWrite) {
+                console.log(`[${this.name}] HIT  WR addr=0x${physicalAddress.toString(16)} set=${setIndex} tag=0x${tag.toString(16)} val=0x${(value >>> 0).toString(16)}`);
+            }
+        }
+
+        this._touchBlock(block);
+        this._writeBlockValue(block, offset, value ?? 0, size);
+        block.modified = true;
+        this.lowerPort.directWrite(physicalAddress, value ?? 0, size, accessType);
     }
 
     // Nhận request từ upper level; cache chỉ xử lý một request tại một thời điểm.
     receiveRequest(req) {
-        if (this.pendingRequest || this.pendingFill) return;
+        if (this.pendingRequest || this.pendingFill || this.pendingBurstResponse) return;
+
+        if (req.type === 'fill') {
+            this._handleFillRequest(req);
+            return;
+        }
 
         if (isReadResponse(req.type)) this.statistics.numRead++;
         else this.statistics.numWrite++;
@@ -126,12 +162,31 @@ export class SimpleCache {
         };
     }
 
+    receiveResponse(resp) {
+        if (!resp?.refillBeat || !this.pendingFill) return;
+
+        const fill = this.pendingFill;
+        if ((resp.blockBase >>> 0) !== fill.blockBase) return;
+
+        this._writeBlockValue(fill.victim, (resp.address >>> 0) - fill.blockBase, resp.data, this._sizeToBytes(resp.size));
+        fill.beatsReceived++;
+
+        if (fill.beatsReceived >= fill.beatsExpected) {
+            fill.victim.valid = true;
+            fill.lineReadyCycle = this.cycle + REFILL_TRANSFER_LATENCY;
+        }
+    }
+
     // Mỗi tick tiến trạng thái refill và trả response khi sẵn sàng.
     tick() {
         this.cycle++;
 
         if (this.pendingFill) {
             this._advancePendingFill();
+        }
+
+        if (this.pendingBurstResponse) {
+            this._advancePendingBurstResponse();
         }
 
         if (!this.pendingRequest || this.cycle < this.pendingRequest.readyCycle || !this.pendingResponse) return;
@@ -171,70 +226,59 @@ export class SimpleCache {
         this.statistics.totalCycles += this.missLatency;
 
         const victim = this._selectVictim(setIndex);
+        this._prepareVictimForRefill(victim, tag);
         console.log(`[${this.name}] MISS ${opType} addr=0x${address.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`);
-        let totalLatency = this.missLatency;
-        let refillPlan = null;
-
-        // Gọi lower level (nếu là cache) để lập kế hoạch refill bất đồng bộ với event timing.
-        if (typeof this.lowerPort?.beginBlockFill === 'function') {
-            refillPlan = this.lowerPort.beginBlockFill(blockBase, this.cycle + this.missLatency);
-            const bypassLatency = refillPlan.bypassLatency;
-            totalLatency += refillPlan.totalLatency + bypassLatency + REFILL_TRANSFER_LATENCY;
-        }
-
-        // Lưu trạng thái refill đang chờ hoàn tất.
+        // Lưu trạng thái refill đang chờ nhận burst responses / direct beats.
         this.pendingFill = {
-            victim,
-            blockBase,
+            mode: 'request', 
+            victim, 
+            blockBase, 
             tag,
             offset,
-            size,
-            req,
-            refillPlan,
-            installCycle: this.cycle + totalLatency - REFILL_TRANSFER_LATENCY,
-            readyCycle: this.cycle + totalLatency,
-            loggedEvents: 0,
-            installed: false
+            size, 
+            req, 
+            beatsExpected: this._getBeatCount(), // Tổng số beat cần nhận để lấp đầy toàn bộ cache line.
+            beatsReceived: 0, // Số beat đã nhận xong từ lower level cho line hiện tại.
+            issued: false, // Đánh dấu refill request đã được phát xuống lower level hay chưa.
+            issueCycle: this.cycle + this.missLatency, // Chu kỳ bắt đầu phát refill request sau khi trả đủ miss latency.
+            lineReadyCycle: null // Chu kỳ line được coi là hợp lệ và có thể dùng để phục vụ request/burst tiếp.
         };
-
+        
         this.pendingResponse = null;
-        return totalLatency;
+        return this.missLatency;
     }
 
-    // Tiến quá trình refill: log event đã đến lúc rồi, khi ready thì hoàn tất block.
+    // Tiến quá trình refill: issue request xuống lower level, nhận beat responses, và hoàn tất line.
     _advancePendingFill() {
         const fill = this.pendingFill;
         if (!fill) return;
 
-        // In ra event timing của refill plan (RAM REQUEST, L2 REFILL, forward, etc.).
-        const events = fill.refillPlan?.events ?? [];
-        while (fill.loggedEvents < events.length && this.cycle >= events[fill.loggedEvents].cycle) {
-            events[fill.loggedEvents].action?.();
-            console.log(events[fill.loggedEvents].message);
-            fill.loggedEvents++;
-        }
-        // Nạp block
-        if (!fill.installed && this.cycle >= fill.installCycle) {
-            let blockData = null;
-            if (fill.refillPlan && typeof this.lowerPort?.finishBlockFill === 'function') {
-                blockData = this.lowerPort.finishBlockFill(fill.refillPlan);
+        if (!fill.issued && this.cycle >= fill.issueCycle) {
+            if (this._supportsBurstRefill()) {
+                this.lowerPort.receiveRequest({
+                    type: 'fill', 
+                    from: this.name, 
+                    replyTo: this, 
+                    address: fill.blockBase, 
+                    blockBase: fill.blockBase, 
+                    size: this._getBlockSizeLog2(), 
+                    beatBytes: REFILL_BEAT_BYTES // Số byte trên mỗi beat burst, đang cấu hình là 4 byte/beat.
+                });
+                console.log(`[${this.name}] REFILL_REQUEST addr=0x${fill.blockBase.toString(16)} beats=${fill.beatsExpected}`);
             }
-
-            if (blockData) {
-                this._installBlockData(fill.victim, fill.tag, blockData);
-            } else {
-                // Fallback: directRead từ lower level từng byte nếu không có async plan.
-                this._fillBlock(fill.victim, fill.blockBase, fill.tag);
-            }
-
-            fill.installed = true;
+            fill.issued = true;
         }
 
-        if (this.cycle < fill.readyCycle) return;
+        if (fill.lineReadyCycle === null || this.cycle < fill.lineReadyCycle) return;
 
         this._touchBlock(fill.victim);
-        console.log(`[CPU] RECEIVE(fill) addr=0x${(fill.req.address >>> 0).toString(16)}`);
-        this.pendingResponse = this._buildResponse(fill.req, this._serveRequest(fill.victim, fill.offset, fill.size, fill.req));
+        if (fill.mode === 'request') {
+            console.log(`[${this.name}] RECEIVE_COMPLETE addr=0x${fill.blockBase.toString(16)} ${fill.beatsExpected}/${fill.beatsExpected}`);
+            console.log(`[CPU] RECEIVE(fill) addr=0x${(fill.req.address >>> 0).toString(16)}`);
+            this.pendingResponse = this._buildResponse(fill.req, this._serveRequest(fill.victim, fill.offset, fill.size, fill.req));
+        } else {
+            this.pendingBurstResponse = this._createBurstResponse(fill.req, fill.victim, fill.blockBase);
+        }
         this.pendingFill = null;
     }
 
@@ -324,15 +368,112 @@ export class SimpleCache {
         }
     }
 
-    // Cài đặt dữ liệu block từ kế hoạch refill async (từ l2 hoặc RAM).
-    _installBlockData(block, tag, blockData) {
-        block.valid = true;
+    _handleFillRequest(req) {
+        const blockBase = (req.blockBase ?? req.address) >>> 0;
+        const setIndex = this._getSetIndex(blockBase);
+        const tag = this._getTag(blockBase);
+        const block = this._findBlock(setIndex, tag);
+
+        this.statistics.numRead++;
+
+        if (block) {
+            this.statistics.numHit++;
+            this.statistics.totalCycles += this.hitLatency;
+            console.log(`[${this.name}] HIT  FILL addr=0x${blockBase.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`);
+            this.pendingBurstResponse = this._createBurstResponse(req, block, blockBase, this.cycle + this.hitLatency);
+            return;
+        }
+
+        this.statistics.numMiss++;
+        this.statistics.totalCycles += this.missLatency;
+        const victim = this._selectVictim(setIndex);
+        this._prepareVictimForRefill(victim, tag);
+        console.log(`[${this.name}] MISS FILL addr=0x${blockBase.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`);
+        this.pendingFill = {
+                mode: 'forward', 
+                victim, 
+                blockBase, 
+                tag, 
+                req, 
+                beatsExpected: this._getBeatCount(), // Số beat cần có để hoàn chỉnh line.
+                beatsReceived: 0, // Số beat refill đã nhận từ lower level.
+                issued: false, // Đã gửi fill request xuống lower level hay chưa.
+                issueCycle: this.cycle + this.missLatency, // Thời điểm bắt đầu issue refill sau miss latency.
+                lineReadyCycle: null // Khi đủ beat, line sẽ usable từ chu kỳ này trở đi.
+        };
+    }
+
+    _advancePendingBurstResponse() {
+        const burst = this.pendingBurstResponse;
+        if (!burst || this.cycle < burst.readyCycle) return;
+
+        const beatAddress = (burst.blockBase + (burst.nextBeatIndex * REFILL_BEAT_BYTES)) >>> 0;
+        const beatBytes = Math.min(REFILL_BEAT_BYTES, this.blockSize - (burst.nextBeatIndex * REFILL_BEAT_BYTES));
+        const beatSize = this._bytesToSize(beatBytes);
+        const beatData = this._readBlockValue(burst.block, burst.nextBeatIndex * REFILL_BEAT_BYTES, beatBytes);
+
+        burst.replyTo?.receiveResponse?.({
+            from: this.name, 
+            to: burst.req.from, // Đích logic ban đầu của fill request, thường là cache tầng trên.
+            type: TL_D_Opcode.AccessAckData, 
+            data: beatData, 
+            address: beatAddress, 
+            size: beatSize, 
+            blockBase: burst.blockBase, 
+            refillBeat: true, // Cờ cho biết đây là một beat của quá trình refill, không phải response đơn lẻ bình thường.
+            beatIndex: burst.nextBeatIndex, // Thứ tự beat hiện tại trong line, bắt đầu từ 0.
+            beatCount: burst.beatCount // Tổng số beat của line, để bên nhận biết khi nào đã nhận đủ.
+        });
+        console.log(`[${this.name}] SEND_BEAT addr=0x${beatAddress.toString(16)} ${burst.nextBeatIndex + 1}/${burst.beatCount}`);
+
+        burst.nextBeatIndex++;
+        if (burst.nextBeatIndex >= burst.beatCount) {
+            this.pendingBurstResponse = null;
+            return;
+        }
+
+        burst.readyCycle = this.cycle + REFILL_TRANSFER_LATENCY;
+    }
+
+    _createBurstResponse(req, block, blockBase, readyCycle = this.cycle + REFILL_TRANSFER_LATENCY) {
+        return {
+            req,
+            block,
+            blockBase,
+            replyTo: req.replyTo,
+            nextBeatIndex: 0,
+            beatCount: this._getBeatCount(),
+            readyCycle
+        };
+    }
+
+    _supportsBurstRefill() {
+        return typeof this.lowerPort?.receiveRequest === 'function';
+    }
+
+    _getBeatCount() {
+        return Math.ceil(this.blockSize / REFILL_BEAT_BYTES);
+    }
+
+    _getBlockSizeLog2() {
+        return Math.log2(this.blockSize);
+    }
+
+    _prepareVictimForRefill(block, tag) {
+        block.valid = false;
         block.modified = false;
         block.tag = tag >>> 0;
         block.data.fill(0);
-        for (let i = 0; i < this.blockSize; i++) {
-            block.data[i] = blockData[i] & 0xFF;
-        }
+    }
+
+    _bytesToSize(byteCount) {
+        if (byteCount <= 1) return 0;
+        if (byteCount <= 2) return 1;
+        return 2;
+    }
+
+    _sizeToBytes(size) {
+        return 1 << (size ?? 2);
     }
 
     // Tìm block hit trong set cụ thể dựa trên tag.
@@ -384,7 +525,6 @@ export class SimpleCache {
     }
 
     // Cấu trúc địa chỉ nhị phân: [TAG][SET_INDEX][OFFSET]
-    
     // địa chỉ: block base = căn lề blockSize (xóa offset bits).
     _getBlockBase(address) {
         const addr = address >>> 0;

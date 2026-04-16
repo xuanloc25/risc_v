@@ -11,7 +11,7 @@ import {
 
 // TileLink-UL / UH Memory implementation
 export class Mem {
-    constructor({ latency = 0, burstBeatLatency = latency } = {}) {
+    constructor({ latency = 0, burstBeatLatency = 1 } = {}) {
         this.mem = {};
         this.pendingRequest = null;
         this.cycle = 0;
@@ -68,6 +68,8 @@ export class Mem {
                 bytesRemaining: bytesRequested,
                 currentAddr: req.address >>> 0,
                 isWrite: isTileLinkWrite(req.type),
+                refillBeat: req.type === 'fill',
+                blockBase: (req.blockBase ?? req.address) >>> 0,
                 readyCycle: this.cycle + this.burstBeatLatency
             };
             this.pendingRequest = null;
@@ -96,7 +98,12 @@ export class Mem {
             type: opD,
             data,
             address: req.address >>> 0,
-            size: sizeLog2
+            size: sizeLog2,
+            refillBeat: req.type === 'fill',
+            blockBase: (req.blockBase ?? req.address) >>> 0,
+            beatIndex: 0,
+            beatCount: 1,
+            lastBeat: true
         });
 
         this.pendingRequest = null;
@@ -115,7 +122,12 @@ export class Mem {
                 type: TL_D_Opcode.AccessAckData,
                 data,
                 address: addr,
-                size: 2
+                size: 2,
+                refillBeat: state.refillBeat,
+                blockBase: state.blockBase,
+                beatIndex: ((state.totalBytes - state.bytesRemaining) / 4) >>> 0,
+                beatCount: Math.ceil(state.totalBytes / 4),
+                lastBeat: (state.bytesRemaining - 4) <= 0
             });
 
             state.bytesRemaining -= 4;

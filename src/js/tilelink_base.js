@@ -124,14 +124,16 @@ export class TileLinkBase {
                 `addr=0x${(resp.address >>> 0).toString(16)} data=${resp.data ?? ''}`
             );
 
-            const target = this.masters[resp.to];
+            const target = this._resolveResponseTarget(resp.to);
             if (target && typeof target.receiveResponse === 'function') {
                 target.receiveResponse(resp);
             } else {
                 console.warn(`[${this.name}] No master registered for ${resp.to}`);
             }
 
-            this.inFlight = null;
+            if (resp.lastBeat !== false) {
+                this.inFlight = null;
+            }
         } else {
             clearChannel(this.signals.d, this.signalDefaults.d);
             this.signals.d.ready = true;
@@ -207,6 +209,19 @@ export class TileLinkBase {
             const opcodeName = getOpcodeName(TL_A_Opcode, req.type);
             throw new Error(`[${this.name}] ${opcodeName} is not supported on TileLink-${this.variant}`);
         }
+    }
+
+    _resolveResponseTarget(targetName) {
+        if (targetName && this.masters[targetName]) {
+            return this.masters[targetName];
+        }
+
+        if (targetName) {
+            const linkedUpper = this.upperPorts.find((port) => port?.name === targetName || port?.constructor?.name === targetName);
+            if (linkedUpper) return linkedUpper;
+        }
+
+        return this.upperPorts[0] ?? null;
     }
 
     _selectSlave(address) {

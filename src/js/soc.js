@@ -75,189 +75,6 @@ function createMMIOEndpoint(bus, name, { read, write }) {
     };
 }
 
-function createSimpleCacheLowerPort(cache, cacheName = 'cache', upperCacheName = null) {
-    const REFILL_TRANSFER_LATENCY = 1;
-    const isRefillAccess = (accessType) => accessType === 'fill' || accessType === 'fill-bypass';
-    const pushRefillEvent = (events, targetName, cycle, blockBase, action = null) => {
-        if (!targetName) return;
-        events.push({
-            cycle,
-            message: `[${targetName}] REFILL(fill) addr=0x${blockBase.toString(16)}`,
-            action
-        });
-    };
-    const materializePlan = (plan) => {
-        if (!plan || plan.materialized) return;
-
-        let block = cache._findBlock(plan.setIndex, plan.tag);
-        if (!block) {
-            block = cache._selectVictim(plan.setIndex);
-
-            if (plan.lowerPlan && typeof cache.lowerPort?.finishBlockFill === 'function') {
-                const lowerBlockData = cache.lowerPort.finishBlockFill(plan.lowerPlan);
-                cache._installBlockData(block, plan.tag, lowerBlockData);
-            } else {
-                cache._fillBlock(block, plan.blockBase, plan.tag);
-            }
-        }
-
-        plan.materialized = true;
-    };
-
-    return {
-        get mem() {
-            return cache.memBytes();
-        },
-        memBytes: () => cache.memBytes(),
-        // Build an async fill plan for a lower cache.
-        // The caller provides the absolute cycle when this lower cache is first consulted.
-        beginBlockFill(blockBase, startCycle) {
-            const setIndex = cache._getSetIndex(blockBase);
-            const tag = cache._getTag(blockBase);
-            const block = cache._findBlock(setIndex, tag);
-            const plan = {
-                blockBase,
-                setIndex,
-                tag,
-                startCycle,
-                totalLatency: 0,
-                hit: !!block,
-                lowerPlan: null,
-                events: [],
-                bypassLatency: REFILL_TRANSFER_LATENCY,
-                materialized: !!block
-            };
-
-            const checkCycle = startCycle + 1;
-
-            cache.statistics.numRead++;
-
-            if (block) {
-                cache.statistics.numHit++;
-                cache.statistics.totalCycles += cache.hitLatency;
-                plan.totalLatency = 1;
-                plan.events.push({
-                    cycle: checkCycle,
-                    message: `[${cacheName}] HIT(fill) addr=0x${blockBase.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`
-                });
-                pushRefillEvent(plan.events, upperCacheName, startCycle + plan.totalLatency + REFILL_TRANSFER_LATENCY, blockBase);
-                return plan;
-            }
-
-            cache.statistics.numMiss++;
-            cache.statistics.totalCycles += cache.missLatency;
-            plan.events.push({
-                cycle: checkCycle,
-                message: `[${cacheName}] MISS(fill) addr=0x${blockBase.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`
-            });
-
-            if (typeof cache.lowerPort?.beginBlockFill === 'function') {
-                const lowerStartCycle = checkCycle + cache.missLatency;
-                plan.lowerPlan = cache.lowerPort.beginBlockFill(blockBase, lowerStartCycle);
-                // totalLatency excludes the final hop to the upper cache.
-                plan.totalLatency = (lowerStartCycle - startCycle)
-                    + plan.lowerPlan.totalLatency
-                    + (plan.lowerPlan.bypassLatency ?? 0);
-                plan.events.push(...plan.lowerPlan.events);
-                pushRefillEvent(
-                    plan.events,
-                    cacheName,
-                    startCycle + plan.totalLatency - REFILL_TRANSFER_LATENCY,
-                    blockBase,
-                    () => materializePlan(plan)
-                );
-                plan.events.push({
-                    cycle: startCycle + plan.totalLatency,
-                    message: `[${cacheName}] FORWARD(fill) addr=0x${blockBase.toString(16)} (+${REFILL_TRANSFER_LATENCY}cy refill latency)`
-                });
-                pushRefillEvent(plan.events, upperCacheName, startCycle + plan.totalLatency + REFILL_TRANSFER_LATENCY, blockBase);
-                return plan;
-            }
-
-            const ramLatency = cache.lowerPort?.memoryTarget?.latency ?? cache.lowerPort?.latency ?? 20;
-            const ramRequestCycle = checkCycle + cache.missLatency;
-            const ramReturnCycle = ramRequestCycle + ramLatency;
-            plan.totalLatency = (ramRequestCycle - startCycle) + ramLatency + REFILL_TRANSFER_LATENCY;
-            plan.events.push({
-                cycle: ramRequestCycle,
-                message: `[RAM] REQUEST addr=0x${blockBase.toString(16)}`
-            });
-            plan.events.push({
-                cycle: ramReturnCycle,
-                message: `[RAM] RETURN addr=0x${blockBase.toString(16)} (+${ramLatency}cy)`
-            });
-            pushRefillEvent(
-                plan.events,
-                cacheName,
-                startCycle + plan.totalLatency - REFILL_TRANSFER_LATENCY,
-                blockBase,
-                () => materializePlan(plan)
-            );
-            plan.events.push({
-                cycle: startCycle + plan.totalLatency,
-                message: `[${cacheName}] FORWARD(fill) addr=0x${blockBase.toString(16)} (+${REFILL_TRANSFER_LATENCY}cy refill latency)`
-            });
-            pushRefillEvent(plan.events, upperCacheName, startCycle + plan.totalLatency + REFILL_TRANSFER_LATENCY, blockBase);
-            return plan;
-        },
-        // Finish the refill only when the async plan reaches its ready cycle.
-        finishBlockFill(plan) {
-            if (!plan) return null;
-
-            materializePlan(plan);
-
-            const block = cache._findBlock(plan.setIndex, plan.tag);
-            if (!block) return null;
-
-            cache._touchBlock(block);
-            const blockCopy = new Uint8Array(cache.blockSize);
-            blockCopy.set(block.data);
-            return blockCopy;
-        },
-        directRead(address, size, accessType) {
-            return cache.lowerPort.directRead(address >>> 0, size, accessType);
-        },
-        directWrite(address, value, size, accessType) {
-            const physicalAddress = address >>> 0;
-            const shouldLogWrite = !isRefillAccess(accessType) && accessType !== 'write-through';
-            const shouldCache = cache.enabled && cache.isCacheable(physicalAddress);
-            if (!shouldCache) {
-                cache.lowerPort.directWrite(physicalAddress, value, size, accessType);
-                return;
-            }
-
-            cache.statistics.numWrite++;
-
-            const setIndex = cache._getSetIndex(physicalAddress);
-            const tag = cache._getTag(physicalAddress);
-            const blockBase = cache._getBlockBase(physicalAddress);
-            const offset = physicalAddress - blockBase;
-
-            let block = cache._findBlock(setIndex, tag);
-            if (!block) {
-                cache.statistics.numMiss++;
-                cache.statistics.totalCycles += cache.missLatency;
-                block = cache._selectVictim(setIndex);
-                cache._fillBlock(block, blockBase, tag);
-                if (shouldLogWrite) {
-                    console.log(`[${cacheName}] MISS WR addr=0x${physicalAddress.toString(16)} set=${setIndex} tag=0x${tag.toString(16)} val=0x${(value >>> 0).toString(16)}`);
-                }
-            } else {
-                cache.statistics.numHit++;
-                cache.statistics.totalCycles += cache.hitLatency;
-                if (shouldLogWrite) {
-                    console.log(`[${cacheName}] HIT  WR addr=0x${physicalAddress.toString(16)} set=${setIndex} tag=0x${tag.toString(16)} val=0x${(value >>> 0).toString(16)}`);
-                }
-            }
-
-            cache._touchBlock(block);
-            cache._writeBlockValue(block, offset, value ?? 0, size);
-            block.modified = true;
-            cache.lowerPort.directWrite(physicalAddress, value ?? 0, size, accessType);
-        }
-    };
-}
-
 export const simulator = {
     cpu: null,
     mmu: null,
@@ -385,13 +202,13 @@ export const simulator = {
             name: 'l2-cache'
         });
 
-        const l1iToL2Port = createSimpleCacheLowerPort(this.l2Cache, 'L2-cache', 'l1i-cache');
-        const l1dToL2Port = createSimpleCacheLowerPort(this.l2Cache, 'L2-cache', 'l1d-cache');
+        //const l1iToL2Port = this.l2Cache;
+        //const l1dToL2Port = this.l2Cache;
         const cpuToMmuPort = attachPort(this.cpu, this.mmu, 'cpu-to-mmu');
         const l2ToUhPort = attachPort(this.l2Cache, this.tilelink_UH, 'l2-to-uh');
 
-        this.iCache.attachLowerPort(l1iToL2Port);
-        this.dCache.attachLowerPort(l1dToL2Port);
+        this.iCache.attachLowerPort(this.l2Cache);
+        this.dCache.attachLowerPort(this.l2Cache);
         this.iCache.setEnabled(this.useCache);
         this.dCache.setEnabled(this.useCache);
         this.l2Cache.setEnabled(this.useCache);
@@ -429,8 +246,8 @@ export const simulator = {
             cpuToMmu: cpuToMmuPort,
             mmuToL1I: this.iCache,
             mmuToL1D: this.dCache,
-            l1iToL2: l1iToL2Port,
-            l1dToL2: l1dToL2Port,
+            l1iToL2: this.l2Cache,
+            l1dToL2: this.l2Cache,
             l2ToUh: l2ToUhPort,
             uhToMainMemory: attachPort(this.tilelink_UH, Port.lower('main-memory', this.mem, (addr) => isCacheableAddress(addr))),
             uhToDmaRegs: attachPort(this.tilelink_UH, Port.lower('dma-regs', this.dma, (addr) => dmaRegRange(addr))),
