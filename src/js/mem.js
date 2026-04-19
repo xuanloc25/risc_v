@@ -1,6 +1,8 @@
 import {
+    TL_A_Opcode,
     TL_D_Opcode,
     applyTileLinkAtomic,
+    getOpcodeName,
     getTransferSizeLog2,
     isTileLinkAtomic,
     isTileLinkRead,
@@ -9,9 +11,18 @@ import {
     writeSizedValue
 } from './tilelink.js';
 
+function describeAOpcode(type) {
+    return typeof type === 'number' ? getOpcodeName(TL_A_Opcode, type) : type;
+}
+
+function describeDOpcode(type) {
+    return typeof type === 'number' ? getOpcodeName(TL_D_Opcode, type) : type;
+}
+
 // TileLink-UL / UH Memory implementation
 export class Mem {
-    constructor({ latency = 0, burstBeatLatency = 1 } = {}) {
+    constructor({ latency = 0, burstBeatLatency = 1, name = 'Main Memory' } = {}) {
+        this.name = name;
         this.mem = {};
         this.pendingRequest = null;
         this.cycle = 0;
@@ -31,17 +42,37 @@ export class Mem {
 
     receiveRequest(req) {
         if (this.pendingRequest || this.burstState) return;
+        console.log(
+            `[${this.name}] RECEIVE_REQUEST from=${req.from} type=${describeAOpcode(req.type)} ` +
+            `addr=0x${(req.address >>> 0).toString(16)} size=${getTransferSizeLog2(req, 2)}`
+        );
         this.pendingRequest = {
             req,
             readyCycle: this.cycle + this.latency
         };
     }
 
+    sendRequest(from, req) {
+        this.receiveRequest({
+            ...req,
+            from
+        });
+    }
+
     directRead(address, size = 2) {
-        return readSizedValue(this.mem, address, size);
+        const value = readSizedValue(this.mem, address, size);
+        console.log(
+            `[${this.name}] DIRECT_READ addr=0x${(address >>> 0).toString(16)} ` +
+            `size=${size} data=${value ?? 0}`
+        );
+        return value;
     }
 
     directWrite(address, value, size = 2) {
+        console.log(
+            `[${this.name}] DIRECT_WRITE addr=0x${(address >>> 0).toString(16)} ` +
+            `size=${size} data=${value ?? 0}`
+        );
         writeSizedValue(this.mem, address, value, size);
     }
 
@@ -92,8 +123,13 @@ export class Mem {
             this.directWrite(req.address, newValue, sizeLog2);
         }
 
+        console.log(
+            `[${this.name}] ${this.name} -> ${bus?.name ?? 'TileLink'} RESPONSE ` +
+            `to=${req.from} type=${describeDOpcode(opD)} addr=0x${(req.address >>> 0).toString(16)} data=${data ?? 0}`
+        );
+
         bus.sendResponse({
-            from: 'mem',
+            from: this.name,
             to: req.from,
             type: opD,
             data,
@@ -115,9 +151,18 @@ export class Mem {
         if (!state.isWrite) {
             const addr = state.currentAddr >>> 0;
             const data = this.directRead(addr, 2);
+            const beatIndex = ((state.totalBytes - state.bytesRemaining) / 4) >>> 0;
+            const beatCount = Math.ceil(state.totalBytes / 4);
+            const lastBeat = (state.bytesRemaining - 4) <= 0;
+
+            console.log(
+                `[${this.name}] ${this.name} -> ${bus?.name ?? 'TileLink'} RESPONSE_BEAT ` +
+                `to=${state.req.from} addr=0x${addr.toString(16)} data=${data ?? 0} ` +
+                `${beatIndex + 1}/${beatCount}`
+            );
 
             bus.sendResponse({
-                from: 'mem',
+                from: this.name,
                 to: state.req.from,
                 type: TL_D_Opcode.AccessAckData,
                 data,
@@ -125,9 +170,9 @@ export class Mem {
                 size: 2,
                 refillBeat: state.refillBeat,
                 blockBase: state.blockBase,
-                beatIndex: ((state.totalBytes - state.bytesRemaining) / 4) >>> 0,
-                beatCount: Math.ceil(state.totalBytes / 4),
-                lastBeat: (state.bytesRemaining - 4) <= 0
+                beatIndex,
+                beatCount,
+                lastBeat
             });
 
             state.bytesRemaining -= 4;

@@ -1,4 +1,12 @@
-import { getTransferSizeLog2, isTileLinkAtomic, isTileLinkRead, isTileLinkWrite } from './tilelink.js';
+import {
+    TL_A_Opcode,
+    TL_D_Opcode,
+    getOpcodeName,
+    getTransferSizeLog2,
+    isTileLinkAtomic,
+    isTileLinkRead,
+    isTileLinkWrite
+} from './tilelink.js';
 import { attachPort } from './port_link.js';
 
 // Chuyển đổi thao tác bus sang miền quyền được kiểm tra bởi MMU.
@@ -9,6 +17,15 @@ function classifyAccess(type) {
     if (isTileLinkRead(type)) return 'read';
     if (isTileLinkWrite(type) || isTileLinkAtomic(type)) return 'write';
     return 'read';
+}
+
+function describeOpcode(type, channel = 'A') {
+    if (typeof type !== 'number') return type;
+    return getOpcodeName(channel === 'D' ? TL_D_Opcode : TL_A_Opcode, type);
+}
+
+function describeEndpoint(endpoint, fallback = 'lower') {
+    return endpoint?.lower?.name ?? endpoint?.name ?? endpoint?.constructor?.name ?? fallback;
 }
 
 export class MMU {
@@ -97,7 +114,8 @@ export class MMU {
         };
     }
 
-    sendRequest(from, req) {
+    receiveRequest(req) {
+        const from = req.from ?? 'cpu';
         const lowerPort = this._resolveLowerPort(req.type);
         if (!lowerPort || typeof lowerPort.receiveRequest !== 'function') {
             throw new Error('MMU has no attached lower port');
@@ -108,6 +126,13 @@ export class MMU {
         // để đường dẫn phản hồi vẫn có thể trả về đúng địa chỉ lúc đầu của CPU.
         const accessType = classifyAccess(req.type);
         const translated = this.translateAddress(req.address, accessType);
+        const targetName = describeEndpoint(lowerPort, req.type === 'fetch' ? 'instruction-cache' : 'data-cache');
+
+        console.log(
+            `[MMU] REQUEST from=${from} type=${describeOpcode(req.type)} access=${accessType} ` +
+            `va=0x${(req.address >>> 0).toString(16)} -> pa=0x${translated.physicalAddress.toString(16)} ` +
+            `mode=${translated.mode} cacheable=${translated.cacheable} next=${targetName}`
+        );
 
         lowerPort.receiveRequest({
             ...req,
@@ -121,6 +146,13 @@ export class MMU {
         });
     }
 
+    sendRequest(from, req) {
+        this.receiveRequest({
+            ...req,
+            from
+        });
+    }
+
     receiveResponse(resp) {
         if (!this.upperPort || typeof this.upperPort.receiveResponse !== 'function') {
             throw new Error('MMU has no attached CPU');
@@ -128,9 +160,16 @@ export class MMU {
 
         // Các cấp thấp hơn có thể phản hồi bằng địa chỉ vật lý đã được biên dịch; CPU
         // nên tiếp tục xử lý dựa trên địa chỉ ảo gốc.
+        const virtualAddress = resp.virtualAddress ?? resp.address;
+        console.log(
+            `[MMU] RESPONSE from=${resp.from} to=${resp.to} type=${describeOpcode(resp.type, 'D')} ` +
+            `pa=0x${(resp.address >>> 0).toString(16)} -> va=0x${(virtualAddress >>> 0).toString(16)} ` +
+            `data=${resp.data ?? ''}`
+        );
+
         this.upperPort.receiveResponse({
             ...resp,
-            address: resp.virtualAddress ?? resp.address
+            address: virtualAddress
         });
     }
 

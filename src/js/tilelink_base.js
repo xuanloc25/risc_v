@@ -27,6 +27,19 @@ function isFiniteAddress(address) {
     return typeof address === 'number' && Number.isFinite(address);
 }
 
+function describeTarget(entryOrTarget) {
+    const target = entryOrTarget?.target ?? entryOrTarget;
+    return entryOrTarget?.name ?? target?.name ?? target?.constructor?.name ?? 'target';
+}
+
+function describeAOpcode(type) {
+    return typeof type === 'number' ? getOpcodeName(TL_A_Opcode, type) : type;
+}
+
+function describeDOpcode(type) {
+    return typeof type === 'number' ? getOpcodeName(TL_D_Opcode, type) : type;
+}
+
 export class TileLinkBase {
     constructor({ name = 'TileLink', variant = 'UL', allowedOpcodes = [] } = {}) {
         this.name = name;
@@ -97,16 +110,18 @@ export class TileLinkBase {
             this.inFlight = nextReq;
             Object.assign(this.signals.a, snapshotAChannel(nextReq));
 
-            const opcodeName = typeof nextReq.type === 'number'
-                ? getOpcodeName(TL_A_Opcode, nextReq.type)
-                : nextReq.type;
+            const opcodeName = describeAOpcode(nextReq.type);
             console.log(
                 `[${this.name}][A] issue from=${nextReq.from} type=${opcodeName} ` +
                 `addr=0x${(nextReq.address >>> 0).toString(16)} val=${nextReq.value ?? ''}`
             );
 
-            const slave = this._selectSlave(nextReq.address);
-            slave.receiveRequest(nextReq);
+            const slaveEntry = this._selectSlaveEntry(nextReq.address);
+            console.log(
+                `[${this.name}] TileLink -> ${describeTarget(slaveEntry)} REQUEST ` +
+                `from=${nextReq.from} type=${opcodeName} addr=0x${(nextReq.address >>> 0).toString(16)}`
+            );
+            slaveEntry.target.receiveRequest(nextReq);
         } else if (!this.inFlight) {
             clearChannel(this.signals.a, this.signalDefaults.a);
             this.signals.a.ready = true;
@@ -116,9 +131,11 @@ export class TileLinkBase {
             const resp = this.responseQueue.shift();
             Object.assign(this.signals.d, snapshotDChannel(resp));
 
-            const opcodeName = typeof resp.type === 'number'
-                ? getOpcodeName(TL_D_Opcode, resp.type)
-                : resp.type;
+            const opcodeName = describeDOpcode(resp.type);
+            console.log(
+                `[${this.name}] ${resp.from} -> TileLink RESPONSE ` +
+                `to=${resp.to} type=${opcodeName} addr=0x${(resp.address >>> 0).toString(16)} data=${resp.data ?? ''}`
+            );
             console.log(
                 `[${this.name}][D] route to=${resp.to} type=${opcodeName} ` +
                 `addr=0x${(resp.address >>> 0).toString(16)} data=${resp.data ?? ''}`
@@ -126,6 +143,10 @@ export class TileLinkBase {
 
             const target = this._resolveResponseTarget(resp.to);
             if (target && typeof target.receiveResponse === 'function') {
+                console.log(
+                    `[${this.name}] TileLink -> ${resp.to} RESPONSE ` +
+                    `type=${opcodeName} addr=0x${(resp.address >>> 0).toString(16)} data=${resp.data ?? ''}`
+                );
                 target.receiveResponse(resp);
             } else {
                 console.warn(`[${this.name}] No master registered for ${resp.to}`);
@@ -150,18 +171,43 @@ export class TileLinkBase {
         this.requestQueue.push(request);
     }
 
+    receiveRequest(req) {
+        this.sendRequest(req.from, req);
+    }
+
     sendResponse(resp) {
         this.responseQueue.push(resp);
     }
 
+    receiveResponse(resp) {
+        this.sendResponse(resp);
+    }
+
     directRead(address, size = 2, accessType = 'direct') {
-        const target = this._selectSlave(address);
-        return this._readFromTarget(target, address, size, accessType);
+        const entry = this._selectSlaveEntry(address);
+        console.log(
+            `[${this.name}] TileLink -> ${describeTarget(entry)} DIRECT_READ ` +
+            `addr=0x${(address >>> 0).toString(16)} size=${size} access=${accessType}`
+        );
+        const value = this._readFromTarget(entry.target, address, size, accessType);
+        console.log(
+            `[${this.name}] ${describeTarget(entry)} -> TileLink DIRECT_READ_DATA ` +
+            `addr=0x${(address >>> 0).toString(16)} data=${value ?? 0}`
+        );
+        return value;
     }
 
     directWrite(address, value, size = 2, accessType = 'direct') {
-        const target = this._selectSlave(address);
-        this._writeToTarget(target, address, value, size, accessType);
+        const entry = this._selectSlaveEntry(address);
+        console.log(
+            `[${this.name}] TileLink -> ${describeTarget(entry)} DIRECT_WRITE ` +
+            `addr=0x${(address >>> 0).toString(16)} size=${size} access=${accessType} data=${value ?? 0}`
+        );
+        this._writeToTarget(entry.target, address, value, size, accessType);
+        console.log(
+            `[${this.name}] ${describeTarget(entry)} -> TileLink DIRECT_WRITE_ACK ` +
+            `addr=0x${(address >>> 0).toString(16)}`
+        );
     }
 
     memBytes() {
@@ -225,12 +271,16 @@ export class TileLinkBase {
     }
 
     _selectSlave(address) {
+        return this._selectSlaveEntry(address).target;
+    }
+
+    _selectSlaveEntry(address) {
         const addr = address >>> 0;
         const entry = this.slaves.find((slave) => slave.match(addr));
         if (!entry) {
             throw new Error(`[${this.name}] No slave matched address 0x${addr.toString(16)}`);
         }
-        return entry.target;
+        return entry;
     }
 
     _readFromTarget(target, address, size, accessType) {

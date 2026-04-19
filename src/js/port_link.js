@@ -92,17 +92,16 @@ export class Port {
     }
 
     sendRequest(from, req) {
-        // Day request tu phia upper xuong lower. Neu lower dung API
-        // sendRequest() thi goi truc tiep; neu lower chi co receiveRequest()
-        // thi bo sung truong from de lower biet nguon gui.
-        if (typeof this.lower?.sendRequest === 'function') {
-            return this.lower.sendRequest(from, req);
-        }
+        // Day request tu phia upper xuong lower bang API receiveRequest()
+        // thong nhat; cac bus/master cu van co the dung sendRequest().
         if (typeof this.lower?.receiveRequest === 'function') {
             return this.lower.receiveRequest({
                 ...req,
                 from
             });
+        }
+        if (typeof this.lower?.sendRequest === 'function') {
+            return this.lower.sendRequest(from, req);
         }
         throw new Error(`Port "${this.name}" cannot forward sendRequest()`);
     }

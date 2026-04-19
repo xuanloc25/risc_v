@@ -38,6 +38,24 @@ function makeMaster() {
     };
 }
 
+function captureLogs(fn) {
+    const originalLog = console.log;
+    const logs = [];
+    console.log = (...args) => {
+        const line = args.map((arg) => String(arg)).join(' ');
+        logs.push(line);
+        originalLog(...args);
+    };
+
+    try {
+        fn();
+    } finally {
+        console.log = originalLog;
+    }
+
+    return logs;
+}
+
 function createCache(options = {}) {
     return new SimpleCache({
         numSets: options.numSets ?? 4,
@@ -387,6 +405,40 @@ function testMmuAndSplitBusRouting() {
     assert.equal(cpu.responses[2].data >>> 0, 0x3);
 }
 
+function testMmuL2TileLinkMemoryLogs() {
+    const tilelink_UH = new TileLink_UH();
+    const mem = new Mem({ burstBeatLatency: 0, name: 'Main Memory' });
+    const cpu = makeMaster();
+    const mmu = new MMU();
+    const l2Cache = createCache({ name: 'L2 Cache' });
+
+    mem.loadMemoryMap({
+        0x40: 0x78,
+        0x41: 0x56,
+        0x42: 0x34,
+        0x43: 0x12
+    });
+
+    attachPort(cpu, mmu, 'cpu-to-mmu');
+    attachPort(mmu, l2Cache, 'mmu-to-l2');
+    attachPort(l2Cache, tilelink_UH, 'l2-to-tilelink-uh');
+    attachPort(tilelink_UH, Port.lower('Main Memory', mem, () => true));
+
+    const logs = captureLogs(() => {
+        mmu.sendRequest('cpu', { type: TL_A_Opcode.Get, address: 0x40, size: 2 });
+        tickMmuCacheBusUntil({ cache: l2Cache, tilelink_UH, tilelink_UL: { tick() {} }, mem }, () => cpu.responses.length === 1);
+    });
+
+    assert.ok(logs.some((line) => line.includes('[MMU] REQUEST')), 'MMU request log is missing');
+    assert.ok(logs.some((line) => line.includes('L2 Cache -> TileLink-UH REQUEST')), 'L2 -> TileLink request log is missing');
+    assert.ok(logs.some((line) => line.includes('TileLink -> Main Memory REQUEST')), 'TileLink -> Main Memory request log is missing');
+    assert.ok(logs.some((line) => line.includes('Main Memory -> TileLink-UH RESPONSE')), 'Main Memory -> TileLink response log is missing');
+    assert.ok(logs.some((line) => line.includes('TileLink -> L2 Cache RESPONSE')), 'TileLink -> L2 response log is missing');
+    assert.ok(logs.some((line) => line.includes('[MMU] RESPONSE')), 'MMU response log is missing');
+
+    assert.equal(cpu.responses[0].data >>> 0, 0x12345678);
+}
+
 testSimpleCacheReadWriteThroughMemory();
 testSimpleCachePartialWrite();
 testUhAtomicsThroughSimpleCache();
@@ -395,5 +447,6 @@ testDmaWordIncrementingTransfer();
 testDmaRegisterMmio();
 testDirectMemoryLatency();
 testMmuAndSplitBusRouting();
+testMmuL2TileLinkMemoryLogs();
 
 console.log('TileLink UL/UH verification passed.');

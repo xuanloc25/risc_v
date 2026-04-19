@@ -151,7 +151,7 @@ export const simulator = {
             !isUlPeripheralAddress(addr) && !dmaRegRange(addr);
 
         this.tilelink_UH = new TileLink_UH();
-        this.mem = new Mem({ latency: mainMemoryLatency });
+        this.mem = new Mem({ latency: mainMemoryLatency, name: 'Main Memory' });
         this.tilelink_UL = new TileLink_UL();
 
         // DMA and bridge sit beside the core path and connect into both fabrics.
@@ -191,41 +191,41 @@ export const simulator = {
         };
         this.iCache = new SimpleCache({
             ...CacheConfigL1,
-            name: 'l1i-cache'
+            name: 'L1I Cache'
         });
         this.dCache = new SimpleCache({
             ...CacheConfigL1,
-            name: 'l1d-cache'
+            name: 'L1D Cache'
         });
         this.l2Cache = new SimpleCache({
             ...CacheConfigL2,
-            name: 'l2-cache'
+            name: 'L2 Cache'
         });
 
-        //const l1iToL2Port = this.l2Cache;
-        //const l1dToL2Port = this.l2Cache;
         const cpuToMmuPort = attachPort(this.cpu, this.mmu, 'cpu-to-mmu');
 
         // MMU route riêng luồng fetch và data access xuống hai L1 độc lập.
-        this.mmu.attachInstructionLowerPort(this.iCache);
-        this.mmu.attachDataLowerPort(this.dCache);
+        const mmuToL1IPort = Port.link('mmu-to-l1i', this.mmu, this.iCache).attach();
+        const mmuToL1DPort = Port.link('mmu-to-l1d', this.mmu, this.dCache).attach();
+        this.mmu.attachInstructionLowerPort(mmuToL1IPort);
+        this.mmu.attachDataLowerPort(mmuToL1DPort);
         
-        const l2ToUhPort = attachPort(this.l2Cache, this.tilelink_UH, 'l2-to-uh');
+        const l1iToL2Port = attachPort(this.iCache, this.l2Cache, 'l1i-to-l2');
+        const l1dToL2Port = attachPort(this.dCache, this.l2Cache, 'l1d-to-l2');
+        const l2ToUhPort = attachPort(this.l2Cache, this.tilelink_UH, 'l2-to-tilelink-uh');
 
-        this.iCache.attachLowerPort(this.l2Cache);
-        this.dCache.attachLowerPort(this.l2Cache);
         this.iCache.setEnabled(this.useCache);
         this.dCache.setEnabled(this.useCache);
         this.l2Cache.setEnabled(this.useCache);
 
 
 
-        const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'uart', {
+        const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'UART', {
             read: (addr) => uart.readRegister(addr),
             write: (addr, value) => uart.writeRegister(addr, value)
         });
 
-        const ledEndpoint = createMMIOEndpoint(this.tilelink_UL, 'led-matrix', {
+        const ledEndpoint = createMMIOEndpoint(this.tilelink_UL, 'LED Matrix', {
             read: () => 0,
             write: (addr, value) => {
                 if (ledMatrix) {
@@ -234,33 +234,33 @@ export const simulator = {
             }
         });
 
-        const keyboardEndpoint = createMMIOEndpoint(this.tilelink_UL, 'keyboard', {
+        const keyboardEndpoint = createMMIOEndpoint(this.tilelink_UL, 'Keyboard', {
             read: (addr) => keyboard.readRegister(addr),
            
             write: (addr, value) => keyboard.writeRegister(addr, value)
         });
 
-        const mouseEndpoint = createMMIOEndpoint(this.tilelink_UL, 'mouse', {
+        const mouseEndpoint = createMMIOEndpoint(this.tilelink_UL, 'Mouse', {
             read: (addr) => mouse.readRegister(addr),
             write: (addr, value) => mouse.writeRegister(addr, value)
         });
 
         this.ports = {
             cpuToMmu: cpuToMmuPort,
-            mmuToL1I: this.iCache,
-            mmuToL1D: this.dCache,
-            l1iToL2: this.l2Cache,
-            l1dToL2: this.l2Cache,
+            mmuToL1I: mmuToL1IPort,
+            mmuToL1D: mmuToL1DPort,
+            l1iToL2: l1iToL2Port,
+            l1dToL2: l1dToL2Port,
             l2ToUh: l2ToUhPort,
-            uhToMainMemory: attachPort(this.tilelink_UH, Port.lower('main-memory', this.mem, (addr) => isCacheableAddress(addr))),
-            uhToDmaRegs: attachPort(this.tilelink_UH, Port.lower('dma-regs', this.dma, (addr) => dmaRegRange(addr))),
+            uhToMainMemory: attachPort(this.tilelink_UH, Port.lower('Main Memory', this.mem, (addr) => isCacheableAddress(addr))),
+            uhToDmaRegs: attachPort(this.tilelink_UH, Port.lower('DMA Controller', this.dma, (addr) => dmaRegRange(addr))),
             uhToUlBridge: attachPort(this.tilelink_UH, Port.lower('uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr))),
             uhToDma: attachPort(this.tilelink_UH, Port.upper('dma', this.dma)),
             uhMemoryView: attachPort(this.tilelink_UH, Port.memory('main-memory-view', this.mem)),
-            ulToUart: attachPort(this.tilelink_UL, Port.lower('uart', uartEndpoint, uartRange)),
-            ulToLedMatrix: attachPort(this.tilelink_UL, Port.lower('led-matrix', ledEndpoint, ledRange)),
-            ulToKeyboard: attachPort(this.tilelink_UL, Port.lower('keyboard', keyboardEndpoint, keyboardRange)),
-            ulToMouse: attachPort(this.tilelink_UL, Port.lower('mouse', mouseEndpoint, mouseRange)),
+            ulToUart: attachPort(this.tilelink_UL, Port.lower('UART', uartEndpoint, uartRange)),
+            ulToLedMatrix: attachPort(this.tilelink_UL, Port.lower('LED Matrix', ledEndpoint, ledRange)),
+            ulToKeyboard: attachPort(this.tilelink_UL, Port.lower('Keyboard', keyboardEndpoint, keyboardRange)),
+            ulToMouse: attachPort(this.tilelink_UL, Port.lower('Mouse', mouseEndpoint, mouseRange)),
             ulToUhBridge: attachPort(this.tilelink_UL, Port.lower('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr))),
             ulToDma: attachPort(this.tilelink_UL, Port.upper('dma', this.dma))
         };
@@ -281,10 +281,9 @@ export const simulator = {
         if (this.l2Cache) this.l2Cache.reset();
         if (this.mmu) this.mmu.reset();
 
-        console.info('[ARCH] CPU -> MMU -> L1I/L1D -> L2 cache -> memory/MMIO');
+        console.info('[ARCH] RISC-V Core -> MMU -> Cache -> TileLink-UH -> Main Memory');
         console.info('[CACHE] L1I: 16 sets x 4 ways, L1D: 16 sets x 4 ways, L2: 64 sets x 4 ways');
-        console.info('[ARCH] TileLink-UH <-> TileLink-UL through bus bridge');
-        console.info('[ARCH] DMA Controller attached to both TileLink-UH and TileLink-UL');
+        console.info('[ARCH] TileLink-UH <-> TileLink-UL; DMA Controller attached to both links');
         console.info('[IO MAP] LED Matrix: 0xFF000000-0xFF000FFF');
         console.info('[IO MAP] Mouse:      0xFF100000-0xFF100013');
         console.info('[IO MAP] UART:       0x10000000-0x10000013');
@@ -325,6 +324,10 @@ export const simulator = {
             console.error(e);
         }
 
+        this.iCache.tick();
+        this.dCache.tick();
+        this.l2Cache.tick();
+
         if (this.dma) {
             this.dma.tick();
         }
@@ -332,11 +335,11 @@ export const simulator = {
         this.tilelink_UH.tick();
         this.tilelink_UL.tick();
         this.mem.tick(this.tilelink_UH);
-        this.iCache.tick();
-        this.dCache.tick();
-        this.l2Cache.tick();
         this.tilelink_UH.tick();
         this.tilelink_UL.tick();
+        this.l2Cache.tick();
+        this.iCache.tick();
+        this.dCache.tick();
 
         if (this.uart) {
             this.uart.tick();
