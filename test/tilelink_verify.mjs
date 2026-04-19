@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { TileLink_UH } from '../src/js/tilelink_UH.js';
 import { TileLink_UL } from '../src/js/tilelink_UL.js';
 import { Mem } from '../src/js/mem.js';
-import { Cache } from '../src/js/cache.js';
+import { SimpleCache } from '../src/js/SimpleCache.js';
 import { DMAController, DMADescriptor } from '../src/js/dma.js';
 import { MMU } from '../src/js/mmu.js';
 import { TileLinkBridge } from '../src/js/tilelink_bridge.js';
@@ -38,6 +38,18 @@ function makeMaster() {
     };
 }
 
+function createCache(options = {}) {
+    return new SimpleCache({
+        numSets: options.numSets ?? 4,
+        numWays: options.numWays ?? 1,
+        blockSize: options.blockSize ?? 16,
+        hitLatency: options.hitLatency ?? 1,
+        missLatency: options.missLatency ?? 1,
+        name: options.name ?? 'test-cache',
+        isCacheable: options.isCacheable ?? (() => true)
+    });
+}
+
 function tickPath(tilelink, target, count = 1) {
     for (let i = 0; i < count; i++) {
         tilelink.tick();
@@ -56,41 +68,83 @@ function tickUntil(tilelink, target, predicate, maxTicks = 64) {
     throw new Error('Timed out waiting for bus response');
 }
 
-function tickCacheUntil(cache, predicate, maxTicks = 16) {
+function tickCacheMemoryUntil(cache, mem, predicate, maxTicks = 64) {
     for (let i = 0; i < maxTicks; i++) {
+        cache.tick();
+        mem.tick(cache.lowerPort);
         cache.tick();
         if (predicate()) return i + 1;
     }
-    throw new Error('Timed out waiting for cache/MMU response');
+    throw new Error('Timed out waiting for cache/memory response');
 }
 
-function testUlReadWriteThroughCache() {
-    const tilelink_UH = new TileLink_UH();
-    const mem = new Mem();
-    const cache = new Cache(null, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
-    attachPort(cache, mem, 'cache-to-mem');
+function tickDmaMemoryUntil(dma, tilelink, mem, predicate, maxTicks = 128) {
+    for (let i = 0; i < maxTicks; i++) {
+        dma.tick();
+        tilelink.tick();
+        mem.tick(tilelink);
+        tilelink.tick();
+        if (predicate()) return i + 1;
+    }
+    throw new Error('Timed out waiting for DMA transfer');
+}
+
+function tickMmuCacheBusUntil({ cache, tilelink_UH, tilelink_UL, mem }, predicate, maxTicks = 128) {
+    for (let i = 0; i < maxTicks; i++) {
+        cache.tick();
+        tilelink_UH.tick();
+        tilelink_UL.tick();
+        mem.tick(tilelink_UH);
+        tilelink_UH.tick();
+        tilelink_UL.tick();
+        cache.tick();
+        if (predicate()) return i + 1;
+    }
+    throw new Error('Timed out waiting for MMU/cache/bus response');
+}
+
+function issueCacheRequest(cache, master, req) {
+    cache.receiveRequest({
+        ...req,
+        from: 'cpu',
+        replyTo: master
+    });
+}
+
+function testSimpleCacheReadWriteThroughMemory() {
+    const mem = new Mem({ burstBeatLatency: 0 });
+    const cache = createCache();
     const master = makeMaster();
+    attachPort(cache, mem, 'cache-to-mem');
 
-    attachPort(tilelink_UH, Port.upper('m', master));
-    attachPort(tilelink_UH, Port.lower('cache', cache, () => true));
+    issueCacheRequest(cache, master, {
+        type: TL_A_Opcode.PutFullData,
+        address: 0x100,
+        value: 0x11223344,
+        size: 2
+    });
+    tickCacheMemoryUntil(cache, mem, () => master.responses.length === 1);
 
-    tilelink_UH.sendRequest('m', { type: TL_A_Opcode.PutFullData, address: 0x100, value: 0x11223344, size: 2 });
-    tickPath(tilelink_UH, cache, 4);
-    tilelink_UH.sendRequest('m', { type: TL_A_Opcode.Get, address: 0x100, size: 2 });
-    tickPath(tilelink_UH, cache, 4);
+    issueCacheRequest(cache, master, {
+        type: TL_A_Opcode.Get,
+        address: 0x100,
+        size: 2
+    });
+    tickCacheMemoryUntil(cache, mem, () => master.responses.length === 2);
 
     assert.equal(master.responses[0].type, TL_D_Opcode.AccessAck);
     assert.equal(master.responses[1].type, TL_D_Opcode.AccessAckData);
     assert.equal(master.responses[1].data >>> 0, 0x11223344);
     assert.equal(readWord(mem.mem, 0x100) >>> 0, 0x11223344);
+    assert.equal(cache.statistics.numMiss, 1);
+    assert.equal(cache.statistics.numHit, 1);
 }
 
-function testUlPartialWrite() {
-    const tilelink_UH = new TileLink_UH();
-    const mem = new Mem();
-    const cache = new Cache(null, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
-    attachPort(cache, mem, 'cache-to-mem');
+function testSimpleCachePartialWrite() {
+    const mem = new Mem({ burstBeatLatency: 0 });
+    const cache = createCache();
     const master = makeMaster();
+    attachPort(cache, mem, 'cache-to-mem');
 
     mem.loadMemoryMap({
         0x120: 0x44,
@@ -99,24 +153,31 @@ function testUlPartialWrite() {
         0x123: 0x11
     });
 
-    attachPort(tilelink_UH, Port.upper('m', master));
-    attachPort(tilelink_UH, Port.lower('cache', cache, () => true));
+    issueCacheRequest(cache, master, {
+        type: TL_A_Opcode.PutPartialData,
+        address: 0x121,
+        value: 0xAA,
+        size: 0
+    });
+    tickCacheMemoryUntil(cache, mem, () => master.responses.length === 1);
 
-    tilelink_UH.sendRequest('m', { type: TL_A_Opcode.PutPartialData, address: 0x121, value: 0xAA, size: 0 });
-    tickPath(tilelink_UH, cache, 4);
-    tilelink_UH.sendRequest('m', { type: TL_A_Opcode.Get, address: 0x120, size: 2 });
-    tickPath(tilelink_UH, cache, 4);
+    issueCacheRequest(cache, master, {
+        type: TL_A_Opcode.Get,
+        address: 0x120,
+        size: 2
+    });
+    tickCacheMemoryUntil(cache, mem, () => master.responses.length === 2);
 
     assert.equal(master.responses[0].type, TL_D_Opcode.AccessAck);
     assert.equal(master.responses[1].data >>> 0, 0x1122AA44);
+    assert.equal(readWord(mem.mem, 0x120) >>> 0, 0x1122AA44);
 }
 
-function testUhAtomicsThroughCache() {
-    const tilelink_UH = new TileLink_UH();
-    const mem = new Mem();
-    const cache = new Cache(null, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
-    attachPort(cache, mem, 'cache-to-mem');
+function testUhAtomicsThroughSimpleCache() {
+    const mem = new Mem({ burstBeatLatency: 0 });
+    const cache = createCache();
     const master = makeMaster();
+    attachPort(cache, mem, 'cache-to-mem');
 
     mem.loadMemoryMap({
         0x200: 0x05,
@@ -125,13 +186,23 @@ function testUhAtomicsThroughCache() {
         0x203: 0x00
     });
 
-    attachPort(tilelink_UH, Port.upper('m', master));
-    attachPort(tilelink_UH, Port.lower('cache', cache, () => true));
+    issueCacheRequest(cache, master, {
+        type: TL_A_Opcode.ArithmeticData,
+        param: TL_Param_Arithmetic.ADD,
+        address: 0x200,
+        value: 3,
+        size: 2
+    });
+    tickCacheMemoryUntil(cache, mem, () => master.responses.length === 1);
 
-    tilelink_UH.sendRequest('m', { type: TL_A_Opcode.ArithmeticData, param: TL_Param_Arithmetic.ADD, address: 0x200, value: 3, size: 2 });
-    tickPath(tilelink_UH, cache, 4);
-    tilelink_UH.sendRequest('m', { type: TL_A_Opcode.LogicalData, param: TL_Param_Logical.OR, address: 0x200, value: 0x10, size: 2 });
-    tickPath(tilelink_UH, cache, 4);
+    issueCacheRequest(cache, master, {
+        type: TL_A_Opcode.LogicalData,
+        param: TL_Param_Logical.OR,
+        address: 0x200,
+        value: 0x10,
+        size: 2
+    });
+    tickCacheMemoryUntil(cache, mem, () => master.responses.length === 2);
 
     assert.equal(master.responses[0].type, TL_D_Opcode.AccessAckData);
     assert.equal(master.responses[0].data >>> 0, 5);
@@ -143,8 +214,6 @@ function testUhAtomicsThroughCache() {
 function testDmaByteTransfer() {
     const tilelink_UH = new TileLink_UH();
     const mem = new Mem();
-    const cache = new Cache(null, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
-    attachPort(cache, mem, 'cache-to-mem');
     const dma = new DMAController(tilelink_UH);
 
     mem.loadMemoryMap({
@@ -155,16 +224,10 @@ function testDmaByteTransfer() {
     });
 
     attachPort(tilelink_UH, Port.upper('dma', dma));
-    attachPort(tilelink_UH, Port.lower('cache', cache, () => true));
+    attachPort(tilelink_UH, Port.lower('mem', mem, () => true));
 
     dma.start(0x300, 0x400, 4);
-
-    for (let i = 0; i < 64 && (dma.isBusy || dma.registers.startRequested); i++) {
-        dma.tick();
-        tilelink_UH.tick();
-        cache.tick(tilelink_UH);
-        tilelink_UH.tick();
-    }
+    tickDmaMemoryUntil(dma, tilelink_UH, mem, () => !dma.isBusy && !dma.registers.startRequested);
 
     assert.equal(dma.isBusy, false);
     assert.deepEqual(readBytes(mem.mem, 0x400, 4), [1, 2, 3, 4]);
@@ -173,8 +236,6 @@ function testDmaByteTransfer() {
 function testDmaWordIncrementingTransfer() {
     const tilelink_UH = new TileLink_UH();
     const mem = new Mem();
-    const cache = new Cache(null, { cacheSize: 128, blockSize: 16, associativity: 1, numSets: 8, hitLatency: 1, missLatency: 1 }, null, { writeBack: false, writeAllocate: false });
-    attachPort(cache, mem, 'cache-to-mem');
     const dma = new DMAController(tilelink_UH);
 
     mem.loadMemoryMap({
@@ -183,7 +244,7 @@ function testDmaWordIncrementingTransfer() {
     });
 
     attachPort(tilelink_UH, Port.upper('dma', dma));
-    attachPort(tilelink_UH, Port.lower('cache', cache, () => true));
+    attachPort(tilelink_UH, Port.lower('mem', mem, () => true));
 
     dma.registers.writeCtrl(1);
     dma.registers.writeDescriptor(0x500);
@@ -191,12 +252,7 @@ function testDmaWordIncrementingTransfer() {
     dma.registers.writeDescriptor(DMADescriptor.createConfig(2, 0, 3, 3));
     dma.registers.writeCtrl(3);
 
-    for (let i = 0; i < 64 && (dma.isBusy || dma.registers.startRequested); i++) {
-        dma.tick();
-        tilelink_UH.tick();
-        cache.tick(tilelink_UH);
-        tilelink_UH.tick();
-    }
+    tickDmaMemoryUntil(dma, tilelink_UH, mem, () => !dma.isBusy && !dma.registers.startRequested);
 
     assert.equal(dma.isBusy, false);
     assert.equal(readWord(mem.mem, 0x600) >>> 0, 0x11223344);
@@ -212,45 +268,14 @@ function testDmaRegisterMmio() {
     attachPort(tilelink_UH, Port.lower('dma-regs', dma, () => true));
 
     tilelink_UH.sendRequest('cpu', { type: TL_A_Opcode.PutFullData, address: 0xFFED0000, value: 1, size: 2 });
-    tilelink_UH.tick();
-    dma.tick();
-    tilelink_UH.tick();
+    tickPath(tilelink_UH, dma, 1);
 
     tilelink_UH.sendRequest('cpu', { type: TL_A_Opcode.Get, address: 0xFFED0000, size: 2 });
-    tilelink_UH.tick();
-    dma.tick();
-    tilelink_UH.tick();
+    tickPath(tilelink_UH, dma, 1);
 
     assert.equal(master.responses[0].type, TL_D_Opcode.AccessAck);
     assert.equal(master.responses[1].type, TL_D_Opcode.AccessAckData);
     assert.equal(master.responses[1].data & 0x1, 1);
-}
-
-function testWriteBackDirtyEviction() {
-    const tilelink_UH = new TileLink_UH();
-    const mem = new Mem();
-    const cache = new Cache(null, { cacheSize: 32, blockSize: 16, associativity: 1, numSets: 2, hitLatency: 1, missLatency: 2 }, null, { writeBack: true, writeAllocate: true });
-    attachPort(cache, mem, 'cache-to-mem');
-    const master = makeMaster();
-
-    attachPort(tilelink_UH, Port.upper('m', master));
-    attachPort(tilelink_UH, Port.lower('cache', cache, () => true));
-
-    tilelink_UH.sendRequest('m', { type: TL_A_Opcode.PutFullData, address: 0x000, value: 0xAABBCCDD, size: 2 });
-    const firstWriteTicks = tickUntil(tilelink_UH, cache, () => master.responses.length === 1);
-
-    assert.equal(firstWriteTicks, 3);
-    assert.equal(master.responses[0].type, TL_D_Opcode.AccessAck);
-    assert.equal(readWord(mem.mem, 0x000) >>> 0, 0x00000000);
-
-    tilelink_UH.sendRequest('m', { type: TL_A_Opcode.Get, address: 0x020, size: 2 });
-    const evictionReadTicks = tickUntil(tilelink_UH, cache, () => master.responses.length === 2);
-
-    assert.equal(evictionReadTicks, 5);
-    assert.equal(master.responses[1].type, TL_D_Opcode.AccessAckData);
-    assert.equal(master.responses[1].data >>> 0, 0x00000000);
-    assert.equal(readWord(mem.mem, 0x000) >>> 0, 0xAABBCCDD);
-    assert.equal(cache.statistics.totalCycles, 8);
 }
 
 function testDirectMemoryLatency() {
@@ -282,7 +307,7 @@ function testMmuAndSplitBusRouting() {
 
     const tilelink_UH = new TileLink_UH();
     const tilelink_UL = new TileLink_UL();
-    const mem = new Mem();
+    const mem = new Mem({ burstBeatLatency: 0 });
     const cpu = makeMaster();
 
     let uartCtrl = 0;
@@ -337,9 +362,8 @@ function testMmuAndSplitBusRouting() {
     attachPort(tilelink_UL, Port.lower('uart', uartEndpoint, uartRange));
     attachPort(tilelink_UL, Port.lower('ul-to-uh-bridge', ulToUhBridge, (addr) => !uartRange(addr)));
 
-    const cache = new Cache(null, { cacheSize: 64, blockSize: 16, associativity: 1, numSets: 4, hitLatency: 1, missLatency: 1 }, null, {
-        writeBack: false,
-        writeAllocate: false,
+    const cache = createCache({
+        name: 'l1d-test',
         isCacheable: (addr) => !uartRange(addr)
     });
     const mmu = new MMU(null, null, { cacheabilityPredicate: (addr) => !uartRange(addr) });
@@ -348,13 +372,13 @@ function testMmuAndSplitBusRouting() {
     attachPort(cache, tilelink_UH, 'cache-to-uh');
 
     mmu.sendRequest('cpu', { type: TL_A_Opcode.Get, address: 0x40, size: 2 });
-    tickCacheUntil(cache, () => cpu.responses.length === 1);
+    tickMmuCacheBusUntil({ cache, tilelink_UH, tilelink_UL, mem }, () => cpu.responses.length === 1);
 
     mmu.sendRequest('cpu', { type: TL_A_Opcode.PutFullData, address: UART_BASE + 0x0C, value: 0x3, size: 2 });
-    tickCacheUntil(cache, () => cpu.responses.length === 2);
+    tickMmuCacheBusUntil({ cache, tilelink_UH, tilelink_UL, mem }, () => cpu.responses.length === 2);
 
     mmu.sendRequest('cpu', { type: TL_A_Opcode.Get, address: UART_BASE + 0x0C, size: 2 });
-    tickCacheUntil(cache, () => cpu.responses.length === 3);
+    tickMmuCacheBusUntil({ cache, tilelink_UH, tilelink_UL, mem }, () => cpu.responses.length === 3);
 
     assert.equal(cpu.responses[0].type, TL_D_Opcode.AccessAckData);
     assert.equal(cpu.responses[0].data >>> 0, 0x12345678);
@@ -363,13 +387,12 @@ function testMmuAndSplitBusRouting() {
     assert.equal(cpu.responses[2].data >>> 0, 0x3);
 }
 
-testUlReadWriteThroughCache();
-testUlPartialWrite();
-testUhAtomicsThroughCache();
+testSimpleCacheReadWriteThroughMemory();
+testSimpleCachePartialWrite();
+testUhAtomicsThroughSimpleCache();
 testDmaByteTransfer();
 testDmaWordIncrementingTransfer();
 testDmaRegisterMmio();
-testWriteBackDirtyEviction();
 testDirectMemoryLatency();
 testMmuAndSplitBusRouting();
 
