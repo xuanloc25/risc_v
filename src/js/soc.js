@@ -331,8 +331,6 @@ export const simulator = {
         this.tilelink_UH.tick();
         this.tilelink_UL.tick();
         this.mem.tick(this.tilelink_UH);
-        this.tilelink_UH.tick();
-        this.tilelink_UL.tick();
         this.l2Cache.tick();
         this.iCache.tick();
         this.dCache.tick();
