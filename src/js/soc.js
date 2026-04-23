@@ -324,10 +324,6 @@ export const simulator = {
             console.error(e);
         }
 
-        this.iCache.tick();
-        this.dCache.tick();
-        this.l2Cache.tick();
-
         if (this.dma) {
             this.dma.tick();
         }
