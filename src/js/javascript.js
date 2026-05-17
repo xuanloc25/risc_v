@@ -913,23 +913,107 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarItems = document.querySelectorAll('.sidebar-item');
     const viewSections = document.querySelectorAll('.view-section');
 
+    const activateView = (targetId) => {
+        sidebarItems.forEach(i => i.classList.remove('active'));
+        viewSections.forEach(v => v.classList.remove('active'));
+
+        const activeItem = document.querySelector(`.sidebar-item[data-target="${targetId}"]`);
+        if (activeItem) activeItem.classList.add('active');
+
+        const targetSection = document.getElementById(targetId);
+        if (targetSection) {
+            targetSection.classList.add('active');
+        }
+
+        if (targetId === 'view-editor' && instructionInput) {
+            setTimeout(() => {
+                instructionInput.refresh();
+            }, 10);
+        }
+    };
+
     sidebarItems.forEach(item => {
         item.addEventListener('click', () => {
-            sidebarItems.forEach(i => i.classList.remove('active'));
-            viewSections.forEach(v => v.classList.remove('active'));
+            activateView(item.getAttribute('data-target'));
+        });
+    });
 
-            item.classList.add('active');
-            const targetId = item.getAttribute('data-target');
-            const targetSection = document.getElementById(targetId);
-            if (targetSection) {
-                targetSection.classList.add('active');
-            }
+    // Help view interactions: search, local navigation, and loading examples into CodeMirror.
+    const helpContent = document.getElementById('helpContent');
+    const helpSearchInput = document.getElementById('helpSearchInput');
+    const helpSections = Array.from(document.querySelectorAll('[data-help-section]'));
+    const helpNavItems = Array.from(document.querySelectorAll('.help-nav-item'));
+    const helpEmptyState = document.getElementById('helpEmptyState');
 
-            if (targetId === 'view-editor' && instructionInput) {
-                setTimeout(() => {
-                    instructionInput.refresh();
-                }, 10);
+    const setActiveHelpNav = (targetId) => {
+        helpNavItems.forEach(navItem => {
+            navItem.classList.toggle('active', navItem.dataset.helpTarget === targetId);
+        });
+    };
+
+    helpNavItems.forEach(navItem => {
+        navItem.addEventListener('click', () => {
+            const target = document.getElementById(navItem.dataset.helpTarget);
+            if (!target || !helpContent) return;
+            setActiveHelpNav(navItem.dataset.helpTarget);
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    if (helpSearchInput) {
+        const normalizeHelpText = (text) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+        helpSearchInput.addEventListener('input', () => {
+            const query = normalizeHelpText(helpSearchInput.value.trim());
+            let firstVisibleId = null;
+            let visibleCount = 0;
+
+            helpSections.forEach(section => {
+                const navItem = helpNavItems.find(item => item.dataset.helpTarget === section.id);
+                const visible = !query || normalizeHelpText(section.textContent).includes(query);
+                section.classList.toggle('hidden', !visible);
+                if (navItem) navItem.hidden = !visible;
+                if (visible) {
+                    visibleCount++;
+                    if (!firstVisibleId) firstVisibleId = section.id;
+                }
+            });
+
+            if (helpEmptyState) helpEmptyState.hidden = visibleCount > 0;
+            if (firstVisibleId) setActiveHelpNav(firstVisibleId);
+            if (helpContent) helpContent.scrollTop = 0;
+        });
+    }
+
+    if (helpContent && helpSections.length > 0) {
+        helpContent.addEventListener('scroll', () => {
+            const containerTop = helpContent.getBoundingClientRect().top;
+            let currentId = null;
+
+            helpSections.forEach(section => {
+                if (section.classList.contains('hidden')) return;
+                const sectionTop = section.getBoundingClientRect().top - containerTop;
+                if (sectionTop <= 80) currentId = section.id;
+            });
+
+            if (currentId) setActiveHelpNav(currentId);
+        });
+    }
+
+    document.querySelectorAll('.help-sample-button[data-sample-template]').forEach(button => {
+        button.addEventListener('click', () => {
+            const template = document.getElementById(button.dataset.sampleTemplate);
+            if (!template || !instructionInput) return;
+            const code = template.content.textContent.trim();
+
+            activateView('view-editor');
+            instructionInput.setValue(code);
+            instructionInput.clearGutter("breakpoints");
+            activeBreakpoints.clear();
+            if (binaryOutput) {
+                binaryOutput.textContent = "Sample loaded from Help. Click Assemble to build it.";
             }
+            setTimeout(() => instructionInput.refresh(), 10);
         });
     });
 

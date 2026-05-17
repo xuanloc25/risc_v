@@ -142,8 +142,8 @@ export const assembler = {
         'fmul.s': { opcode: '1010011', funct7: '0001000', type: 'R-FP' },
         'fdiv.s': { opcode: '1010011', funct7: '0001100', type: 'R-FP' },
         'fsqrt.s': { opcode: '1010011', funct7: '0101100', rs2_subfield: '00000', type: 'R-FP-CVT' },
-        'fmin.s': { opcode: '1010011', funct3: '001', funct7: '0010100', type: 'R-FP' },
-        'fmax.s': { opcode: '1010011', funct3: '000', funct7: '0010100', type: 'R-FP' },
+        'fmin.s': { opcode: '1010011', funct3: '000', funct7: '0010100', type: 'R-FP' },
+        'fmax.s': { opcode: '1010011', funct3: '001', funct7: '0010100', type: 'R-FP' },
 
         'fsgnj.s': { opcode: '1010011', funct3: '000', funct7: '0010000', type: 'R-FP' },
         'fsgnjn.s': { opcode: '1010011', funct3: '001', funct7: '0010000', type: 'R-FP' },
@@ -438,6 +438,38 @@ export const assembler = {
         return { offset: offsetValue, baseRegIndex: baseRegIndex };
     },
 
+    _encodeRoundingMode(mode) {
+        const roundingModes = {
+            rne: '000',
+            rtz: '001',
+            rdn: '010',
+            rup: '011',
+            rmm: '100',
+            dyn: '111',
+        };
+        const normalized = (mode || 'dyn').trim().toLowerCase();
+        if (roundingModes[normalized]) return roundingModes[normalized];
+        throw new Error(`Invalid floating-point rounding mode: "${mode}"`);
+    },
+
+    _resolveFpRm(instrInfo, operands, rmOperandIndex) {
+        if (instrInfo.funct3) return instrInfo.funct3;
+        return this._encodeRoundingMode(operands[rmOperandIndex] || 'dyn');
+    },
+
+    _encodeFenceSet(operand) {
+        const normalized = (operand || 'iorw').trim().toLowerCase();
+        let value = 0;
+        for (const char of normalized) {
+            if (char === 'i') value |= 0b1000;
+            else if (char === 'o') value |= 0b0100;
+            else if (char === 'r') value |= 0b0010;
+            else if (char === 'w') value |= 0b0001;
+            else throw new Error(`Invalid fence operand: "${operand}"`);
+        }
+        return this._decToBin(value, 4);
+    },
+
     /**
      * Mã hóa một lệnh assembly đã được phân tích thành chuỗi nhị phân 32-bit.
      * @param {object} instrInfo - Thông tin về lệnh từ bảng opcodes.
@@ -492,6 +524,12 @@ export const assembler = {
                     }
                     if (mnemonic === 'ebreak') {
                         binaryInstruction = '00000000000100000000000001110011'; // imm=1,rs1=0,rd=0
+                        break;
+                    }
+                    if (mnemonic === 'fence') {
+                        const predecessor = this._encodeFenceSet(operands[0]);
+                        const successor = this._encodeFenceSet(operands[1]);
+                        binaryInstruction = '0000' + predecessor + successor + '00000' + instrInfo.funct3 + '00000' + instrInfo.opcode;
                         break;
                     }
 
@@ -592,7 +630,7 @@ export const assembler = {
                     rs1_s = encodeReg(operands[1]);
                     rs2_s = encodeReg(operands[2]);
                     const rs3_s = encodeReg(operands[3]);
-                    const rm_r4 = instrInfo.funct3 || '000'; // Default rounding mode
+                    const rm_r4 = this._resolveFpRm(instrInfo, operands, 4);
                     const fmt_s = instrInfo.fmt || '00';
                     binaryInstruction = rs3_s + fmt_s + rs2_s + rs1_s + rm_r4 + rd_s + instrInfo.opcode;
                     break;
@@ -601,7 +639,7 @@ export const assembler = {
                     rd_s = encodeReg(operands[0]);
                     rs1_s = encodeReg(operands[1]);
                     rs2_s = encodeReg(operands[2]);
-                    const rm = instrInfo.funct3 || '000'; // Chế độ làm tròn mặc định
+                    const rm = this._resolveFpRm(instrInfo, operands, 3);
                     binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + rm + rd_s + instrInfo.opcode;
                     break;
 
@@ -609,7 +647,7 @@ export const assembler = {
                     rd_s = encodeReg(operands[0]);
                     rs1_s = encodeReg(operands[1]);
                     rs2_s = instrInfo.rs2_subfield; // rs2 không phải là thanh ghi mà là một giá trị cố định
-                    const rm_cvt = instrInfo.funct3 || '000';
+                    const rm_cvt = this._resolveFpRm(instrInfo, operands, 2);
                     binaryInstruction = instrInfo.funct7 + rs2_s + rs1_s + rm_cvt + rd_s + instrInfo.opcode;
                     break;
 

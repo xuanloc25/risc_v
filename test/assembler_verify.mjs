@@ -42,6 +42,21 @@ assert.deepEqual(
   ['0x00000013', '0x00000097', '0xFFC080E7']
 );
 
+assert.deepEqual(
+  assemble(`.text\nfence\nfence rw, rw`),
+  ['0x0FF0000F', '0x0330000F']
+);
+
+assert.deepEqual(
+  assemble(`.text\nfadd.s f1, f2, f3\nfadd.s f1, f2, f3, rne`),
+  ['0x003170D3', '0x003100D3']
+);
+
+assert.deepEqual(
+  assemble(`.text\nfmin.s f15, f16, f17\nfmax.s f18, f19, f20`),
+  ['0x291807D3', '0x29499953']
+);
+
 expectAssembleError(
   `.text\nbeq x0, x0, 3`,
   /must be aligned to 2 bytes/
