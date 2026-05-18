@@ -285,6 +285,104 @@ html {
     cursor: pointer;
 }
 
+/* RISC-V autocomplete popup */
+.CodeMirror-hints {
+    z-index: 2500;
+    min-width: 360px;
+    max-width: min(720px, calc(100vw - 40px));
+    max-height: 320px;
+    border: 1px solid #9db5e8;
+    border-radius: 4px;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(45, 52, 54, 0.18);
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    padding: 4px;
+}
+
+.CodeMirror-hint {
+    padding: 0;
+    border-radius: 3px;
+    white-space: normal;
+    color: #2d3436;
+}
+
+li.CodeMirror-hint-active,
+.CodeMirror-hints .CodeMirror-hint-active {
+    background: #f3f8ff;
+    color: #1f2d3d;
+}
+
+.riscv-hint-content {
+    display: grid;
+    grid-template-columns: minmax(92px, max-content) minmax(0, 1fr);
+    gap: 8px 14px;
+    align-items: baseline;
+    padding: 7px 9px;
+}
+
+.riscv-hint-main {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.riscv-hint-label {
+    color: #1d4ed8;
+    font-weight: 700;
+}
+
+.CodeMirror-hint-active .riscv-hint-label {
+    color: #0f3b82;
+}
+
+.riscv-hint-badge {
+    border: 1px solid #d7dee8;
+    border-radius: 3px;
+    color: #607083;
+    font-family: 'Roboto', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+    padding: 1px 4px;
+    text-transform: uppercase;
+}
+
+.CodeMirror-hint-active .riscv-hint-badge {
+    background: #ffffff;
+    border-color: #b8c8dd;
+    color: #46596f;
+}
+
+.CodeMirror-hint-active .riscv-hint-detail,
+.CodeMirror-hint-active .riscv-hint-syntax,
+.CodeMirror-hint-active .riscv-hint-example {
+    color: #263545;
+}
+
+.riscv-hint-detail {
+    min-width: 0;
+    color: #3d4852;
+    font-family: 'Roboto', sans-serif;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.riscv-hint-syntax {
+    grid-column: 1 / -1;
+    color: #5f6f82;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.riscv-hint-example {
+    grid-column: 1 / -1;
+    color: #2f3a46;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
 /* Console Area */
 .console-area {
     flex: 1;

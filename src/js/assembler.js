@@ -385,6 +385,27 @@ export const assembler = {
         else if (operand.match(/^[+-]?0x[0-9a-fA-F]+$/i)) { value = parseInt(operand, 16); }
         else if (operand.match(/^[+-]?\d+$/)) { value = parseInt(operand, 10); }
 
+        const relocMatch = operand.match(/^%(hi|lo)\(([^)]+)\)$/i);
+        if (value === null && relocMatch) {
+            const relocKind = relocMatch[1].toLowerCase();
+            const symbol = relocMatch[2].trim();
+            let symbolValue = null;
+
+            if (this.equValues[symbol] !== undefined) symbolValue = this.equValues[symbol];
+            else if (symbol.match(/^[+-]?0x[0-9a-fA-F]+$/i)) symbolValue = parseInt(symbol, 16);
+            else if (symbol.match(/^[+-]?\d+$/)) symbolValue = parseInt(symbol, 10);
+            else if (this.labels[symbol] && this.labels[symbol].address !== undefined) {
+                symbolValue = isRelative ? this.labels[symbol].address - instructionAddress : this.labels[symbol].address;
+            } else if (isPass1) {
+                return null;
+            } else {
+                throw new Error(`Undefined label "${symbol}"`);
+            }
+
+            const roundedUpper = Math.trunc((symbolValue + 0x800) / 0x1000);
+            value = relocKind === 'hi' ? roundedUpper : symbolValue - (roundedUpper * 0x1000);
+        }
+
         if (value === null && /^[a-zA-Z_][\w]*$/.test(operand)) {
             if (this.labels[operand] && this.labels[operand].address !== undefined) {
                 const labelAddress = this.labels[operand].address;
@@ -425,10 +446,10 @@ export const assembler = {
 
     // Phân tích toán hạng dạng bộ nhớ `offset(baseRegister)`
     _parseMemoryOperand(operand) {
-        const match = operand.match(/^(-?[0-9a-zA-Z_]+)?\s*\(\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\)$/);
+        const match = operand.match(/^\s*(.*?)\s*\(\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\)\s*$/);
         if (!match) throw new Error(`Invalid memory operand format: "${operand}"`);
 
-        const offsetPart = match[1] || '0';
+        const offsetPart = match[1].trim() || '0';
         const basePart = match[2];
 
         const offsetValue = this._parseImmediate(offsetPart, 12, false, false, this.currentAddress);

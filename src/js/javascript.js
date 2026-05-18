@@ -16,6 +16,7 @@ CodeMirror.defineSimpleMode("riscv", {
 
 import { assembler } from './assembler.js';
 import { simulator } from './soc.js';
+import { configureRiscvEditorHints } from './editor_hint.js';
 
 // --- THAM CHIẾU DOM ---
 let instructionInput; // Sẽ được khởi tạo bởi CodeMirror
@@ -945,6 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
         theme: "default",
         gutters: ["CodeMirror-linenumbers", "breakpoints"]
     });
+    configureRiscvEditorHints(instructionInput, { assembler });
 
     instructionInput.on("gutterClick", function (cm, n) {
         const lineNumber = n + 1;
