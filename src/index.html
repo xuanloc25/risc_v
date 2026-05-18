@@ -8,6 +8,7 @@
 
     <!-- CodeMirror Styles -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.css">
 
     <!-- Material Design & Icons -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -19,6 +20,7 @@
     <!-- Libraries Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/mode/simple.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.js"></script>
     <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
 </head>
 
@@ -46,6 +48,10 @@
                 <i class="material-icons">input</i>
                 <span>I/O</span>
             </div>
+            <div class="sidebar-item sidebar-help" data-target="view-help" title="Help">
+                <i class="material-icons">help_outline</i>
+                <span>Help</span>
+            </div>
         </div>
 
         <!-- 2. MAIN CONTENT (Nội dung chính) -->
@@ -65,6 +71,14 @@
                     <button class="mdc-button mdc-button--raised success-btn" id="runButton">
                         <i class="material-icons mdc-button__icon" aria-hidden="true">play_arrow</i>
                         <span class="mdc-button__label">Run</span>
+                    </button>
+                    <button class="mdc-button mdc-button--outlined pause-btn" id="pauseButton" disabled>
+                        <i class="material-icons mdc-button__icon" aria-hidden="true">pause</i>
+                        <span class="mdc-button__label">Pause</span>
+                    </button>
+                    <button class="mdc-button mdc-button--outlined stop-btn" id="stopButton" disabled>
+                        <i class="material-icons mdc-button__icon" aria-hidden="true">stop</i>
+                        <span class="mdc-button__label">Stop</span>
                     </button>
                     <button class="mdc-button mdc-button--outlined" id="stepButton">
                         <i class="material-icons mdc-button__icon" aria-hidden="true">redo</i>
@@ -390,6 +404,1006 @@
                 </div>
             </div>
 
+            <!-- VIEW 6: HELP -->
+            <div id="view-help" class="view-section">
+                <div class="help-layout">
+                    <aside class="help-nav-panel" aria-label="Help navigation">
+                        <div class="help-title-block">
+                            <i class="material-icons">help_outline</i>
+                            <div>
+                                <h2>Help / Guide</h2>
+                                <p>Tra cứu nhanh khi viết, assemble và debug RISC-V trong simulator.</p>
+                            </div>
+                        </div>
+
+                        <label class="help-search">
+                            <i class="material-icons">search</i>
+                            <input id="helpSearchInput" type="search" placeholder="Tìm lệnh, syscall, MMIO..."
+                                autocomplete="off">
+                        </label>
+
+                        <div class="help-nav-list">
+                            <button type="button" class="help-nav-item active" data-help-target="help-overview">Tổng
+                                quan</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-workflow">Quy trình
+                                chạy</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-syntax">Cú pháp &
+                                operands</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-registers">Thanh
+                                ghi</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-instructions">Instruction
+                                set</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-pseudo">Pseudo
+                                instructions</button>
+                            <button type="button" class="help-nav-item"
+                                data-help-target="help-directives">Directives</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-syscalls">ECALL /
+                                Syscall</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-memory-map">Memory
+                                map</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-io">I/O
+                                peripherals</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-cache-mmu">Cache, MMU,
+                                bus</button>
+                            <button type="button" class="help-nav-item"
+                                data-help-target="help-debugging">Debugging</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-examples">Ví dụ
+                                mẫu</button>
+                        </div>
+                    </aside>
+
+                    <main class="help-content" id="helpContent">
+                        <section class="help-section" id="help-overview" data-help-section>
+                            <div class="help-section-header">
+                                <div>
+                                    <h2>RISC-V SoC Simulator</h2>
+                                    <p>SoC Simulator là một công cụ mô phỏng hoạt động của một Hệ thống trên Chip (SoC)
+                                        được thiết kế và phát triển bởi nhóm tác giả Nguyễn Xuân Lộc & Dương Hiển Gia
+                                        Khang. Mục đích của Project là hỗ trợ những người mới bắt đầu tìm hiểu về thiết
+                                        kế SoC.</p>
+                                </div>
+                                <div class="help-chip-row">
+                                    <span>RV32I</span>
+                                    <span>RV32M</span>
+                                    <span>RV32F</span>
+                                    <span>MMIO</span>
+                                    <span>Cache</span>
+                                </div>
+                            </div>
+                            <div class="help-callout">
+                                <strong>Mục tiêu sử dụng:</strong> viết assembly trong Editor, bấm Assemble để sinh mã
+                                máy, Run/Step để thực thi, rồi quan sát Registers, Memory, Cache, I/O và Systems Log
+                                Console.
+                            </div>
+                            <table class="help-table">
+                                <thead>
+                                    <tr>
+                                        <th>Khu vực</th>
+                                        <th>Dùng để làm gì</th>
+                                        <th>Mẹo thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Editor</td>
+                                        <td>Soạn RISC-V assembly, đặt breakpoint ở gutter, xem binary output.</td>
+                                        <td>Ưu tiên khai báo <code>.text</code>, <code>.globl _start</code>, nhãn
+                                            <code>_start:</code>.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Processor</td>
+                                        <td>Không gian dành cho datapath/processor visualization.</td>
+                                        <td>Dùng Registers và Instruction Memory để debug tạm thời.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Cache</td>
+                                        <td>Xem L1I, L1D, L2 cache: set, way, valid, dirty, tag, hit/miss.</td>
+                                        <td>Dùng nút Cache: ON/OFF để so sánh hành vi bộ nhớ.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Memory</td>
+                                        <td>Xem instruction memory và data segment.</td>
+                                        <td>Ô địa chỉ hỗ trợ dạng thập phân hoặc hex, ví dụ <code>0x10010000</code>.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>I/O</td>
+                                        <td>Tương tác LED Matrix, UART Console, Keyboard.</td>
+                                        <td>I/O dùng memory-mapped registers, không phải syscall RARS truyền thống.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-workflow" data-help-section>
+                            <h2>Quy trình chạy chương trình</h2>
+                            <ol class="help-steps">
+                                <li><strong>Viết code:</strong> đặt dữ liệu trong <code>.data</code>, đặt lệnh trong
+                                    <code>.text</code>. Nếu có nhãn <code>_start</code>, simulator sẽ ưu tiên chạy từ
+                                    nhãn này.
+                                </li>
+                                <li><strong>Assemble:</strong> bấm Assemble để kiểm tra cú pháp, expand
+                                    pseudo-instruction và nạp chương trình vào CPU/memory.</li>
+                                <li><strong>Sửa lỗi:</strong> nếu có lỗi, đọc dòng lỗi trong Console / Binary Output.
+                                    Lỗi phổ biến là sai số toán hạng, label chưa khai báo, immediate vượt range.</li>
+                                <li><strong>Step:</strong> chạy từng instruction để xem PC, register, memory, cache thay
+                                    đổi theo từng chu kỳ.</li>
+                                <li><strong>Run:</strong> chạy liên tục. Nếu đã đặt breakpoint, Run sẽ dừng khi PC tới
+                                    instruction tương ứng.</li>
+                                <li><strong>Quan sát:</strong> Registers tô vàng khi giá trị đổi; Memory cho biết mã
+                                    máy/data; I/O hiển thị UART/LED/keyboard; Systems Log Console ghi log bus, CPU, DMA,
+                                    cache.</li>
+                            </ol>
+                            <table class="help-table compact">
+                                <thead>
+                                    <tr>
+                                        <th>Nút</th>
+                                        <th>Chức năng</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Assemble</td>
+                                        <td>Biên dịch assembly, reset CPU/memory cần thiết và load chương trình.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Reset</td>
+                                        <td>Reset trạng thái CPU/simulator nhưng giữ code trong editor.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Run</td>
+                                        <td>Thực thi liên tục tới khi program exit, gặp lỗi, vượt max cycle hoặc hit
+                                            breakpoint.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Step</td>
+                                        <td>Thực thi đúng một bước simulator, hữu ích khi kiểm tra PC/register.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Speed</td>
+                                        <td>Điều chỉnh số chu kỳ mỗi frame khi Run.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>IPS</td>
+                                        <td>Ước lượng số instruction/chu kỳ đang chạy mỗi giây.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Cache: ON/OFF</td>
+                                        <td>Bật/tắt cache rồi quan sát khác biệt trong Cache view và log.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-syntax" data-help-section>
+                            <h2>Cú pháp assembly & operand key</h2>
+                            <div class="help-two-column">
+                                <div>
+                                    <h3>Quy ước dòng lệnh</h3>
+                                    <ul class="help-list">
+                                        <li>Comment bắt đầu bằng <code>#</code>.</li>
+                                        <li>Label kết thúc bằng dấu hai chấm: <code>loop:</code>, <code>done:</code>.
+                                        </li>
+                                        <li>Immediate hỗ trợ decimal và hex: <code>10</code>, <code>-4</code>,
+                                            <code>0x10010000</code>.
+                                        </li>
+                                        <li>Load/store dùng dạng <code>offset(base)</code>, ví dụ
+                                            <code>lw t0, 8(sp)</code>.
+                                        </li>
+                                        <li>Branch/jump tới label dùng PC-relative offset do assembler tự tính.</li>
+                                        <li>Không đặt instruction trong <code>.data</code>; chuyển về <code>.text</code>
+                                            trước khi viết lệnh.</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h3>Operand key</h3>
+                                    <table class="help-table compact">
+                                        <tbody>
+                                            <tr>
+                                                <td><code>rd</code></td>
+                                                <td>Destination register, nơi ghi kết quả.</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>rs1</code>, <code>rs2</code></td>
+                                                <td>Source registers.</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>imm12</code></td>
+                                                <td>Immediate 12-bit có dấu, thường trong I/S-type.</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>label</code></td>
+                                                <td>Nhãn trong chương trình, dùng cho branch/jump/la/call.</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>offset(base)</code></td>
+                                                <td>Địa chỉ hiệu dụng = <code>base + offset</code>.</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>frd</code>, <code>frs1</code></td>
+                                                <td>Floating-point registers <code>f0..f31</code> hoặc ABI như
+                                                    <code>fa0</code>.
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <pre class="help-code"><code>.data
+msg: .asciiz "Hello\n"
+
+.text
+.globl _start
+_start:
+    la   a0, msg
+    li   a7, 4
+    ecall
+
+    li   a0, 0
+    li   a7, 93
+    ecall</code></pre>
+                        </section>
+
+                        <section class="help-section" id="help-registers" data-help-section>
+                            <h2>Thanh ghi quan trọng</h2>
+                            <table class="help-table">
+                                <thead>
+                                    <tr>
+                                        <th>Register</th>
+                                        <th>ABI</th>
+                                        <th>Ý nghĩa thường dùng</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>x0</code></td>
+                                        <td><code>zero</code></td>
+                                        <td>Luôn bằng 0; ghi vào x0 không làm thay đổi giá trị.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>x1</code></td>
+                                        <td><code>ra</code></td>
+                                        <td>Return address khi gọi hàm bằng <code>jal</code>/<code>call</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>x2</code></td>
+                                        <td><code>sp</code></td>
+                                        <td>Stack pointer.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>x5-x7</code>, <code>x28-x31</code></td>
+                                        <td><code>t0-t6</code></td>
+                                        <td>Temporary registers, tiện cho biến tạm trong bài lab.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>x8-x9</code>, <code>x18-x27</code></td>
+                                        <td><code>s0-s11</code></td>
+                                        <td>Saved registers, thường giữ giá trị qua lời gọi hàm.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>x10-x17</code></td>
+                                        <td><code>a0-a7</code></td>
+                                        <td>Arguments/return values; <code>a7</code> dùng làm syscall ID.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>pc</code></td>
+                                        <td>PC</td>
+                                        <td>Program Counter, địa chỉ instruction hiện tại/tiếp theo.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>f0-f31</code></td>
+                                        <td><code>ft/fa/fs</code></td>
+                                        <td>Floating-point registers cho RV32F single precision.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-instructions" data-help-section>
+                            <h2>Instruction set được hỗ trợ</h2>
+                            <h3>RV32I base integer</h3>
+                            <table class="help-table instruction-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nhóm</th>
+                                        <th>Lệnh</th>
+                                        <th>Cú pháp</th>
+                                        <th>Ý nghĩa</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>R-type</td>
+                                        <td><code>add sub</code></td>
+                                        <td><code>rd, rs1, rs2</code></td>
+                                        <td>Cộng/trừ hai thanh ghi.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>R-type</td>
+                                        <td><code>sll srl sra</code></td>
+                                        <td><code>rd, rs1, rs2</code></td>
+                                        <td>Dịch trái logic, dịch phải logic, dịch phải số học; shift amount lấy 5 bit
+                                            thấp của rs2.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>R-type</td>
+                                        <td><code>slt sltu</code></td>
+                                        <td><code>rd, rs1, rs2</code></td>
+                                        <td>So sánh signed/unsigned, ghi 1 nếu rs1 nhỏ hơn rs2.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>R-type</td>
+                                        <td><code>xor or and</code></td>
+                                        <td><code>rd, rs1, rs2</code></td>
+                                        <td>Toán tử bitwise.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>I-type</td>
+                                        <td><code>addi slti sltiu xori ori andi</code></td>
+                                        <td><code>rd, rs1, imm12</code></td>
+                                        <td>Phép toán với immediate 12-bit có dấu.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>I-shift</td>
+                                        <td><code>slli srli srai</code></td>
+                                        <td><code>rd, rs1, shamt</code></td>
+                                        <td>Dịch bit với shift amount 0..31.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Load</td>
+                                        <td><code>lb lh lw lbu lhu</code></td>
+                                        <td><code>rd, offset(rs1)</code></td>
+                                        <td>Đọc byte/half/word từ memory; <code>lbu/lhu</code> zero-extend.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Store</td>
+                                        <td><code>sb sh sw</code></td>
+                                        <td><code>rs2, offset(rs1)</code></td>
+                                        <td>Ghi byte/half/word từ rs2 xuống memory hoặc MMIO.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Branch</td>
+                                        <td><code>beq bne blt bge bltu bgeu</code></td>
+                                        <td><code>rs1, rs2, label</code></td>
+                                        <td>Nhảy có điều kiện; signed hoặc unsigned tùy lệnh.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Jump</td>
+                                        <td><code>jal</code></td>
+                                        <td><code>rd, label</code></td>
+                                        <td>Ghi <code>pc+4</code> vào rd rồi nhảy tới label.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Jump</td>
+                                        <td><code>jalr</code></td>
+                                        <td><code>rd, rs1, imm</code> hoặc <code>rd, imm(rs1)</code></td>
+                                        <td>Nhảy tới <code>(rs1+imm)&~1</code>, thường dùng cho return/function pointer.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Upper</td>
+                                        <td><code>lui auipc</code></td>
+                                        <td><code>rd, imm20</code></td>
+                                        <td>Nạp immediate cao hoặc cộng offset cao với PC.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>System</td>
+                                        <td><code>ecall ebreak fence</code></td>
+                                        <td><code>ecall</code>, <code>ebreak</code>, <code>fence pred, succ</code></td>
+                                        <td>System call, breakpoint exception, memory ordering hint.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <h3>RV32M multiply/divide</h3>
+                            <table class="help-table compact">
+                                <tbody>
+                                    <tr>
+                                        <td><code>mul</code></td>
+                                        <td><code>rd, rs1, rs2</code></td>
+                                        <td>32 bit thấp của phép nhân signed x signed.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>mulh</code></td>
+                                        <td><code>rd, rs1, rs2</code></td>
+                                        <td>32 bit cao của signed x signed.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>mulhsu</code></td>
+                                        <td><code>rd, rs1, rs2</code></td>
+                                        <td>32 bit cao của signed x unsigned.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>mulhu</code></td>
+                                        <td><code>rd, rs1, rs2</code></td>
+                                        <td>32 bit cao của unsigned x unsigned.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>div divu rem remu</code></td>
+                                        <td><code>rd, rs1, rs2</code></td>
+                                        <td>Chia và lấy dư signed/unsigned theo quy ước RV32M.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <h3>RV32F single precision</h3>
+                            <table class="help-table compact">
+                                <tbody>
+                                    <tr>
+                                        <td><code>flw fsw</code></td>
+                                        <td><code>frd, offset(rs1)</code> / <code>frs2, offset(rs1)</code></td>
+                                        <td>Load/store float 32-bit.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>fadd.s fsub.s fmul.s fdiv.s</code></td>
+                                        <td><code>frd, frs1, frs2</code></td>
+                                        <td>Cộng, trừ, nhân, chia float.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>fmadd.s fmsub.s fnmsub.s fnmadd.s</code></td>
+                                        <td><code>frd, frs1, frs2, frs3</code></td>
+                                        <td>Fused multiply-add/subtract variants.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>fsqrt.s</code></td>
+                                        <td><code>frd, frs1</code></td>
+                                        <td>Căn bậc hai float.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>fmin.s fmax.s</code></td>
+                                        <td><code>frd, frs1, frs2</code></td>
+                                        <td>Minimum/maximum, có xử lý NaN cơ bản.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>fsgnj.s fsgnjn.s fsgnjx.s</code></td>
+                                        <td><code>frd, frs1, frs2</code></td>
+                                        <td>Copy/negate/xor sign bit.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>fcvt.w.s fcvt.wu.s fcvt.s.w fcvt.s.wu</code></td>
+                                        <td><code>rd/frd, frs1/rs1[, rm]</code></td>
+                                        <td>Chuyển đổi int/unsigned int và float.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>feq.s flt.s fle.s</code></td>
+                                        <td><code>rd, frs1, frs2</code></td>
+                                        <td>So sánh float, kết quả ghi vào integer register.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>fclass.s</code></td>
+                                        <td><code>rd, frs1</code></td>
+                                        <td>Phân loại số float: zero, subnormal, normal, infinity, NaN.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>fmv.x.w fmv.w.x</code></td>
+                                        <td><code>rd, frs1</code> / <code>frd, rs1</code></td>
+                                        <td>Di chuyển bit pattern giữa register integer và float.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <h3>Atomic đang có</h3>
+                            <table class="help-table compact">
+                                <tbody>
+                                    <tr>
+                                        <td><code>amoadd.w</code></td>
+                                        <td><code>rd, rs2, offset(rs1)</code></td>
+                                        <td>Đọc word cũ ở memory, cộng rs2 vào memory, trả word cũ về rd.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-pseudo" data-help-section>
+                            <h2>Pseudo instructions</h2>
+                            <table class="help-table">
+                                <thead>
+                                    <tr>
+                                        <th>Pseudo</th>
+                                        <th>Expand gần đúng</th>
+                                        <th>Ghi chú</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>nop</code></td>
+                                        <td><code>addi x0, x0, 0</code></td>
+                                        <td>Không làm gì.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>li rd, imm</code></td>
+                                        <td><code>addi</code> hoặc <code>lui + addi</code></td>
+                                        <td>Assembler tự chọn 1 hoặc 2 instruction theo độ lớn immediate.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>la rd, label</code></td>
+                                        <td><code>auipc + addi</code></td>
+                                        <td>Nạp địa chỉ label đúng theo PC-relative relocation đơn giản.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>mv rd, rs</code></td>
+                                        <td><code>addi rd, rs, 0</code></td>
+                                        <td>Copy register.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>j label</code></td>
+                                        <td><code>jal x0, label</code></td>
+                                        <td>Nhảy không lưu return address.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>jr rs</code></td>
+                                        <td><code>jalr x0, rs, 0</code></td>
+                                        <td>Nhảy tới địa chỉ trong register.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>ret</code></td>
+                                        <td><code>jalr x0, ra, 0</code></td>
+                                        <td>Return từ function.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>call label</code></td>
+                                        <td><code>auipc ra + jalr ra</code></td>
+                                        <td>Gọi subroutine xa hơn range của jal.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>beqz rs, label</code></td>
+                                        <td><code>beq rs, x0, label</code></td>
+                                        <td>Branch nếu register bằng 0.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>bnez rs, label</code></td>
+                                        <td><code>bne rs, x0, label</code></td>
+                                        <td>Branch nếu register khác 0.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>fmv.s</code>, <code>fabs.s</code>, <code>fneg.s</code></td>
+                                        <td><code>fsgnj.s</code> variants</td>
+                                        <td>Copy, absolute, negate float bằng sign injection.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-directives" data-help-section>
+                            <h2>Assembler directives</h2>
+                            <table class="help-table">
+                                <thead>
+                                    <tr>
+                                        <th>Directive</th>
+                                        <th>Cú pháp</th>
+                                        <th>Ý nghĩa</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>.text</code></td>
+                                        <td><code>.text [address]</code></td>
+                                        <td>Chuyển sang vùng lệnh, mặc định bắt đầu ở <code>0x00400000</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.data</code></td>
+                                        <td><code>.data [address]</code></td>
+                                        <td>Chuyển sang vùng dữ liệu, mặc định <code>0x10010000</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.section</code></td>
+                                        <td><code>.section .text</code>, <code>.section .rodata</code></td>
+                                        <td>Hỗ trợ một số section phổ biến: text, data, rodata, bss, startup/hot/cold.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.word .half .byte</code></td>
+                                        <td><code>.word 1, 2, 0xFF</code></td>
+                                        <td>Ghi dữ liệu 32-bit, 16-bit, 8-bit vào data memory.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.float .single</code></td>
+                                        <td><code>.float 1.25, -3.5</code></td>
+                                        <td>Ghi float single-precision little-endian.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.ascii</code></td>
+                                        <td><code>.ascii "abc"</code></td>
+                                        <td>Ghi chuỗi không tự thêm byte null.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.asciiz .string</code></td>
+                                        <td><code>.asciiz "abc\n"</code></td>
+                                        <td>Ghi chuỗi và thêm byte <code>0</code> kết thúc.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.space</code></td>
+                                        <td><code>.space 64</code></td>
+                                        <td>Dành sẵn số byte, khởi tạo 0.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.align</code></td>
+                                        <td><code>.align 2</code></td>
+                                        <td>Căn địa chỉ theo <code>2^n</code> byte; <code>.align 2</code> là 4 byte.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.globl .global</code></td>
+                                        <td><code>.globl _start</code></td>
+                                        <td>Đánh dấu label global; simulator ưu tiên <code>_start</code> nếu có.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.extern</code></td>
+                                        <td><code>.extern symbol</code></td>
+                                        <td>Đánh dấu symbol ngoài; chủ yếu để tương thích input assembly.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.eqv</code></td>
+                                        <td><code>.eqv UART, 0x10000000</code></td>
+                                        <td>Định nghĩa hằng số thay thế trong assembler.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.org</code></td>
+                                        <td><code>.org 0x10010100</code></td>
+                                        <td>Đặt địa chỉ hiện tại trong section.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-syscalls" data-help-section>
+                            <h2>ECALL / Syscall</h2>
+                            <div class="help-callout">
+                                Đặt syscall ID trong <code>a7</code>, đặt arguments trong <code>a0</code>,
+                                <code>a1</code>, <code>a2</code>, sau đó gọi <code>ecall</code>. Trong trình duyệt, một
+                                số syscall in/exit đang hiển thị bằng alert; để output mượt hơn, dùng UART MMIO.
+                            </div>
+                            <table class="help-table">
+                                <thead>
+                                    <tr>
+                                        <th><code>a7</code></th>
+                                        <th>Tên</th>
+                                        <th>Input</th>
+                                        <th>Output / tác dụng</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>1</code></td>
+                                        <td>PrintInt</td>
+                                        <td><code>a0</code> = integer</td>
+                                        <td>In số nguyên.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>4</code></td>
+                                        <td>PrintString</td>
+                                        <td><code>a0</code> = địa chỉ chuỗi null-terminated</td>
+                                        <td>In chuỗi tới khi gặp byte 0.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>64</code></td>
+                                        <td>Write stdout</td>
+                                        <td><code>a0=1</code>, <code>a1=buffer</code>, <code>a2=count</code></td>
+                                        <td>Ghi count byte; trả số byte đã ghi trong <code>a0</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>93</code></td>
+                                        <td>Exit</td>
+                                        <td><code>a0</code> = exit code</td>
+                                        <td>Dừng chương trình.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>0</code></td>
+                                        <td>Halt/no-op</td>
+                                        <td>Không cần</td>
+                                        <td>Dừng CPU theo behavior hiện tại.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-memory-map" data-help-section>
+                            <h2>Memory map</h2>
+                            <table class="help-table">
+                                <thead>
+                                    <tr>
+                                        <th>Range / base</th>
+                                        <th>Tên</th>
+                                        <th>Ghi chú lập trình</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>0x00400000</code></td>
+                                        <td>Text segment</td>
+                                        <td>Mặc định cho instruction sau <code>.text</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>0x10010000</code></td>
+                                        <td>Data segment</td>
+                                        <td>Mặc định cho dữ liệu sau <code>.data</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>0x10000000-0x10000013</code></td>
+                                        <td>UART</td>
+                                        <td>TX/RX/status/control/baud divisor.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>0xFF000000-0xFF000FFF</code></td>
+                                        <td>LED Matrix</td>
+                                        <td>32x32 pixels, mỗi pixel 1 word <code>0x00RRGGBB</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>0xFF100000-0xFF100013</code></td>
+                                        <td>Mouse</td>
+                                        <td>X, Y, button bitmap, status, control.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>0xFFFF0000-0xFFFF0007</code></td>
+                                        <td>Keyboard</td>
+                                        <td>Control bit0 = ready; Data = ASCII char.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>0xFFED0000-0xFFED0007</code></td>
+                                        <td>DMA registers</td>
+                                        <td>CTRL và DESC FIFO.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-io" data-help-section>
+                            <h2>I/O peripherals</h2>
+                            <div class="help-two-column">
+                                <div>
+                                    <h3>UART <code>0x10000000</code></h3>
+                                    <table class="help-table compact">
+                                        <tbody>
+                                            <tr>
+                                                <td><code>+0x00</code></td>
+                                                <td>TX write-only: ghi ASCII byte để gửi ra UART Console.</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>+0x04</code></td>
+                                                <td>RX read-only: đọc byte người dùng nhập.</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>+0x08</code></td>
+                                                <td>Status: bit0 TX ready, bit1 RX available, bit2/3 interrupt enable.
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>+0x0C</code></td>
+                                                <td>Control: bit0 TX interrupt enable, bit1 RX interrupt enable.</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>+0x10</code></td>
+                                                <td>Baud divisor; baud = 48MHz / (16 x divisor).</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div>
+                                    <h3>LED Matrix <code>0xFF000000</code></h3>
+                                    <p>Mỗi pixel là một word. Offset pixel = <code>((row * 32) + col) * 4</code>. Màu
+                                        dùng dạng <code>0x00RRGGBB</code>.</p>
+                                    <h3>Keyboard <code>0xFFFF0000</code></h3>
+                                    <p>Đọc control <code>+0x00</code>, nếu bit0 = 1 thì đọc data <code>+0x04</code> để
+                                        lấy ASCII và pop khỏi buffer.</p>
+                                    <h3>Mouse <code>0xFF100000</code></h3>
+                                    <p>Đọc X/Y/button/status ở <code>+0x00/+0x04/+0x08/+0x0C</code>. Ghi
+                                        <code>0x3</code> vào status để clear move/click bits.
+                                    </p>
+                                </div>
+                            </div>
+                            <h3>DMA quick reference</h3>
+                            <table class="help-table compact">
+                                <tbody>
+                                    <tr>
+                                        <td><code>CTRL +0x00</code></td>
+                                        <td>bit0 EN, bit1 START, bit27 FIFO empty, bit28 FIFO full, bit29 error, bit30
+                                            done, bit31 busy.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>DESC +0x04</code></td>
+                                        <td>Write-only FIFO: ghi 3 word theo thứ tự source, destination, config.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>config</code></td>
+                                        <td>bits 0..23 = length/elements, bit27 byte swap, bits 28..29 source mode, bits
+                                            30..31 destination mode.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-cache-mmu" data-help-section>
+                            <h2>Cache, MMU và bus</h2>
+                            <ul class="help-list">
+                                <li>Đường CPU chính đi qua
+                                    <code>RISC-V Core -> MMU -> Cache -> TileLink-UH -> Main Memory</code>.
+                                </li>
+                                <li>MMIO như UART/LED/Keyboard/Mouse đi qua TileLink-UL và thường không cache.</li>
+                                <li>Cache view có 3 tab: L1I cho instruction fetch, L1D cho data access, L2 shared
+                                    cache.</li>
+                                <li>Khi Cache ON, bảng cache hiển thị set/way/tag/valid/dirty và thống kê
+                                    read/write/hit/miss.</li>
+                                <li>MMU hiện có page table/TLB nhỏ ở mức simulator; log MMU giúp thấy translate,
+                                    hit/miss và permission fault.</li>
+                                <li>Dùng Systems Log Console để thấy request/response CPU, MMU, cache, TileLink, DMA
+                                    theo trình tự thời gian.</li>
+                            </ul>
+                        </section>
+
+                        <section class="help-section" id="help-debugging" data-help-section>
+                            <h2>Debugging checklist</h2>
+                            <table class="help-table">
+                                <thead>
+                                    <tr>
+                                        <th>Triệu chứng</th>
+                                        <th>Nguyên nhân hay gặp</th>
+                                        <th>Cách kiểm tra</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Unknown mnemonic/directive</td>
+                                        <td>Sai tên lệnh hoặc directive chưa hỗ trợ.</td>
+                                        <td>Tra bảng Instruction set/Directives; chú ý dấu chấm trong lệnh float như
+                                            <code>fadd.s</code>.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Immediate out of range</td>
+                                        <td><code>addi/lw/sw</code> chỉ có immediate 12-bit; branch/jump có range riêng.
+                                        </td>
+                                        <td>Dùng <code>li</code> để nạp hằng lớn hoặc tách <code>lui/addi</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Không nhảy đúng label</td>
+                                        <td>Label đặt trong section sai hoặc branch offset không align.</td>
+                                        <td>Assemble xong xem Instruction Memory và cột Source.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Register không đổi</td>
+                                        <td>Ghi vào <code>x0</code>, hoặc lệnh chưa chạy do PC/branch.</td>
+                                        <td>Step từng lệnh, quan sát PC và dòng được highlight.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>UART không in ký tự</td>
+                                        <td>TX chưa ready hoặc địa chỉ sai.</td>
+                                        <td>Poll bit0 ở <code>UART_STATUS</code> trước khi ghi TX.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>LED không sáng</td>
+                                        <td>Tính sai offset pixel hoặc màu bằng 0.</td>
+                                        <td>Offset phải nhân 4; màu nên dạng <code>0x00RRGGBB</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Run quá lâu</td>
+                                        <td>Vòng lặp vô hạn không có exit/breakpoint.</td>
+                                        <td>Đặt breakpoint hoặc thêm <code>li a7,93; ecall</code>.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-examples" data-help-section>
+                            <h2>Ví dụ mẫu</h2>
+                            <div class="help-example-grid">
+                                <article class="help-example">
+                                    <div>
+                                        <h3>UART: in hai ký tự</h3>
+                                        <p>Ghi ASCII vào TX, poll status trước khi gửi byte tiếp theo.</p>
+                                    </div>
+                                    <button type="button" class="help-sample-button"
+                                        data-sample-template="helpSampleUart">
+                                        <i class="material-icons">content_paste</i>
+                                        Nạp vào editor
+                                    </button>
+                                </article>
+                                <article class="help-example">
+                                    <div>
+                                        <h3>LED Matrix: tô gradient</h3>
+                                        <p>Duyệt 32x32 pixel và ghi word màu <code>0x00RRGGBB</code>.</p>
+                                    </div>
+                                    <button type="button" class="help-sample-button"
+                                        data-sample-template="helpSampleLed">
+                                        <i class="material-icons">content_paste</i>
+                                        Nạp vào editor
+                                    </button>
+                                </article>
+                                <article class="help-example">
+                                    <div>
+                                        <h3>Syscall: in chuỗi rồi exit</h3>
+                                        <p>Dùng <code>a7=4</code> để print string và <code>a7=93</code> để exit.</p>
+                                    </div>
+                                    <button type="button" class="help-sample-button"
+                                        data-sample-template="helpSampleSyscall">
+                                        <i class="material-icons">content_paste</i>
+                                        Nạp vào editor
+                                    </button>
+                                </article>
+                            </div>
+
+                            <template id="helpSampleUart">.globl _start
+                                _start:
+                                lui t0, 0x10000 # UART base = 0x10000000
+
+                                li t1, 65 # 'A'
+                                sw t1, 0(t0) # UART_TX
+
+                                wait_tx_ready:
+                                lw t2, 8(t0) # UART_STATUS
+                                andi t2, t2, 1 # bit0 = TX ready
+                                beq t2, x0, wait_tx_ready
+
+                                li t1, 66 # 'B'
+                                sw t1, 0(t0)
+
+                                li a0, 0
+                                li a7, 93
+                                ecall</template>
+
+                            <template id="helpSampleLed">.text
+                                .globl _start
+                                _start:
+                                lui t0, 0xFF000 # LED base = 0xFF000000
+                                li t1, 0 # row
+                                li t6, 32 # limit
+
+                                row_loop:
+                                bge t1, t6, done
+                                li t2, 0 # col
+
+                                col_loop:
+                                bge t2, t6, next_row
+                                slli t4, t1, 5 # row * 32
+                                add t4, t4, t2
+                                slli t4, t4, 2 # byte offset
+
+                                slli t3, t1, 16 # red from row
+                                slli t5, t2, 8 # green from col
+                                or t3, t3, t5
+                                ori t3, t3, 0x40 # blue floor
+
+                                add t5, t0, t4
+                                sw t3, 0(t5)
+
+                                addi t2, t2, 1
+                                j col_loop
+
+                                next_row:
+                                addi t1, t1, 1
+                                j row_loop
+
+                                done:
+                                li a0, 0
+                                li a7, 93
+                                ecall</template>
+
+                            <template id="helpSampleSyscall">.data
+                                msg:
+                                .asciiz "Hello from syscall!\n"
+
+                                .text
+                                .globl _start
+                                _start:
+                                la a0, msg
+                                li a7, 4 # PrintString
+                                ecall
+
+                                li a0, 0 # exit code
+                                li a7, 93 # Exit
+                                ecall</template>
+                        </section>
+
+                        <div class="help-empty-state" id="helpEmptyState" hidden>
+                            <i class="material-icons">search_off</i>
+                            <p>Không tìm thấy nội dung phù hợp. Thử tìm bằng tên lệnh như <code>lw</code>,
+                                <code>ecall</code>, <code>UART</code>, <code>DMA</code>.
+                            </p>
+                        </div>
+                    </main>
+                </div>
+            </div>
+
         </div> <!-- End Main Content -->
     </div>
 
@@ -411,7 +1425,8 @@
                 <button id="logClearBtn" class="mdc-button mdc-button--outlined log-btn">
                     <span class="mdc-button__label">Clear</span>
                 </button>
-                <button id="logToggleBtn" class="mdc-icon-button material-icons" aria-label="Toggle Console">expand_more</button>
+                <button id="logToggleBtn" class="mdc-icon-button material-icons"
+                    aria-label="Toggle Console">expand_more</button>
             </div>
         </div>
         <div id="logContent" class="log-content"></div>

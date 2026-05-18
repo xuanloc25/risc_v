@@ -16,6 +16,7 @@ CodeMirror.defineSimpleMode("riscv", {
 
 import { assembler } from './assembler.js';
 import { simulator } from './soc.js';
+import { configureRiscvEditorHints } from './editor_hint.js';
 
 // --- THAM CHIẾU DOM ---
 let instructionInput; // Sẽ được khởi tạo bởi CodeMirror
@@ -38,6 +39,8 @@ const tabFp = document.getElementById('tab-fp');
 // Nút điều khiển Toolbar
 const assembleButton = document.getElementById('assembleButton');
 const runButton = document.getElementById('runButton');
+const pauseButton = document.getElementById('pauseButton');
+const stopButton = document.getElementById('stopButton');
 const stepButton = document.getElementById('stepButton');
 const resetButton = document.getElementById('resetButton');
 
@@ -75,6 +78,16 @@ const wordsPerRow = 8;
 let currentRegisterView = 'integer';
 let currentCacheView = 'l1i';
 let activeBreakpoints = new Set();
+const runState = {
+    isRunning: false,
+    isPaused: false,
+    frameId: null,
+    cycle: 0,
+    maxCycles: 500000,
+    breakpointAddresses: new Map(),
+    lastTime: 0,
+    cyclesInLastSecond: 0
+};
 
 // --- SYSTEM LOG TERMINAL LOGIC ---
 const logContent = document.getElementById('logContent');
@@ -595,6 +608,7 @@ setCacheView(currentCacheView);
 window.updateUIGlobally = updateUIGlobally;
 
 function toggleCacheAndReset() {
+    if (runState.isRunning) finishRun();
     simulator.setCacheEnabled(!simulator.useCache);
     updateCacheToggleUI();
     console.log(`[UI] Cache toggled -> ${simulator.useCache ? 'ON' : 'OFF'}`);
@@ -624,6 +638,7 @@ function setupUARTCallbacks() {
 
 function handleAssemble() {
     if (!assembler || !simulator || !binaryOutput || !instructionInput) return;
+    if (runState.isRunning) finishRun();
     binaryOutput.textContent = "Assembling...";
 
     if (instructionViewBody) instructionViewBody.innerHTML = '';
@@ -677,113 +692,205 @@ if (cacheToggleButton) {
     cacheToggleButton.addEventListener('click', toggleCacheAndReset);
 }
 
-// --- [CẬP NHẬT] HÀM RUN MỚI HỖ TRỢ TỐC ĐỘ ---
-function handleRun() {
-    if (!simulator) return;
-    binaryOutput.textContent += "\n\n--- Running ---";
-
-    // 1. Logic Breakpoint (Giữ nguyên)
-    let breakpointAddress = null;
-    if (activeBreakpoints.size > 0) {
-        const firstBreakpointLine = Math.min(...activeBreakpoints);
-        const instructionLineInfo = assembler.instructionLines.find(
-            line => line.lineNumber === firstBreakpointLine &&
-                (line.type === 'instruction' || line.type === 'pseudo-instruction')
-        );
-        if (instructionLineInfo) {
-            breakpointAddress = instructionLineInfo.address;
-            binaryOutput.textContent += `\n(Running until breakpoint at Line ${firstBreakpointLine})`;
-        }
+function collectBreakpointAddresses() {
+    const breakpointAddresses = new Map();
+    if (!assembler?.instructionLines || activeBreakpoints.size === 0) {
+        return breakpointAddresses;
     }
 
-    let running = true;
-    const maxCycles = 500000;
-    let cycle = 0;
+    assembler.instructionLines.forEach((lineInfo) => {
+        const isExecutableLine = lineInfo.type === 'instruction' || lineInfo.type === 'pseudo-instruction';
+        if (!isExecutableLine || !activeBreakpoints.has(lineInfo.lineNumber)) return;
 
-    // [MỚI] Biến dùng để đo tốc độ
-    let lastTime = performance.now();
-    let cyclesInLastSecond = 0;
+        const size = Math.max(4, lineInfo.size || 4);
+        for (let offset = 0; offset < size; offset += 4) {
+            breakpointAddresses.set((lineInfo.address + offset) >>> 0, lineInfo.lineNumber);
+        }
+    });
 
-    function runLoop() {
-        // Kiểm tra dừng
-        if (!running || !simulator.cpu.isRunning || cycle > maxCycles) {
-            if (cycle > maxCycles) binaryOutput.textContent += `\n\n⚠ Halted: Exceeded max cycles.`;
-            while (simulator.dma && simulator.dma.isBusy) simulator.tick();
-            updateUIGlobally();
+    return breakpointAddresses;
+}
+
+function cancelRunFrame() {
+    if (runState.frameId !== null) {
+        cancelAnimationFrame(runState.frameId);
+        runState.frameId = null;
+    }
+}
+
+function updateRunControlUI() {
+    if (runButton) runButton.disabled = runState.isRunning && !runState.isPaused;
+    if (pauseButton) {
+        pauseButton.disabled = !runState.isRunning;
+        const label = pauseButton.querySelector('.mdc-button__label');
+        const icon = pauseButton.querySelector('.material-icons');
+        if (label) label.textContent = runState.isPaused ? 'Resume' : 'Pause';
+        if (icon) icon.textContent = runState.isPaused ? 'play_arrow' : 'pause';
+    }
+    if (stopButton) stopButton.disabled = !runState.isRunning;
+    if (stepButton) stepButton.disabled = runState.isRunning && !runState.isPaused;
+}
+
+function finishRun({ message = '', drainDma = false, resetClock = true } = {}) {
+    cancelRunFrame();
+    runState.isRunning = false;
+    runState.isPaused = false;
+
+    if (message && binaryOutput) {
+        binaryOutput.textContent += message;
+    }
+
+    if (drainDma) {
+        while (simulator?.dma && simulator.dma.isBusy) simulator.tick();
+    }
+
+    if (resetClock && clockRateDisplay) clockRateDisplay.textContent = "0 Hz";
+    updateRunControlUI();
+    updateUIGlobally();
+}
+
+function scheduleRunLoop() {
+    if (!runState.isRunning || runState.isPaused || runState.frameId !== null) return;
+    runState.frameId = requestAnimationFrame(runLoop);
+}
+
+function runLoop() {
+    runState.frameId = null;
+
+    if (!runState.isRunning || runState.isPaused) return;
+
+    if (!simulator.cpu.isRunning || runState.cycle > runState.maxCycles) {
+        const message = runState.cycle > runState.maxCycles ? `\n\nHalted: Exceeded max cycles.` : '';
+        finishRun({ message, drainDma: true, resetClock: false });
+        return;
+    }
+
+    let cyclesPerFrame = 1;
+    if (speedSlider) {
+        cyclesPerFrame = parseInt(speedSlider.value, 10);
+        if (cyclesPerFrame === 100) cyclesPerFrame = 1000;
+    }
+
+    let executedThisFrame = 0;
+    for (let i = 0; i < cyclesPerFrame; i++) {
+        const currentPc = simulator.cpu.pc >>> 0;
+        if (runState.breakpointAddresses.has(currentPc)) {
+            const breakpointLine = runState.breakpointAddresses.get(currentPc);
+            finishRun({
+                message: `\nBreakpoint hit at line ${breakpointLine}, PC = 0x${currentPc.toString(16)}`,
+                resetClock: false
+            });
             return;
         }
 
-        // Lấy tốc độ từ Slider
-        let cyclesPerFrame = 1;
-        if (speedSlider) {
-            cyclesPerFrame = parseInt(speedSlider.value, 10);
-            if (cyclesPerFrame === 100) cyclesPerFrame = 1000; // Tăng tốc cực đại lên 1000
+        if (!simulator.cpu.isRunning) {
+            finishRun({ drainDma: true, resetClock: false });
+            return;
         }
 
-        // Vòng lặp thực thi
-        let executedThisFrame = 0;
-        for (let i = 0; i < cyclesPerFrame; i++) {
-            if (breakpointAddress !== null && simulator.cpu.pc === breakpointAddress) {
-                running = false;
-                binaryOutput.textContent += `\n🔴 Breakpoint hit at PC = 0x${breakpointAddress.toString(16)}`;
-                break;
+        try {
+            simulator.tick();
+            runState.cycle++;
+            executedThisFrame++;
+
+            if (runState.cycle > runState.maxCycles) {
+                finishRun({ message: `\n\nHalted: Exceeded max cycles.`, resetClock: false });
+                return;
             }
-            if (!simulator.cpu.isRunning) {
-                running = false;
-                break;
-            }
-
-            try {
-                simulator.tick();
-                cycle++;
-                executedThisFrame++; // Đếm số lệnh chạy được trong frame này
-
-                if (cycle > maxCycles) {
-                    running = false;
-                    break;
-                }
-            } catch (e) {
-                running = false;
-                console.error("Run Error:", e);
-                binaryOutput.textContent += `\n\nRun Error: ${e.message}`;
-                break;
-            }
-        }
-
-        // [MỚI] Tính toán tốc độ Hz (Instructions Per Second)
-        cyclesInLastSecond += executedThisFrame;
-        const now = performance.now();
-        const elapsed = now - lastTime;
-
-        // Cập nhật mỗi 500ms (nửa giây) để số nhảy cho mượt
-        if (elapsed >= 500) {
-            // Công thức: (Số lệnh / Số mili giây) * 1000 = Số lệnh/giây
-            const hz = Math.round((cyclesInLastSecond / elapsed) * 1000);
-
-            if (clockRateDisplay) {
-                // Định dạng số có dấu phẩy (ví dụ: 1,200 Hz)
-                clockRateDisplay.textContent = hz.toLocaleString() + " Hz";
-            }
-
-            // Reset bộ đếm
-            cyclesInLastSecond = 0;
-            lastTime = now;
-        }
-
-        updateUIGlobally();
-
-        if (running && simulator.cpu.isRunning) {
-            requestAnimationFrame(runLoop);
+        } catch (e) {
+            console.error("Run Error:", e);
+            finishRun({ message: `\n\nRun Error: ${e.message}` });
+            return;
         }
     }
 
-    requestAnimationFrame(runLoop);
+    runState.cyclesInLastSecond += executedThisFrame;
+    const now = performance.now();
+    const elapsed = now - runState.lastTime;
+
+    if (elapsed >= 500) {
+        const hz = Math.round((runState.cyclesInLastSecond / elapsed) * 1000);
+        if (clockRateDisplay) clockRateDisplay.textContent = hz.toLocaleString() + " Hz";
+        runState.cyclesInLastSecond = 0;
+        runState.lastTime = now;
+    }
+
+    updateUIGlobally();
+    scheduleRunLoop();
+}
+
+function resumeRun() {
+    if (!runState.isRunning || !runState.isPaused) return;
+    runState.isPaused = false;
+    runState.lastTime = performance.now();
+    runState.cyclesInLastSecond = 0;
+    if (binaryOutput) binaryOutput.textContent += "\n--- Resumed ---";
+    updateRunControlUI();
+    scheduleRunLoop();
+}
+
+// --- [CẬP NHẬT] HÀM RUN MỚI HỖ TRỢ TỐC ĐỘ ---
+function handleRun() {
+    if (!simulator) return;
+
+    if (runState.isRunning) {
+        if (runState.isPaused) {
+            resumeRun();
+        } else if (binaryOutput) {
+            binaryOutput.textContent += "\n(Run is already active.)";
+        }
+        return;
+    }
+
+    binaryOutput.textContent += "\n\n--- Running ---";
+
+    runState.breakpointAddresses = collectBreakpointAddresses();
+    if (runState.breakpointAddresses.size > 0) {
+        const breakpointLines = [...new Set(runState.breakpointAddresses.values())].sort((a, b) => a - b);
+        binaryOutput.textContent += `\n(Running with ${runState.breakpointAddresses.size} breakpoint address(es) from line(s): ${breakpointLines.join(', ')})`;
+    } else if (activeBreakpoints.size > 0) {
+        binaryOutput.textContent += `\n(No executable breakpoint addresses found. Running normally.)`;
+    }
+
+    runState.isRunning = true;
+    runState.isPaused = false;
+    runState.cycle = 0;
+    runState.lastTime = performance.now();
+    runState.cyclesInLastSecond = 0;
+    updateRunControlUI();
+    scheduleRunLoop();
+}
+
+function handlePause() {
+    if (!runState.isRunning) return;
+
+    if (runState.isPaused) {
+        resumeRun();
+        return;
+    }
+
+    runState.isPaused = true;
+    cancelRunFrame();
+    if (clockRateDisplay) clockRateDisplay.textContent = "0 Hz";
+    if (binaryOutput) binaryOutput.textContent += "\n--- Paused ---";
+    updateRunControlUI();
+    updateUIGlobally();
+}
+
+function handleStop() {
+    if (!runState.isRunning) return;
+    finishRun({ message: "\n--- Stopped ---" });
 }
 
 function handleStep() {
     if (!simulator) return;
+    if (runState.isRunning && !runState.isPaused) {
+        if (binaryOutput) binaryOutput.textContent += "\n(Pause or stop the active run before stepping.)";
+        return;
+    }
+
     try {
-        simulator.tick();
+        simulator.stepInstruction();
         updateUIGlobally();
     } catch (e) {
         console.error("Step Error:", e);
@@ -795,6 +902,7 @@ function handleStep() {
 function handleReset() {
     if (!simulator || !instructionInput) return;
 
+    if (runState.isRunning) finishRun();
     simulator.init();
 
     if (assembler && typeof assembler._reset === 'function') {
@@ -838,6 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
         theme: "default",
         gutters: ["CodeMirror-linenumbers", "breakpoints"]
     });
+    configureRiscvEditorHints(instructionInput, { assembler });
 
     instructionInput.on("gutterClick", function (cm, n) {
         const lineNumber = n + 1;
@@ -885,8 +994,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     assembleButton?.addEventListener('click', handleAssemble);
     runButton?.addEventListener('click', handleRun);
+    pauseButton?.addEventListener('click', handlePause);
+    stopButton?.addEventListener('click', handleStop);
     stepButton?.addEventListener('click', handleStep);
     resetButton?.addEventListener('click', handleReset);
+    updateRunControlUI();
 
     // [MỚI] Sự kiện thanh trượt tốc độ
     if (speedSlider && speedValueLabel) {
@@ -913,23 +1025,108 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarItems = document.querySelectorAll('.sidebar-item');
     const viewSections = document.querySelectorAll('.view-section');
 
+    const activateView = (targetId) => {
+        sidebarItems.forEach(i => i.classList.remove('active'));
+        viewSections.forEach(v => v.classList.remove('active'));
+
+        const activeItem = document.querySelector(`.sidebar-item[data-target="${targetId}"]`);
+        if (activeItem) activeItem.classList.add('active');
+
+        const targetSection = document.getElementById(targetId);
+        if (targetSection) {
+            targetSection.classList.add('active');
+        }
+
+        if (targetId === 'view-editor' && instructionInput) {
+            setTimeout(() => {
+                instructionInput.refresh();
+            }, 10);
+        }
+    };
+
     sidebarItems.forEach(item => {
         item.addEventListener('click', () => {
-            sidebarItems.forEach(i => i.classList.remove('active'));
-            viewSections.forEach(v => v.classList.remove('active'));
+            activateView(item.getAttribute('data-target'));
+        });
+    });
 
-            item.classList.add('active');
-            const targetId = item.getAttribute('data-target');
-            const targetSection = document.getElementById(targetId);
-            if (targetSection) {
-                targetSection.classList.add('active');
-            }
+    // Help view interactions: search, local navigation, and loading examples into CodeMirror.
+    const helpContent = document.getElementById('helpContent');
+    const helpSearchInput = document.getElementById('helpSearchInput');
+    const helpSections = Array.from(document.querySelectorAll('[data-help-section]'));
+    const helpNavItems = Array.from(document.querySelectorAll('.help-nav-item'));
+    const helpEmptyState = document.getElementById('helpEmptyState');
 
-            if (targetId === 'view-editor' && instructionInput) {
-                setTimeout(() => {
-                    instructionInput.refresh();
-                }, 10);
+    const setActiveHelpNav = (targetId) => {
+        helpNavItems.forEach(navItem => {
+            navItem.classList.toggle('active', navItem.dataset.helpTarget === targetId);
+        });
+    };
+
+    helpNavItems.forEach(navItem => {
+        navItem.addEventListener('click', () => {
+            const target = document.getElementById(navItem.dataset.helpTarget);
+            if (!target || !helpContent) return;
+            setActiveHelpNav(navItem.dataset.helpTarget);
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    if (helpSearchInput) {
+        const normalizeHelpText = (text) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+        helpSearchInput.addEventListener('input', () => {
+            const query = normalizeHelpText(helpSearchInput.value.trim());
+            let firstVisibleId = null;
+            let visibleCount = 0;
+
+            helpSections.forEach(section => {
+                const navItem = helpNavItems.find(item => item.dataset.helpTarget === section.id);
+                const visible = !query || normalizeHelpText(section.textContent).includes(query);
+                section.classList.toggle('hidden', !visible);
+                if (navItem) navItem.hidden = !visible;
+                if (visible) {
+                    visibleCount++;
+                    if (!firstVisibleId) firstVisibleId = section.id;
+                }
+            });
+
+            if (helpEmptyState) helpEmptyState.hidden = visibleCount > 0;
+            if (firstVisibleId) setActiveHelpNav(firstVisibleId);
+            if (helpContent) helpContent.scrollTop = 0;
+        });
+    }
+
+    if (helpContent && helpSections.length > 0) {
+        helpContent.addEventListener('scroll', () => {
+            const containerTop = helpContent.getBoundingClientRect().top;
+            let currentId = null;
+
+            helpSections.forEach(section => {
+                if (section.classList.contains('hidden')) return;
+                const sectionTop = section.getBoundingClientRect().top - containerTop;
+                if (sectionTop <= 80) currentId = section.id;
+            });
+
+            if (currentId) setActiveHelpNav(currentId);
+        });
+    }
+
+    document.querySelectorAll('.help-sample-button[data-sample-template]').forEach(button => {
+        button.addEventListener('click', () => {
+            const template = document.getElementById(button.dataset.sampleTemplate);
+            if (!template || !instructionInput) return;
+            const code = template.content.textContent.trim();
+
+            if (runState.isRunning) finishRun();
+            activateView('view-editor');
+            instructionInput.setValue(code);
+            instructionInput.clearGutter("breakpoints");
+            activeBreakpoints.clear();
+            if (binaryOutput) {
+                binaryOutput.textContent = "Sample loaded from Help. Click Assemble to build it.";
             }
+            setTimeout(() => instructionInput.refresh(), 10);
         });
     });
 

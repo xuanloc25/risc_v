@@ -299,6 +299,36 @@ export const simulator = {
         this.cpu.isRunning = true;
     },
 
+    stepInstruction(maxCycles = 100000) {
+        if (!this.cpu.isRunning) {
+            return {
+                completed: false,
+                cycles: 0,
+                halted: true,
+                instructionCount: this.cpu.instructionCount
+            };
+        }
+
+        const startInstructionCount = this.cpu.instructionCount;
+        let cycles = 0;
+
+        while (this.cpu.isRunning && this.cpu.instructionCount === startInstructionCount) {
+            this.tick();
+            cycles++;
+
+            if (cycles >= maxCycles) {
+                throw new Error(`Step exceeded ${maxCycles} cycles before completing an instruction.`);
+            }
+        }
+
+        return {
+            completed: this.cpu.instructionCount > startInstructionCount,
+            cycles,
+            halted: !this.cpu.isRunning,
+            instructionCount: this.cpu.instructionCount
+        };
+    },
+
     tick() {
         const cpuActive = this.cpu.isRunning;
         const dmaActive = this.dma?.registers?.busy;
