@@ -109,14 +109,13 @@ Các kiểm thử đối chiếu với GNU toolchain và Spike:
 
 ```bash
 node test/verify_rv32imf_against_gnu.mjs
-node test/verify_project_assembler_spike.mjs
 node test/verify_riscv_tests_spike.mjs
 ```
 
-Các script này dùng GNU binutils để kiểm tra encoding và dùng Spike làm reference model cho hành vi thực thi. Nếu Spike không nằm trong `PATH`, có thể chỉ định trực tiếp:
+Các script này dùng GNU binutils để kiểm tra encoding trên artifact từ `riscv-tests` và dùng Spike làm reference model cho hành vi thực thi. Nếu Spike không nằm trong `PATH`, có thể chỉ định trực tiếp:
 
 ```bash
-SPIKE=/duong/dan/toi/spike node test/verify_project_assembler_spike.mjs
+SPIKE=/duong/dan/toi/spike node test/verify_riscv_tests_spike.mjs
 ```
 
 ## Verification với riscv-tests

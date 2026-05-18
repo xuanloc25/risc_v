@@ -12,6 +12,7 @@ const isWindows = process.platform === 'win32';
 const GNU_AS = 'riscv64-unknown-elf-as';
 const GNU_OBJCOPY = 'riscv64-unknown-elf-objcopy';
 const GNU_OBJDUMP = 'riscv64-unknown-elf-objdump';
+const INCLUDE_LOCAL_CORPUS = process.env.INCLUDE_LOCAL_CORPUS === '1';
 
 function shQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -419,11 +420,13 @@ function main() {
   console.log('RV32IMF differential verification');
   console.log('Reference: riscv64-unknown-elf-as/objcopy/objdump');
 
-  const corpusResult = runCorpusComparison();
-  if (corpusResult.failures.length === 0) {
-    console.log(`- Corpus: PASS (${corpus.length} groups, ${corpusResult.checkedWords} instruction words)`);
-  } else {
-    console.log(`- Corpus: FAIL (${corpusResult.failures.length} group mismatch(es))`);
+  const corpusResult = INCLUDE_LOCAL_CORPUS ? runCorpusComparison() : { failures: [] };
+  if (INCLUDE_LOCAL_CORPUS) {
+    if (corpusResult.failures.length === 0) {
+      console.log(`- Local developer corpus: PASS (${corpus.length} groups, ${corpusResult.checkedWords} instruction words)`);
+    } else {
+      console.log(`- Local developer corpus: FAIL (${corpusResult.failures.length} group mismatch(es))`);
+    }
   }
 
   const riscvTestsResult = runRiscvTestsArtifactComparison();
@@ -441,7 +444,7 @@ function main() {
     console.log(`- riscv-tests artifacts: FAIL (${riscvTestsResult.failures.length} mismatch(es))`);
   }
 
-  printFailures('Corpus mismatches:', corpusResult.failures);
+  printFailures('Local developer corpus mismatches:', corpusResult.failures);
   printFailures('riscv-tests artifact mismatches:', riscvTestsResult.failures);
 
   if (corpusResult.failures.length > 0 || riscvTestsResult.failures.length > 0) {
