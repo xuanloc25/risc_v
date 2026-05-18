@@ -730,7 +730,7 @@ export class CPU {
     tick(bus = this.lowerPort) {
         bus = this._resolveBus(bus);
         if (this.waitingRequest && !this.pendingResponse) {
-            return;
+            return { instructionCompleted: false };
         }
 
         const shouldReplayInstruction = !!(this.waitingRequest && this.pendingResponse && this.replayInstruction);
@@ -739,11 +739,11 @@ export class CPU {
             // Issue instruction fetch if none in flight and no pending inst
             if (!this.fetchWaiting && !this.fetchPending) {
                 this.readInstructionAsync(this.pc, bus);
-                return;
+                return { instructionCompleted: false };
             }
 
             // Wait for instruction fetch
-            if (!this.fetchPending) return;
+            if (!this.fetchPending) return { instructionCompleted: false };
         }
 
         const oldPc = this.pc;
@@ -755,6 +755,7 @@ export class CPU {
 
         const decoded = this.decode(inst);
         const { nextPc } = this.execute(decoded, bus);
+        const instructionCompleted = !this.waitingRequest;
 
         if (this.waitingRequest) {
             this.replayInstruction = { pc, data: inst };
@@ -770,6 +771,18 @@ export class CPU {
         if (this.pc !== oldPc) {
             console.log(`[CPU] PC: 0x${oldPc.toString(16)} -> 0x${this.pc.toString(16)}, Executed: ${decoded.opName}`);
         }
+
+        if (instructionCompleted) {
+            this.instructionCount++;
+        }
+
+        return {
+            instructionCompleted,
+            pcBefore: oldPc >>> 0,
+            pcAfter: this.pc >>> 0,
+            opName: decoded.opName,
+            instructionCount: this.instructionCount
+        };
     }
 
     readInstructionAsync(address, bus = this.lowerPort) {

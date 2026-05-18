@@ -139,6 +139,21 @@ html {
     color: white !important;
 }
 
+.pause-btn {
+    border-color: #f39c12 !important;
+    color: #d35400 !important;
+}
+
+.stop-btn {
+    border-color: var(--error-color) !important;
+    color: var(--error-color) !important;
+}
+
+.mdc-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 /* [MỚI] Style cho thanh tốc độ */
 .speed-control {
     display: flex;

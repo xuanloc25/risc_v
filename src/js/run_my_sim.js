@@ -70,11 +70,12 @@ function main() {
 
         while (simulator.cpu.isRunning && step < MAX_STEPS) {
             step++;
-            simulator.tick();
+            const previousPc = simulator.cpu.pc;
+            simulator.stepInstruction();
             printState(simulator, sourceLineMap, step);
             
             // Heuristic để dừng các test case có vòng lặp vô tận ở cuối
-            if (step > 1 && simulator.cpu.pc === simulator.cpu.oldPc) {
+            if (step > 1 && simulator.cpu.pc === previousPc) {
                  if (sourceLineMap.has(simulator.cpu.pc) && sourceLineMap.get(simulator.cpu.pc).mnemonic === 'jal') {
                     break;
                  }
