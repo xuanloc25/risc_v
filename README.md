@@ -1,68 +1,164 @@
-# RISC-V Simulator & Assembler
+# RISC-V SoC Simulator & Assembler
 
-A web-based **System-on-Chip (SoC) simulator** and **RISC-V assembler** designed for learning computer architecture and embedded systems.
+RISC-V SoC Simulator & Assembler là công cụ web hỗ trợ soạn thảo, biên dịch và mô phỏng chương trình hợp ngữ RISC-V trong một mô hình System-on-Chip đơn giản. Dự án phục vụ mục tiêu học tập, kiểm thử và minh họa cách CPU, bộ nhớ, bus, cache, DMA và các ngoại vi phối hợp trong một hệ thống nhúng.
 
-This project allows users to write RISC-V assembly code, assemble it, and run it inside an interactive simulator that visualizes how different hardware components interact in a System-on-Chip environment.
+## Demo
 
-This project is developed as an **undergraduate thesis** at the University of Information Technology – VNU-HCM.
-
----
-
-## 🌐 Live Demo
-
-Try the simulator here:
+Truy cập bản triển khai trực tuyến:
 
 https://risc-v.vercel.app
 
----
+## Chức năng chính
 
-## 📚 Project Overview
+- Soạn thảo chương trình RISC-V assembly trực tiếp trên trình duyệt.
+- Biên dịch assembly sang mã máy bằng assembler tích hợp.
+- Mô phỏng thực thi chương trình theo từng bước hoặc chạy liên tục.
+- Quan sát thanh ghi, bộ nhớ, log hệ thống và trạng thái các khối phần cứng.
+- Mô phỏng các thành phần SoC gồm CPU, MMU, cache, TileLink, DMA, UART, LED matrix, keyboard và mouse.
+- Hỗ trợ kiểm thử assembler với GNU RISC-V toolchain, Spike và bộ `riscv-tests`.
 
-The goal of this project is to create an **educational tool** that helps students understand how a modern processor system works.
+## Kiến trúc mô phỏng
 
-Unlike many simulators that only simulate the CPU instruction set, this project focuses on simulating a **complete SoC architecture**, including CPU, bus interconnect, DMA, and peripheral devices.
+Dự án mô hình hóa một hệ thống SoC gồm các thành phần chính:
 
-Users can:
+- `CPU`: thực thi lệnh RISC-V và phát sinh yêu cầu truy cập bộ nhớ.
+- `MMU`: xử lý dịch địa chỉ và kiểm tra quyền truy cập.
+- `Cache`: mô phỏng tầng nhớ đệm giữa CPU và bus.
+- `TileLink`: mô phỏng giao tiếp giữa các master, slave và bộ nhớ.
+- `DMA`: thực hiện truyền dữ liệu độc lập với CPU.
+- `Memory`: lưu trữ chương trình và dữ liệu.
+- `Peripheral`: mô phỏng các thiết bị ngoại vi như UART, LED matrix, keyboard và mouse.
 
-- Write RISC-V assembly code
-- Assemble the program
-- Load it into the simulator
-- Observe registers, memory, and system behavior in real time
+## Cấu trúc thư mục
 
----
+```text
+.
+├── src/
+│   ├── index.html
+│   ├── style.css
+│   └── js/
+│       ├── assembler.js
+│       ├── cpu.js
+│       ├── soc.js
+│       ├── mmu.js
+│       ├── SimpleCache.js
+│       ├── tilelink*.js
+│       ├── dma.js
+│       └── peripheral modules
+├── test/
+│   ├── assembler_verify.mjs
+│   ├── verify_rv32imf_against_gnu.mjs
+│   ├── verify_project_assembler_spike.mjs
+│   ├── verify_riscv_tests_spike.mjs
+│   └── sample assembly programs
+├── README.md
+└── LICENSE
+```
 
-## ⚙️ Features
+## Yêu cầu hệ thống
 
-- RISC-V RV32 instruction simulation
-- Built-in RISC-V assembler
-- Interactive web interface
-- Register visualization
-- Memory inspection
-- Program execution step-by-step
-- Educational system-level simulation
+Để chạy giao diện web:
 
-Planned features:
+- Trình duyệt hiện đại hỗ trợ JavaScript module.
+- Kết nối Internet nếu dùng các thư viện được tải từ CDN.
+- Python hoặc một static HTTP server tương đương.
 
-- RV32IMF full support
-- DMA controller simulation
-- Multi-master bus interconnect
-- Peripheral devices (UART, display, keyboard)
-- System-level debugging tools
+Để chạy các script kiểm thử:
 
----
+- Node.js.
+- GNU RISC-V toolchain nếu cần đối chiếu với GNU assembler.
+- Spike nếu cần kiểm thử hành vi thực thi.
+- `riscv-tests` nếu cần chạy verification với bộ test chính thức.
 
-## 🏗 System Architecture
+## Chạy ứng dụng cục bộ
 
-The simulator models a simplified System-on-Chip architecture including:
+Từ thư mục gốc của project:
 
-- **CPU Core** – executes RISC-V instructions
-- **Memory** – program and data storage
-- **Bus Interconnect** – communication between components
-- **DMA Controller** – memory transfer without CPU
-- **Peripheral Controllers** – external device interaction
+```bash
+python -m http.server 8000
+```
 
----
+Sau đó mở:
 
-Developed by Xuan Loc and Gia Khang
+```text
+http://localhost:8000/src/
+```
 
+Nên chạy qua HTTP server thay vì mở trực tiếp file `src/index.html`, vì project sử dụng JavaScript module.
+
+## Cách sử dụng
+
+1. Mở giao diện simulator trên trình duyệt.
+2. Nhập chương trình RISC-V assembly trong vùng editor.
+3. Chọn assemble để biên dịch chương trình sang mã máy.
+4. Nạp chương trình vào simulator.
+5. Dùng chế độ chạy từng bước hoặc chạy liên tục để quan sát quá trình thực thi.
+6. Theo dõi thanh ghi, bộ nhớ, log hệ thống và trạng thái các ngoại vi để phân tích hành vi chương trình.
+
+## Kiểm thử
+
+Các kiểm thử cơ bản có thể chạy trực tiếp bằng Node.js:
+
+```bash
+node test/assembler_verify.mjs
+node test/mmu_basic_verify.mjs
+node test/tilelink_verify.mjs
+```
+
+Các kiểm thử đối chiếu với GNU toolchain và Spike:
+
+```bash
+node test/verify_rv32imf_against_gnu.mjs
+node test/verify_project_assembler_spike.mjs
+node test/verify_riscv_tests_spike.mjs
+```
+
+Các script này dùng GNU binutils để kiểm tra encoding và dùng Spike làm reference model cho hành vi thực thi. Nếu Spike không nằm trong `PATH`, có thể chỉ định trực tiếp:
+
+```bash
+SPIKE=/duong/dan/toi/spike node test/verify_project_assembler_spike.mjs
+```
+
+## Verification với riscv-tests
+
+Thư mục `riscv-tests/` chỉ phục vụ môi trường verification cục bộ và không cần commit vào repository chính. Nếu cần chạy lại verification, clone riêng bộ test này tại thư mục gốc:
+
+```bash
+git clone https://github.com/riscv/riscv-tests.git riscv-tests
+cd riscv-tests
+git submodule update --init --recursive
+make isa XLEN=32
+```
+
+Sau khi build, quay lại thư mục gốc của project và chạy:
+
+```bash
+node test/verify_rv32imf_against_gnu.mjs
+node test/verify_riscv_tests_spike.mjs
+```
+
+Nếu `riscv-tests/` xuất hiện trong Source Control của VS Code, hãy đảm bảo thư mục này đã được đưa vào `.gitignore`:
+
+```gitignore
+riscv-tests/
+```
+
+Việc bỏ qua thư mục này giúp repository chính chỉ lưu mã nguồn của simulator, assembler và các script verification cần thiết.
+
+## Ghi chú về line ending trên Windows
+
+Khi commit trên Windows, Git có thể hiển thị cảnh báo dạng:
+
+```text
+LF will be replaced by CRLF the next time Git touches it
+```
+
+Đây là cảnh báo về line ending, không phải lỗi logic của project. Nếu muốn hạn chế thay đổi line ending ngoài ý muốn, có thể cấu hình Git theo nhu cầu của môi trường phát triển.
+
+## License
+
+Dự án sử dụng giấy phép trong file `LICENSE`.
+
+Developed by Xuan Loc and Gia Khang<br>
+Faculty of Computer Engineering<br>
 University of Information Technology – VNU-HCM
