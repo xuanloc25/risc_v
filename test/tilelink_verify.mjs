@@ -244,11 +244,17 @@ function testDmaByteTransfer() {
     attachPort(tilelink_UH, Port.upper('dma', dma));
     attachPort(tilelink_UH, Port.lower('mem', mem, () => true));
 
-    dma.start(0x300, 0x400, 4);
-    tickDmaMemoryUntil(dma, tilelink_UH, mem, () => !dma.isBusy && !dma.registers.startRequested);
+    const logs = captureLogs(() => {
+        dma.start(0x300, 0x400, 4);
+        tickDmaMemoryUntil(dma, tilelink_UH, mem, () => !dma.isBusy && !dma.registers.startRequested);
+    });
 
     assert.equal(dma.isBusy, false);
     assert.deepEqual(readBytes(mem.mem, 0x400, 4), [1, 2, 3, 4]);
+    assert.ok(logs.some((line) => line.includes('[DMA] TileLink route src=0x300 via=TileLink-UH dst=0x400 via=TileLink-UH')), 'DMA route log is missing');
+    assert.ok(logs.some((line) => line.includes('[DMA] ISSUE_READ via=TileLink-UH')), 'DMA read issue log is missing');
+    assert.ok(logs.some((line) => line.includes('[DMA] ISSUE_WRITE via=TileLink-UH')), 'DMA write issue log is missing');
+    assert.ok(logs.some((line) => line.includes('[DMA] RECEIVE_RESPONSE via=TileLink-UH')), 'DMA response log is missing');
 }
 
 function testDmaWordIncrementingTransfer() {
@@ -405,6 +411,65 @@ function testMmuAndSplitBusRouting() {
     assert.equal(cpu.responses[2].data >>> 0, 0x3);
 }
 
+function testTileLinkBridgeInteractionLogs() {
+    const UART_BASE = 0x10000000;
+    const uartRange = (addr) => addr >= UART_BASE && addr < UART_BASE + 0x14;
+
+    const tilelink_UH = new TileLink_UH();
+    const tilelink_UL = new TileLink_UL();
+    const mem = new Mem({ burstBeatLatency: 0, name: 'Main Memory' });
+    const uhMaster = makeMaster();
+    const ulMaster = makeMaster();
+    let uartCtrl = 0;
+
+    const uartEndpoint = {
+        directRead(address) {
+            const offset = (address >>> 0) - UART_BASE;
+            if (offset === 0x0C) return uartCtrl >>> 0;
+            return 0;
+        },
+        directWrite(address, value) {
+            const offset = (address >>> 0) - UART_BASE;
+            if (offset === 0x0C) uartCtrl = value >>> 0;
+        }
+    };
+
+    mem.loadMemoryMap({
+        0x40: 0x78,
+        0x41: 0x56,
+        0x42: 0x34,
+        0x43: 0x12
+    });
+
+    const uhToUlBridge = new TileLinkBridge(tilelink_UH, tilelink_UL, { name: 'uh-to-ul-bridge' });
+    const ulToUhBridge = new TileLinkBridge(tilelink_UL, tilelink_UH, { name: 'ul-to-uh-bridge' });
+
+    attachPort(tilelink_UH, Port.upper('cpu', uhMaster));
+    attachPort(tilelink_UH, Port.lower('uh-to-ul-bridge', uhToUlBridge, uartRange));
+    attachPort(tilelink_UH, Port.lower('Main Memory', mem, (addr) => !uartRange(addr)));
+
+    attachPort(tilelink_UL, Port.upper('ul-master', ulMaster));
+    attachPort(tilelink_UL, Port.lower('UART', uartEndpoint, uartRange));
+    attachPort(tilelink_UL, Port.lower('ul-to-uh-bridge', ulToUhBridge, (addr) => !uartRange(addr)));
+
+    const logs = captureLogs(() => {
+        tilelink_UH.sendRequest('cpu', { type: TL_A_Opcode.PutFullData, address: UART_BASE + 0x0C, value: 0x3, size: 2 });
+        tilelink_UH.tick();
+
+        tilelink_UL.sendRequest('ul-master', { type: TL_A_Opcode.Get, address: 0x40, size: 2 });
+        tilelink_UL.tick();
+    });
+
+    assert.equal(uartCtrl >>> 0, 0x3);
+    assert.equal(uhMaster.responses[0].type, TL_D_Opcode.AccessAck);
+    assert.equal(ulMaster.responses[0].type, TL_D_Opcode.AccessAckData);
+    assert.equal(ulMaster.responses[0].data >>> 0, 0x12345678);
+    assert.ok(logs.some((line) => line.includes('[uh-to-ul-bridge] BRIDGE_REQUEST TileLink-UH->TileLink-UL')), 'UH -> UL bridge request log is missing');
+    assert.ok(logs.some((line) => line.includes('[uh-to-ul-bridge] BRIDGE_DIRECT_WRITE TileLink-UH->TileLink-UL')), 'UH -> UL direct write log is missing');
+    assert.ok(logs.some((line) => line.includes('[ul-to-uh-bridge] BRIDGE_REQUEST TileLink-UL->TileLink-UH')), 'UL -> UH bridge request log is missing');
+    assert.ok(logs.some((line) => line.includes('[ul-to-uh-bridge] BRIDGE_DIRECT_READ TileLink-UL->TileLink-UH')), 'UL -> UH direct read log is missing');
+}
+
 function testMmuL2TileLinkMemoryLogs() {
     const tilelink_UH = new TileLink_UH();
     const mem = new Mem({ burstBeatLatency: 0, name: 'Main Memory' });
@@ -447,6 +512,7 @@ testDmaWordIncrementingTransfer();
 testDmaRegisterMmio();
 testDirectMemoryLatency();
 testMmuAndSplitBusRouting();
+testTileLinkBridgeInteractionLogs();
 testMmuL2TileLinkMemoryLogs();
 
 console.log('TileLink UL/UH verification passed.');

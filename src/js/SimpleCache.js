@@ -74,6 +74,12 @@ export class SimpleCache {
         this.lowerPort = lowerPort;
     }
 
+    memBytes() {
+        if (typeof this.lowerPort?.memBytes === 'function') return this.lowerPort.memBytes();
+        if (this.lowerPort?.mem) return this.lowerPort.mem;
+        throw new Error(`${this.name} cannot expose backing memory bytes`);
+    }
+
     // Toggle enable/disable cache; khi off thì bypass trực tiếp.
     setEnabled(enabled) {
         this.enabled = !!enabled;

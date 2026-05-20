@@ -17,6 +17,9 @@ export class CPU {
         this.fetchPending = null;
         this.fetchWaiting = false;
         this.replayInstruction = null;
+        this.onSyscallOutput = null;
+        this.onSyscallExit = null;
+        this.onSyscallError = null;
     }
 
     resetRegisters() {
@@ -39,6 +42,24 @@ export class CPU {
     loadProgram(programData) {
         this.reset();
         this.pc = programData.startAddress || 0;
+    }
+
+    _emitSyscallOutput(text) {
+        if (typeof this.onSyscallOutput !== 'function') return false;
+        this.onSyscallOutput(String(text));
+        return true;
+    }
+
+    _emitSyscallExit(code) {
+        if (typeof this.onSyscallExit !== 'function') return false;
+        this.onSyscallExit(code | 0);
+        return true;
+    }
+
+    _emitSyscallError(message) {
+        if (typeof this.onSyscallError !== 'function') return false;
+        this.onSyscallError(String(message));
+        return true;
     }
 
     attachUpperPort(upperPort) {
@@ -640,8 +661,6 @@ export class CPU {
     }
 
     handleSyscall(bus) {
-        const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
-
         const syscallId = this.registers[17];
         const arg0 = this.registers[10];
         const arg1 = this.registers[11];
@@ -650,19 +669,13 @@ export class CPU {
         switch (syscallId) {
             case 93:
                 this.isRunning = false;
-                if (isBrowser) {
-                    alert(`Program exited with code: ${arg0}`);
-                } else {
-                    console.log(`\n[Syscall] Program exited with code: ${arg0}`);
-                }
+                this._emitSyscallExit(arg0);
+                console.log(`\n[Syscall] Program exited with code: ${arg0}`);
                 if (this.registers[10] !== undefined) this.registers[10] = arg0;
                 break;
             case 1:
-                if (isBrowser) {
-                    alert(`Print Int: ${arg0}`);
-                } else {
-                    console.log(`\n[Syscall] Print Int: ${arg0}`);
-                }
+                this._emitSyscallOutput(String(arg0));
+                console.log(`\n[Syscall] Print Int: ${arg0}`);
                 break;
             case 4:
                 const memForStr = this.getMemBytes(bus);
@@ -679,11 +692,8 @@ export class CPU {
                         break;
                     }
                 }
-                if (isBrowser) {
-                    alert(`Print String:\n${str}`);
-                } else {
-                    console.log(`\n[Syscall] Print String: ${str}`);
-                }
+                this._emitSyscallOutput(str);
+                console.log(`\n[Syscall] Print String: ${str}`);
                 break;
             case 64:
                 const fd_write = arg0;
@@ -700,19 +710,13 @@ export class CPU {
                         }
                         outputStr += String.fromCharCode(byte);
                     }
-                    if (isBrowser) {
-                        alert(`Write to stdout:\n${outputStr}`);
-                    } else {
-                        console.log(`\n[Syscall] Write to stdout: ${outputStr}`);
-                    }
+                    this._emitSyscallOutput(outputStr);
+                    console.log(`\n[Syscall] Write to stdout: ${outputStr}`);
                     this.registers[10] = outputStr.length;
                 } else {
                     const errorMsg = `Syscall write: Unsupported file descriptor ${fd_write}`;
-                    if (isBrowser) {
-                        alert(errorMsg);
-                    } else {
-                        console.warn(`\n[Syscall] ${errorMsg}`);
-                    }
+                    this._emitSyscallError(errorMsg);
+                    console.warn(`\n[Syscall] ${errorMsg}`);
                     this.registers[10] = -1;
                 }
                 break;
@@ -722,6 +726,7 @@ export class CPU {
                 break;
             default:
                 const errorMsg = `Unsupported syscall ID: ${syscallId}`;
+                this._emitSyscallError(errorMsg);
                 console.warn(`\n[Syscall] ${errorMsg}`);
                 this.isRunning = false;
         }

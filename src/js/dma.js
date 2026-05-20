@@ -1,4 +1,20 @@
-import { TL_A_Opcode, TL_D_Opcode } from './tilelink.js';
+import { TL_A_Opcode, TL_D_Opcode, getOpcodeName } from './tilelink.js';
+
+function describeLink(link) {
+    return link?.name ?? link?.signals?.label ?? link?.constructor?.name ?? 'TileLink';
+}
+
+function describeAOpcode(type) {
+    return typeof type === 'number' ? getOpcodeName(TL_A_Opcode, type) : String(type);
+}
+
+function describeDOpcode(type) {
+    return typeof type === 'number' ? getOpcodeName(TL_D_Opcode, type) : String(type);
+}
+
+function hex(value) {
+    return `0x${(value >>> 0).toString(16)}`;
+}
 
 // DMA descriptor and controller implementation
 export class DMADescriptor {
@@ -221,6 +237,11 @@ export class DMAController {
     }
 
     receiveRequest(req) {
+        const registerLink = this.registerLink ?? this.defaultLink;
+        console.log(
+            `[DMA] REGISTER_REQUEST via=${describeLink(registerLink)} ` +
+            `from=${req.from} type=${describeAOpcode(req.type)} addr=${hex(req.address)} value=${req.value ?? ''}`
+        );
         this.pendingRegReq = req;
     }
 
@@ -303,6 +324,11 @@ export class DMAController {
 
             const registerLink = this.registerLink ?? this.defaultLink;
             if (registerLink) {
+                console.log(
+                    `[DMA] REGISTER_RESPONSE via=${describeLink(registerLink)} ` +
+                    `to=${this.pendingRegReq.from} type=${describeDOpcode(responseType)} ` +
+                    `addr=${hex(address)} data=${data ?? ''}`
+                );
                 registerLink.sendResponse({
                     from: 'dma-regs',
                     to: this.pendingRegReq.from,
@@ -349,6 +375,10 @@ export class DMAController {
 
         console.log(`[DMA] Transfer started: ${this.currentDescriptor.toString()}`);
         console.log(`[DMA] Config: elements=${this.numElements}, bswap=${this.bswap}, srcMode=${this.srcMode}, dstMode=${this.dstMode}`);
+        console.log(
+            `[DMA] TileLink route src=${hex(this.currentSrcAddr)} via=${describeLink(this._resolveLink(this.currentSrcAddr))} ` +
+            `dst=${hex(this.currentDstAddr)} via=${describeLink(this._resolveLink(this.currentDstAddr))}`
+        );
         return true;
     }
 
@@ -372,6 +402,11 @@ export class DMAController {
                     const requestLink = this._resolveLink(this.latchedSrcAddr);
                     this.waitingRequest = readReq;
                     this.activeRequestLink = requestLink;
+                    console.log(
+                        `[DMA] ISSUE_READ via=${describeLink(requestLink)} ` +
+                        `element=${this.transferProgress + 1}/${this.numElements} ` +
+                        `type=${describeAOpcode(readReq.type)} addr=${hex(readReq.address)} size=${1 << readReq.size}B`
+                    );
                     requestLink.sendRequest('dma', readReq);
                     return;
                 }
@@ -396,6 +431,12 @@ export class DMAController {
                     const requestLink = this._resolveLink(this.latchedDstAddr);
                     this.waitingRequest = writeReq;
                     this.activeRequestLink = requestLink;
+                    console.log(
+                        `[DMA] ISSUE_WRITE via=${describeLink(requestLink)} ` +
+                        `element=${this.transferProgress + 1}/${this.numElements} ` +
+                        `type=${describeAOpcode(writeReq.type)} addr=${hex(writeReq.address)} ` +
+                        `size=${1 << writeReq.size}B data=${hex(writeReq.value ?? 0)}`
+                    );
                     requestLink.sendRequest('dma', writeReq);
                     return;
                 }
@@ -474,6 +515,10 @@ export class DMAController {
     }
 
     receiveResponse(resp) {
+        console.log(
+            `[DMA] RECEIVE_RESPONSE via=${describeLink(this.activeRequestLink ?? this.defaultLink)} ` +
+            `from=${resp.from} type=${describeDOpcode(resp.type)} addr=${hex(resp.address)} data=${resp.data ?? ''}`
+        );
         this.pendingResponse = resp;
     }
 

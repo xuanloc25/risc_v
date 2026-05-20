@@ -95,6 +95,10 @@ export const simulator = {
     cycleCount: 0,
     useCache: true,
 
+    reset() {
+        this.init();
+    },
+
     setCacheEnabled(enabled) {
         this.useCache = !!enabled;
         this.init();
