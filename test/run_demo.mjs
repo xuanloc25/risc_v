@@ -34,11 +34,21 @@ console.log('dst 0x300:', dumpBytes(simulator.tilelink_UH, 0x300, 4));
 simulator.dma.start(0x200, 0x300, 4);
 
 let cycles = 0;
-while ((simulator.cpu.isRunning || simulator.dma.isBusy) && cycles < 64) {
+const maxCycles = 512;
+while ((simulator.cpu.isRunning || simulator.dma.isBusy) && cycles < maxCycles) {
     simulator.tick();
     cycles++;
+}
+
+if (simulator.dma.isBusy) {
+    throw new Error(`DMA did not finish within ${maxCycles} cycles`);
 }
 
 console.log('After DMA:');
 console.log('src 0x200:', dumpBytes(simulator.tilelink_UH, 0x200, 4));
 console.log('dst 0x300:', dumpBytes(simulator.tilelink_UH, 0x300, 4));
+
+console.log('TileLink UH/UL bridge demo:');
+simulator.tilelink_UH.pokeWord(0x1000000C, 0x3);
+console.log('UART CTRL via UH->UL:', `0x${simulator.tilelink_UH.peekWord(0x1000000C).toString(16)}`);
+console.log('Memory word via UL->UH:', `0x${simulator.tilelink_UL.peekWord(0x200).toString(16)}`);

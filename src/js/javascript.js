@@ -86,7 +86,8 @@ const runState = {
     maxCycles: 500000,
     breakpointAddresses: new Map(),
     lastTime: 0,
-    cyclesInLastSecond: 0
+    cyclesInLastSecond: 0,
+    programOutputStarted: false
 };
 
 // --- SYSTEM LOG TERMINAL LOGIC ---
@@ -96,6 +97,11 @@ const logClearBtn = document.getElementById('logClearBtn');
 const logExportBtn = document.getElementById('logExportBtn');
 const logStats = document.getElementById('logStats');
 const systemLogTerminal = document.getElementById('systemLogTerminal');
+const logResizeHandle = document.getElementById('logResizeHandle');
+const logSearchInput = document.getElementById('logSearchInput');
+const logLevelFilter = document.getElementById('logLevelFilter');
+const logModuleFilters = document.getElementById('logModuleFilters');
+const logFilterResetBtn = document.getElementById('logFilterResetBtn');
 const systemLogStore = window.__systemLogStore || {
     snapshot: () => [],
     size: () => 0,
@@ -109,6 +115,206 @@ let isAutoScrollPaused = false;
 let logFlushScheduled = false;
 const MAX_DOM_LINES = 2000;
 const MAX_LOGS_PER_FRAME = 250;
+const LOG_HEIGHT_STORAGE_KEY = 'systemLogConsoleHeight';
+const DEFAULT_LOG_HEIGHT = 300;
+const MIN_LOG_HEIGHT = 180;
+const TOP_SAFE_SPACE = 72;
+const LOG_FILTER_STORAGE_KEY = 'systemLogFilters';
+const LOG_MODULE_RULES = [
+    { id: 'system', test: (tag) => tag.includes('soc') || tag.includes('arch') || tag.includes('ui') || tag.includes('syscall') },
+    { id: 'io', test: (tag, text) => tag.includes('io map') || tag.includes('uart') || tag.includes('keyboard') || tag.includes('mouse') || text.includes('led matrix') || text.includes('io map') },
+    { id: 'cpu', test: (tag, text) => tag.includes('cpu') || text.startsWith('[cycle ') },
+    { id: 'mmu', test: (tag) => tag.includes('mmu') },
+    { id: 'cache', test: (tag, text, raw) => tag.includes('cache') || /\bl[12][id]?\s+cache\b/i.test(raw) },
+    { id: 'tilelink', test: (tag, text) => tag.includes('tilelink') || text.includes('tilelink') },
+    { id: 'dma', test: (tag, text, raw) => tag.includes('dma') || /\bdma\b/i.test(raw) },
+    { id: 'memory', test: (tag, text) => tag.includes('memory') || text.includes('main memory') }
+];
+const KNOWN_LOG_MODULES = new Set([
+    'cpu',
+    'mmu',
+    'cache',
+    'tilelink',
+    'dma',
+    'memory',
+    'io',
+    'system',
+    'other'
+]);
+
+function loadLogFilters() {
+    const defaults = {
+        search: '',
+        level: 'all',
+        modules: new Set()
+    };
+
+    try {
+        const stored = JSON.parse(window.localStorage.getItem(LOG_FILTER_STORAGE_KEY));
+        if (!stored || typeof stored !== 'object') return defaults;
+        const modules = Array.isArray(stored.modules)
+            ? stored.modules.filter((module) => KNOWN_LOG_MODULES.has(module))
+            : [];
+
+        return {
+            search: typeof stored.search === 'string' ? stored.search : '',
+            level: ['all', 'log', 'info', 'warn', 'error'].includes(stored.level) ? stored.level : 'all',
+            modules: new Set(modules)
+        };
+    } catch (error) {
+        return defaults;
+    }
+}
+
+let logFilters = loadLogFilters();
+let currentMatchingLogCount = 0;
+
+function getMaxLogHeight() {
+    return Math.max(MIN_LOG_HEIGHT, window.innerHeight - TOP_SAFE_SPACE);
+}
+
+function clampLogHeight(height) {
+    if (!Number.isFinite(height)) return DEFAULT_LOG_HEIGHT;
+    return Math.min(Math.max(height, MIN_LOG_HEIGHT), getMaxLogHeight());
+}
+
+function getStoredLogHeight() {
+    try {
+        return Number.parseFloat(window.localStorage.getItem(LOG_HEIGHT_STORAGE_KEY));
+    } catch (error) {
+        return NaN;
+    }
+}
+
+function storeLogHeight(height) {
+    try {
+        window.localStorage.setItem(LOG_HEIGHT_STORAGE_KEY, String(Math.round(height)));
+    } catch (error) {
+        // Ignore storage failures in private/file contexts; resizing still works.
+    }
+}
+
+function applyLogHeight(height, persist = false) {
+    if (!systemLogTerminal) return DEFAULT_LOG_HEIGHT;
+    const nextHeight = clampLogHeight(height);
+    systemLogTerminal.style.setProperty('--system-log-expanded-height', `${nextHeight}px`);
+    if (persist) storeLogHeight(nextHeight);
+    return nextHeight;
+}
+
+function getCurrentLogHeight() {
+    if (!systemLogTerminal) return DEFAULT_LOG_HEIGHT;
+    const renderedHeight = systemLogTerminal.getBoundingClientRect().height;
+    if (renderedHeight > MIN_LOG_HEIGHT) return renderedHeight;
+
+    const cssHeight = getComputedStyle(systemLogTerminal).getPropertyValue('--system-log-expanded-height');
+    return Number.parseFloat(cssHeight) || DEFAULT_LOG_HEIGHT;
+}
+
+function stripLogLevelPrefix(text) {
+    return String(text).replace(/^\s*(?:\[(?:ERROR|WARN)\]\s*)?/i, '');
+}
+
+function getLogEntryText(entry) {
+    return String(entry?.text ?? '');
+}
+
+function inferLogModule(entry) {
+    if (KNOWN_LOG_MODULES.has(entry?.module)) return entry.module;
+
+    const rawText = stripLogLevelPrefix(getLogEntryText(entry));
+    const firstTag = (rawText.match(/^\[([^\]]+)\]/)?.[1] || '').toLowerCase();
+    const lowerText = rawText.toLowerCase();
+    const matchedRule = LOG_MODULE_RULES.find((rule) => rule.test(firstTag, lowerText, rawText));
+
+    return matchedRule?.id ?? 'other';
+}
+
+function isLogFilterActive() {
+    return logFilters.search.trim() !== '' || logFilters.level !== 'all' || logFilters.modules.size > 0;
+}
+
+function logEntryMatchesFilters(entry) {
+    if (logFilters.level !== 'all' && (entry.level || 'log') !== logFilters.level) return false;
+    if (logFilters.modules.size > 0 && !logFilters.modules.has(inferLogModule(entry))) return false;
+
+    const search = logFilters.search.trim().toLowerCase();
+    if (!search) return true;
+
+    return getLogEntryText(entry).toLowerCase().includes(search);
+}
+
+function getFilteredLogEntries(entries = systemLogStore.snapshot()) {
+    return entries.filter(logEntryMatchesFilters);
+}
+
+function exportLogEntries(entries) {
+    return entries.map((entry) => getLogEntryText(entry)).join('\n');
+}
+
+function saveLogFilters() {
+    try {
+        window.localStorage.setItem(LOG_FILTER_STORAGE_KEY, JSON.stringify({
+            search: logFilters.search,
+            level: logFilters.level,
+            modules: Array.from(logFilters.modules)
+        }));
+    } catch (error) {
+        // Filters still work when storage is unavailable.
+    }
+}
+
+function renderLogFilterControls() {
+    if (logSearchInput && logSearchInput.value !== logFilters.search) {
+        logSearchInput.value = logFilters.search;
+    }
+    if (logLevelFilter && logLevelFilter.value !== logFilters.level) {
+        logLevelFilter.value = logFilters.level;
+    }
+    if (!logModuleFilters) return;
+
+    const chips = logModuleFilters.querySelectorAll('[data-log-module]');
+    chips.forEach((chip) => {
+        const module = chip.dataset.logModule;
+        const isAllChip = module === 'all';
+        const active = isAllChip ? logFilters.modules.size === 0 : logFilters.modules.has(module);
+        chip.classList.toggle('active', active);
+        chip.setAttribute('aria-pressed', String(active));
+    });
+}
+
+function updateLogFilters(nextFilters) {
+    logFilters = {
+        search: nextFilters.search ?? logFilters.search,
+        level: nextFilters.level ?? logFilters.level,
+        modules: nextFilters.modules ?? logFilters.modules
+    };
+    saveLogFilters();
+    renderLogFilterControls();
+    renderFilteredLogSnapshot();
+}
+
+function resetLogFilters() {
+    updateLogFilters({
+        search: '',
+        level: 'all',
+        modules: new Set()
+    });
+}
+
+function keepLogScrolledToBottom() {
+    if (!logContent || isAutoScrollPaused) return;
+    window.requestAnimationFrame(() => {
+        logContent.scrollTop = logContent.scrollHeight;
+    });
+}
+
+function setLogExpanded(expanded) {
+    if (!systemLogTerminal) return;
+    systemLogTerminal.classList.toggle('expanded', expanded);
+    if (logToggleBtn) logToggleBtn.setAttribute('aria-expanded', String(expanded));
+    if (expanded) keepLogScrolledToBottom();
+}
 
 function updateLogStats() {
     if (!logStats) return;
@@ -116,19 +322,26 @@ function updateLogStats() {
     const exportCount = typeof systemLogStore.size === 'function'
         ? systemLogStore.size()
         : systemLogStore.snapshot().length;
-    logStats.textContent = `Visible: ${visibleCount} / Export: ${exportCount}`;
+    const matchingCount = isLogFilterActive() ? Math.min(currentMatchingLogCount, exportCount) : exportCount;
+    logStats.textContent = `Visible: ${visibleCount} / Match: ${matchingCount} / Total: ${exportCount}`;
 }
 
 function createLogLine(entry) {
     const line = document.createElement('div');
     line.className = 'log-line';
+    const module = inferLogModule(entry);
+    const level = entry.level || 'log';
+    const text = getLogEntryText(entry);
 
-    if (entry.level === 'error') line.classList.add('log-error');
-    if (entry.level === 'warn') line.classList.add('log-warn');
-    if (entry.level === 'info') line.classList.add('log-info');
-    if (entry.text.startsWith('[Cycle ')) line.classList.add('log-cycle');
+    if (level === 'log') line.classList.add('log-debug');
+    if (level === 'error') line.classList.add('log-error');
+    if (level === 'warn') line.classList.add('log-warn');
+    if (level === 'info') line.classList.add('log-info');
+    if (text.startsWith('[Cycle ')) line.classList.add('log-cycle');
 
-    line.textContent = entry.text;
+    line.dataset.logModule = module;
+    line.title = `${level.toUpperCase()} / ${module.toUpperCase()}`;
+    line.textContent = text;
     return line;
 }
 
@@ -179,17 +392,121 @@ function queueLogEntries(entries) {
     scheduleLogFlush();
 }
 
+function renderFilteredLogSnapshot() {
+    const filteredEntries = getFilteredLogEntries(systemLogStore.snapshot());
+    currentMatchingLogCount = filteredEntries.length;
+    clearRenderedLogs();
+    queueLogEntries(filteredEntries.slice(-MAX_DOM_LINES));
+    updateLogStats();
+    keepLogScrolledToBottom();
+}
+
 // Set up UI listeners for terminal
+if (systemLogTerminal) {
+    applyLogHeight(getStoredLogHeight());
+    if (logToggleBtn) logToggleBtn.setAttribute('aria-expanded', 'false');
+}
+
 if (logToggleBtn && systemLogTerminal) {
     const logHeader = document.querySelector('.log-header');
     if (logHeader) {
         logHeader.addEventListener('click', (e) => {
             if (e.target.closest('button')) return;
-            systemLogTerminal.classList.toggle('expanded');
+            setLogExpanded(!systemLogTerminal.classList.contains('expanded'));
         });
     }
     logToggleBtn.addEventListener('click', () => {
-        systemLogTerminal.classList.toggle('expanded');
+        setLogExpanded(!systemLogTerminal.classList.contains('expanded'));
+    });
+}
+
+renderLogFilterControls();
+
+if (logSearchInput) {
+    logSearchInput.addEventListener('input', () => {
+        updateLogFilters({ search: logSearchInput.value });
+    });
+}
+
+if (logLevelFilter) {
+    logLevelFilter.addEventListener('change', () => {
+        updateLogFilters({ level: logLevelFilter.value });
+    });
+}
+
+if (logModuleFilters) {
+    logModuleFilters.addEventListener('click', (event) => {
+        const chip = event.target.closest('[data-log-module]');
+        if (!chip) return;
+
+        const module = chip.dataset.logModule;
+        if (module === 'all') {
+            updateLogFilters({ modules: new Set() });
+            return;
+        }
+
+        const modules = new Set(logFilters.modules);
+        if (modules.has(module)) modules.delete(module);
+        else modules.add(module);
+        updateLogFilters({ modules });
+    });
+}
+
+if (logFilterResetBtn) {
+    logFilterResetBtn.addEventListener('click', resetLogFilters);
+}
+
+if (logResizeHandle && systemLogTerminal) {
+    let resizeState = null;
+
+    const handleResizeMove = (event) => {
+        if (!resizeState) return;
+        event.preventDefault();
+        const nextHeight = resizeState.startHeight + (resizeState.startY - event.clientY);
+        applyLogHeight(nextHeight);
+        keepLogScrolledToBottom();
+    };
+
+    const finishResize = (event) => {
+        if (!resizeState) return;
+        applyLogHeight(getCurrentLogHeight(), true);
+        systemLogTerminal.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.removeEventListener('pointermove', handleResizeMove);
+        document.removeEventListener('pointerup', finishResize);
+        window.removeEventListener('blur', finishResize);
+        const shouldReleaseCapture = event?.pointerId !== undefined && logResizeHandle.hasPointerCapture?.(event.pointerId);
+        resizeState = null;
+        if (shouldReleaseCapture) {
+            logResizeHandle.releasePointerCapture(event.pointerId);
+        }
+        keepLogScrolledToBottom();
+    };
+
+    logResizeHandle.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        setLogExpanded(true);
+        resizeState = {
+            startY: event.clientY,
+            startHeight: getCurrentLogHeight()
+        };
+        systemLogTerminal.classList.add('resizing');
+        document.body.style.cursor = 'ns-resize';
+        logResizeHandle.setPointerCapture?.(event.pointerId);
+        document.addEventListener('pointermove', handleResizeMove);
+        document.addEventListener('pointerup', finishResize);
+        window.addEventListener('blur', finishResize);
+    });
+
+    logResizeHandle.addEventListener('pointermove', handleResizeMove);
+
+    logResizeHandle.addEventListener('pointerup', finishResize);
+    logResizeHandle.addEventListener('pointercancel', finishResize);
+    logResizeHandle.addEventListener('lostpointercapture', finishResize);
+
+    window.addEventListener('resize', () => {
+        applyLogHeight(getCurrentLogHeight(), true);
     });
 }
 
@@ -201,11 +518,12 @@ if (logClearBtn) {
 
 if (logExportBtn) {
     logExportBtn.addEventListener('click', () => {
-        const blob = new Blob([systemLogStore.exportText()], { type: 'text/plain' });
+        const exportEntries = getFilteredLogEntries(systemLogStore.snapshot());
+        const blob = new Blob([exportLogEntries(exportEntries)], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'simulator_logs.txt';
+        a.download = isLogFilterActive() ? 'simulator_logs_filtered.txt' : 'simulator_logs.txt';
         a.click();
         URL.revokeObjectURL(url);
     });
@@ -218,16 +536,20 @@ if (logContent) {
         isAutoScrollPaused = !isAtBottom;
     });
 
-    queueLogEntries(systemLogStore.snapshot().slice(-MAX_DOM_LINES));
-    updateLogStats();
+    renderFilteredLogSnapshot();
     systemLogStore.subscribe((event) => {
         if (event.type === 'clear') {
+            currentMatchingLogCount = 0;
             clearRenderedLogs();
             return;
         }
         if (event.type === 'entry') {
+            const matchesFilters = logEntryMatchesFilters(event.entry);
+            if (matchesFilters) {
+                currentMatchingLogCount++;
+                queueLogEntries([event.entry]);
+            }
             updateLogStats();
-            queueLogEntries([event.entry]);
         }
     });
 } else {
@@ -613,6 +935,7 @@ function toggleCacheAndReset() {
     updateCacheToggleUI();
     console.log(`[UI] Cache toggled -> ${simulator.useCache ? 'ON' : 'OFF'}`);
     setupUARTCallbacks();
+    setupSyscallCallbacks();
 }
 
 // --- SETUP UART CALLBACKS ---
@@ -636,13 +959,47 @@ function setupUARTCallbacks() {
 
 // --- EVENT HANDLERS (Nút điều khiển) ---
 
+function scrollBinaryOutputToBottom() {
+    if (binaryOutput) binaryOutput.scrollTop = binaryOutput.scrollHeight;
+}
+
+function appendProgramOutput(text) {
+    if (!binaryOutput) return;
+    if (!runState.programOutputStarted) {
+        if (binaryOutput.textContent && !binaryOutput.textContent.endsWith('\n')) {
+            binaryOutput.textContent += '\n';
+        }
+        runState.programOutputStarted = true;
+    }
+    binaryOutput.textContent += text;
+    scrollBinaryOutputToBottom();
+}
+
+function appendProgramStatus(message) {
+    if (!binaryOutput) return;
+    if (binaryOutput.textContent && !binaryOutput.textContent.endsWith('\n')) {
+        binaryOutput.textContent += '\n';
+    }
+    binaryOutput.textContent += message;
+    scrollBinaryOutputToBottom();
+}
+
+function setupSyscallCallbacks() {
+    if (typeof simulator === 'undefined' || !simulator.cpu) return;
+    simulator.cpu.onSyscallOutput = appendProgramOutput;
+    simulator.cpu.onSyscallExit = (code) => appendProgramStatus(`[Program exited with code ${code}]`);
+    simulator.cpu.onSyscallError = (message) => appendProgramStatus(`[Syscall error] ${message}`);
+}
+
 function handleAssemble() {
     if (!assembler || !simulator || !binaryOutput || !instructionInput) return;
     if (runState.isRunning) finishRun();
     binaryOutput.textContent = "Assembling...";
+    runState.programOutputStarted = false;
 
     if (instructionViewBody) instructionViewBody.innerHTML = '';
     simulator.init();
+    setupSyscallCallbacks();
     setupUARTCallbacks(); // Setup lại UART callbacks sau reset
 
     setTimeout(() => {
@@ -657,6 +1014,7 @@ function handleAssemble() {
             }
 
             simulator.loadProgram(programData);
+            setupSyscallCallbacks();
             setupUARTCallbacks(); // Setup lại callbacks sau load program
 
             let dataStartAddrFound = false;
@@ -842,7 +1200,8 @@ function handleRun() {
         return;
     }
 
-    binaryOutput.textContent += "\n\n--- Running ---";
+    runState.programOutputStarted = false;
+    binaryOutput.textContent += "\n\n--- Running ---\n";
 
     runState.breakpointAddresses = collectBreakpointAddresses();
     if (runState.breakpointAddresses.size > 0) {
@@ -904,6 +1263,8 @@ function handleReset() {
 
     if (runState.isRunning) finishRun();
     simulator.init();
+    setupUARTCallbacks();
+    setupSyscallCallbacks();
 
     if (assembler && typeof assembler._reset === 'function') {
         assembler._reset();
@@ -912,6 +1273,7 @@ function handleReset() {
     // instructionInput.setValue(""); // [FIX] Không xóa code khi reset
     try { instructionInput.clearGutter("breakpoints"); } catch { }
     binaryOutput.textContent = "";
+    runState.programOutputStarted = false;
     if (clockRateDisplay) clockRateDisplay.textContent = "0 Hz"; // [FIX] Reset IPS display
 
     // [FIX] Reset Keyboard UI
@@ -1016,6 +1378,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (typeof simulator !== 'undefined') {
         simulator.init();
+        setupSyscallCallbacks();
         setDataAddressValue(`0x${dataSegmentStartAddress.toString(16)}`);
         setRegisterView('integer');
         updateUIGlobally();

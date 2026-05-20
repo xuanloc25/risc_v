@@ -37,16 +37,49 @@
         history.splice(0, history.length - MAX_EXPORT_LINES);
     }
 
+    function stripLevelPrefix(text) {
+        return String(text).replace(/^\s*(?:\[(?:ERROR|WARN)\]\s*)?/i, '');
+    }
+
+    function inferLogModule(text) {
+        const normalized = stripLevelPrefix(text);
+        const bracketMatch = normalized.match(/^\[([^\]]+)\]/);
+        const firstTag = (bracketMatch?.[1] || '').toLowerCase();
+        const lowerText = normalized.toLowerCase();
+
+        if (firstTag.includes('soc') || firstTag.includes('arch') || firstTag.includes('ui') || firstTag.includes('syscall')) return 'system';
+        if (
+            firstTag.includes('io map') ||
+            firstTag.includes('uart') ||
+            firstTag.includes('keyboard') ||
+            firstTag.includes('mouse') ||
+            lowerText.includes('led matrix') ||
+            lowerText.includes('io map')
+        ) {
+            return 'io';
+        }
+        if (firstTag.includes('cpu') || lowerText.startsWith('[cycle ')) return 'cpu';
+        if (firstTag.includes('mmu')) return 'mmu';
+        if (firstTag.includes('cache') || /\bl[12][id]?\s+cache\b/i.test(normalized)) return 'cache';
+        if (firstTag.includes('tilelink') || lowerText.includes('tilelink')) return 'tilelink';
+        if (firstTag.includes('dma') || /\bdma\b/i.test(normalized)) return 'dma';
+        if (firstTag.includes('memory') || firstTag.includes('main memory') || lowerText.includes('main memory')) return 'memory';
+
+        return 'other';
+    }
+
     function pushEntry(level, args) {
         let prefix = '';
         if (level === 'error') prefix = '[ERROR] ';
         if (level === 'warn') prefix = '[WARN] ';
 
         const indent = '  '.repeat(groupDepth);
+        const text = indent + prefix + Array.from(args).map(formatArg).join(' ');
 
         const entry = {
             level,
-            text: indent + prefix + Array.from(args).map(formatArg).join(' ')
+            module: inferLogModule(text),
+            text
         };
 
         history.push(entry);
@@ -89,9 +122,11 @@
     const pushGroupHeader = (args, collapsed = false) => {
         const label = Array.from(args).map(formatArg).join(' ');
         const marker = collapsed ? '[+] ' : '[-] ';
+        const text = '  '.repeat(groupDepth) + marker + label;
         const entry = {
             level: 'info',
-            text: '  '.repeat(groupDepth) + marker + label
+            module: inferLogModule(text),
+            text
         };
 
         history.push(entry);
