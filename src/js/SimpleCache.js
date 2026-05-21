@@ -261,6 +261,7 @@ export class SimpleCache {
 
         if (!fill.issued && this.cycle >= fill.issueCycle) {
             if (this._supportsBurstRefill()) {
+                console.log(`[${this.name}] REFILL_REQUEST addr=0x${fill.blockBase.toString(16)} beats=${fill.beatsExpected}`);
                 this.lowerPort.receiveRequest({
                     type: 'fill', 
                     from: this.name, 
@@ -270,7 +271,6 @@ export class SimpleCache {
                     size: this._getBlockSizeLog2(), 
                     beatBytes: REFILL_BEAT_BYTES // Số byte trên mỗi beat burst, đang cấu hình là 4 byte/beat.
                 });
-                console.log(`[${this.name}] REFILL_REQUEST addr=0x${fill.blockBase.toString(16)} beats=${fill.beatsExpected}`);
             }
             fill.issued = true;
         }
@@ -430,7 +430,7 @@ export class SimpleCache {
             beatIndex: burst.nextBeatIndex, // Thứ tự beat hiện tại trong line, bắt đầu từ 0.
             beatCount: burst.beatCount // Tổng số beat của line, để bên nhận biết khi nào đã nhận đủ.
         });
-        console.log(`[${this.name}] SEND_BEAT addr=0x${beatAddress.toString(16)} ${burst.nextBeatIndex + 1}/${burst.beatCount}`);
+        console.log(`[${this.name}] SEND_BEAT addr=0x${beatAddress.toString(16)} ${burst.nextBeatIndex + 1}/${burst.beatCount} -> ${burst.req.from}`);
 
         burst.nextBeatIndex++;
         if (burst.nextBeatIndex >= burst.beatCount) {
