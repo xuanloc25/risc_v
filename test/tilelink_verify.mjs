@@ -495,7 +495,7 @@ function testMmuL2TileLinkMemoryLogs() {
     });
 
     assert.ok(logs.some((line) => line.includes('[MMU] REQUEST')), 'MMU request log is missing');
-    assert.ok(logs.some((line) => line.includes('L2 Cache -> TileLink-UH REQUEST')), 'L2 -> TileLink request log is missing');
+    assert.ok(logs.some((line) => line.includes('REFILL_REQUEST')), 'L2 -> TileLink request log is missing');
     assert.ok(logs.some((line) => line.includes('TileLink -> Main Memory REQUEST')), 'TileLink -> Main Memory request log is missing');
     assert.ok(logs.some((line) => line.includes('Main Memory -> TileLink-UH RESPONSE')), 'Main Memory -> TileLink response log is missing');
     assert.ok(logs.some((line) => line.includes('TileLink -> L2 Cache RESPONSE')), 'TileLink -> L2 response log is missing');
