@@ -358,20 +358,16 @@ export const simulator = {
             console.error(e);
         }
 
-        // Tick components once per global cycle, ordered from top to bottom
-        // in the SoC diagram. MMU work is triggered immediately by CPU.tick().
-        this.iCache.tick();
-        this.dCache.tick();
-        this.l2Cache.tick();
-
-        // DMA is a side master attached to the TileLink fabrics.
         if (this.dma) {
             this.dma.tick();
         }
 
         this.tilelink_UH.tick();
-        this.mem.tick(this.tilelink_UH);
         this.tilelink_UL.tick();
+        this.mem.tick(this.tilelink_UH);
+        this.l2Cache.tick();
+        this.iCache.tick();
+        this.dCache.tick();
 
         if (this.uart) {
             this.uart.tick();

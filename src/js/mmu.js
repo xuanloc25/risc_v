@@ -173,7 +173,7 @@ export class MMU {
         });
     }
 
-    translateAddress(address, accessType = 'read') {
+    translateAddress(address, accessType) { //='read'|'write'|'execute'
         const va = address >>> 0;
         const vpn = this._getPageNumber(va);
         const offset = va & (this.pageSize - 1);

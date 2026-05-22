@@ -926,7 +926,7 @@ function renderCacheView() {
             return;
         }
 
-        const assoc = cache.policy?.associativity ?? 1;
+        const assoc = cache.policy?.numWays ?? cache.numWays ?? 1;
         cache.blocks.forEach(block => {
             const row = tableBody.insertRow();
             const set = Math.floor(block.id / assoc);
