@@ -120,16 +120,6 @@ const DEFAULT_LOG_HEIGHT = 300;
 const MIN_LOG_HEIGHT = 180;
 const TOP_SAFE_SPACE = 72;
 const LOG_FILTER_STORAGE_KEY = 'systemLogFilters';
-const LOG_MODULE_RULES = [
-    { id: 'system', test: (tag) => tag.includes('soc') || tag.includes('arch') || tag.includes('ui') || tag.includes('syscall') },
-    { id: 'io', test: (tag, text) => tag.includes('io map') || tag.includes('uart') || tag.includes('keyboard') || tag.includes('mouse') || text.includes('led matrix') || text.includes('io map') },
-    { id: 'cpu', test: (tag, text) => tag.includes('cpu') || text.startsWith('[cycle ') },
-    { id: 'mmu', test: (tag) => tag.includes('mmu') },
-    { id: 'cache', test: (tag, text, raw) => tag.includes('cache') || /\bl[12][id]?\s+cache\b/i.test(raw) },
-    { id: 'tilelink', test: (tag, text) => tag.includes('tilelink') || text.includes('tilelink') },
-    { id: 'dma', test: (tag, text, raw) => tag.includes('dma') || /\bdma\b/i.test(raw) },
-    { id: 'memory', test: (tag, text) => tag.includes('memory') || text.includes('main memory') }
-];
 const KNOWN_LOG_MODULES = new Set([
     'cpu',
     'mmu',
@@ -219,15 +209,69 @@ function getLogEntryText(entry) {
     return String(entry?.text ?? '');
 }
 
-function inferLogModule(entry) {
-    if (KNOWN_LOG_MODULES.has(entry?.module)) return entry.module;
-
-    const rawText = stripLogLevelPrefix(getLogEntryText(entry));
+function fallbackInferLogModules(text) {
+    const rawText = stripLogLevelPrefix(text);
     const firstTag = (rawText.match(/^\[([^\]]+)\]/)?.[1] || '').toLowerCase();
     const lowerText = rawText.toLowerCase();
-    const matchedRule = LOG_MODULE_RULES.find((rule) => rule.test(firstTag, lowerText, rawText));
+    const modules = new Set();
 
-    return matchedRule?.id ?? 'other';
+    if (firstTag.includes('soc') || firstTag.includes('arch') || firstTag.includes('ui') || firstTag.includes('syscall')) modules.add('system');
+    if (firstTag.includes('io map') || firstTag.includes('uart') || firstTag.includes('keyboard') || firstTag.includes('mouse')) modules.add('io');
+    if (firstTag.includes('cpu') || firstTag.startsWith('cycle ')) modules.add('cpu');
+    if (firstTag.includes('mmu')) modules.add('mmu');
+    if (firstTag.includes('cache') || /\bl[12][id]?\s+cache\b/i.test(firstTag)) modules.add('cache');
+    if (firstTag.includes('tilelink')) modules.add('tilelink');
+    if (firstTag.includes('dma')) modules.add('dma');
+    if (firstTag.includes('memory')) modules.add('memory');
+
+    if (
+        lowerText.includes('system reset') ||
+        lowerText.includes('simulation halted') ||
+        lowerText.includes('initializing app') ||
+        lowerText.includes('assembly error') ||
+        lowerText.includes('run error') ||
+        lowerText.includes('step error') ||
+        /\bsyscall\b/i.test(rawText)
+    ) {
+        modules.add('system');
+    }
+
+    if (lowerText.startsWith('[cycle ') || /\bcpu\b/i.test(rawText)) modules.add('cpu');
+    if (/\bmmu\b/i.test(rawText)) modules.add('mmu');
+    if (/\bcache\b/i.test(rawText) || /\bl[12][id]?\s+cache\b/i.test(rawText)) modules.add('cache');
+    if (/\btilelink(?:-[a-z]+)?\b/i.test(rawText)) modules.add('tilelink');
+    if (/\bdma\b/i.test(rawText)) modules.add('dma');
+    if (/\bmain memory\b/i.test(rawText)) modules.add('memory');
+    if (/\b(?:uart|keyboard|mouse)\b/i.test(rawText) || lowerText.includes('led matrix') || lowerText.includes('io map')) modules.add('io');
+
+    if (modules.size === 0) modules.add('other');
+    return modules;
+}
+
+function inferLogModules(entry) {
+    const rawText = stripLogLevelPrefix(getLogEntryText(entry));
+    const modules = new Set();
+    const classifierModules = window.__systemLogClassifier?.inferModules?.(rawText);
+
+    if (Array.isArray(classifierModules)) {
+        classifierModules.forEach((module) => {
+            if (KNOWN_LOG_MODULES.has(module)) modules.add(module);
+        });
+    } else {
+        fallbackInferLogModules(rawText).forEach((module) => modules.add(module));
+    }
+
+    if (Array.isArray(entry?.modules)) {
+        entry.modules.forEach((module) => {
+            if (KNOWN_LOG_MODULES.has(module)) modules.add(module);
+        });
+    } else if (KNOWN_LOG_MODULES.has(entry?.module)) {
+        modules.add(entry.module);
+    }
+
+    if (modules.size > 1) modules.delete('other');
+    if (modules.size === 0) modules.add('other');
+    return modules;
 }
 
 function isLogFilterActive() {
@@ -236,7 +280,11 @@ function isLogFilterActive() {
 
 function logEntryMatchesFilters(entry) {
     if (logFilters.level !== 'all' && (entry.level || 'log') !== logFilters.level) return false;
-    if (logFilters.modules.size > 0 && !logFilters.modules.has(inferLogModule(entry))) return false;
+    if (logFilters.modules.size > 0) {
+        const entryModules = inferLogModules(entry);
+        const hasSelectedModule = Array.from(logFilters.modules).some((module) => entryModules.has(module));
+        if (!hasSelectedModule) return false;
+    }
 
     const search = logFilters.search.trim().toLowerCase();
     if (!search) return true;
@@ -329,7 +377,7 @@ function updateLogStats() {
 function createLogLine(entry) {
     const line = document.createElement('div');
     line.className = 'log-line';
-    const module = inferLogModule(entry);
+    const modules = Array.from(inferLogModules(entry));
     const level = entry.level || 'log';
     const text = getLogEntryText(entry);
 
@@ -339,8 +387,8 @@ function createLogLine(entry) {
     if (level === 'info') line.classList.add('log-info');
     if (text.startsWith('[Cycle ')) line.classList.add('log-cycle');
 
-    line.dataset.logModule = module;
-    line.title = `${level.toUpperCase()} / ${module.toUpperCase()}`;
+    line.dataset.logModule = modules.join(' ');
+    line.title = `${level.toUpperCase()} / ${modules.map((module) => module.toUpperCase()).join(', ')}`;
     line.textContent = text;
     return line;
 }

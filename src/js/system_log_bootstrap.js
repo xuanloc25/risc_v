@@ -1,4 +1,78 @@
 (function initSystemLogStore(global) {
+    const KNOWN_LOG_MODULES = [
+        'cpu',
+        'mmu',
+        'cache',
+        'tilelink',
+        'dma',
+        'memory',
+        'io',
+        'system',
+        'other'
+    ];
+
+    function stripLevelPrefix(text) {
+        return String(text).replace(/^\s*(?:\[(?:ERROR|WARN)\]\s*)?/i, '');
+    }
+
+    function addFirstTagModules(modules, firstTag) {
+        if (!firstTag) return;
+
+        if (firstTag.includes('soc') || firstTag.includes('arch') || firstTag.includes('ui') || firstTag.includes('syscall')) modules.add('system');
+        if (firstTag.includes('io map') || firstTag.includes('uart') || firstTag.includes('keyboard') || firstTag.includes('mouse')) modules.add('io');
+        if (firstTag.includes('cpu') || firstTag.startsWith('cycle ')) modules.add('cpu');
+        if (firstTag.includes('mmu')) modules.add('mmu');
+        if (firstTag.includes('cache') || /\bl[12][id]?\s+cache\b/i.test(firstTag)) modules.add('cache');
+        if (firstTag.includes('tilelink')) modules.add('tilelink');
+        if (firstTag.includes('dma')) modules.add('dma');
+        if (firstTag.includes('memory')) modules.add('memory');
+    }
+
+    function addTextModules(modules, lowerText, normalized) {
+        if (
+            lowerText.includes('system reset') ||
+            lowerText.includes('simulation halted') ||
+            lowerText.includes('initializing app') ||
+            lowerText.includes('assembly error') ||
+            lowerText.includes('run error') ||
+            lowerText.includes('step error') ||
+            /\bsyscall\b/i.test(normalized)
+        ) {
+            modules.add('system');
+        }
+
+        if (lowerText.startsWith('[cycle ') || /\bcpu\b/i.test(normalized)) modules.add('cpu');
+        if (/\bmmu\b/i.test(normalized)) modules.add('mmu');
+        if (/\bcache\b/i.test(normalized) || /\bl[12][id]?\s+cache\b/i.test(normalized)) modules.add('cache');
+        if (/\btilelink(?:-[a-z]+)?\b/i.test(normalized)) modules.add('tilelink');
+        if (/\bdma\b/i.test(normalized)) modules.add('dma');
+        if (/\bmain memory\b/i.test(normalized)) modules.add('memory');
+        if (/\b(?:uart|keyboard|mouse)\b/i.test(normalized) || lowerText.includes('led matrix') || lowerText.includes('io map')) modules.add('io');
+    }
+
+    function inferLogModules(text) {
+        const normalized = stripLevelPrefix(text);
+        const bracketMatch = normalized.match(/^\[([^\]]+)\]/);
+        const firstTag = (bracketMatch?.[1] || '').toLowerCase();
+        const lowerText = normalized.toLowerCase();
+        const modules = new Set();
+
+        addFirstTagModules(modules, firstTag);
+        addTextModules(modules, lowerText, normalized);
+
+        if (modules.size === 0) modules.add('other');
+        return Array.from(modules).filter((module) => KNOWN_LOG_MODULES.includes(module));
+    }
+
+    function getPrimaryLogModule(modules) {
+        return modules.find((module) => module !== 'other') || 'other';
+    }
+
+    global.__systemLogClassifier = {
+        inferModules: inferLogModules,
+        knownModules: KNOWN_LOG_MODULES.slice()
+    };
+
     if (global.__systemLogStore) return;
 
     const MAX_EXPORT_LINES = 10000;
@@ -37,37 +111,6 @@
         history.splice(0, history.length - MAX_EXPORT_LINES);
     }
 
-    function stripLevelPrefix(text) {
-        return String(text).replace(/^\s*(?:\[(?:ERROR|WARN)\]\s*)?/i, '');
-    }
-
-    function inferLogModule(text) {
-        const normalized = stripLevelPrefix(text);
-        const bracketMatch = normalized.match(/^\[([^\]]+)\]/);
-        const firstTag = (bracketMatch?.[1] || '').toLowerCase();
-        const lowerText = normalized.toLowerCase();
-
-        if (firstTag.includes('soc') || firstTag.includes('arch') || firstTag.includes('ui') || firstTag.includes('syscall')) return 'system';
-        if (
-            firstTag.includes('io map') ||
-            firstTag.includes('uart') ||
-            firstTag.includes('keyboard') ||
-            firstTag.includes('mouse') ||
-            lowerText.includes('led matrix') ||
-            lowerText.includes('io map')
-        ) {
-            return 'io';
-        }
-        if (firstTag.includes('cpu') || lowerText.startsWith('[cycle ')) return 'cpu';
-        if (firstTag.includes('mmu')) return 'mmu';
-        if (firstTag.includes('cache') || /\bl[12][id]?\s+cache\b/i.test(normalized)) return 'cache';
-        if (firstTag.includes('tilelink') || lowerText.includes('tilelink')) return 'tilelink';
-        if (firstTag.includes('dma') || /\bdma\b/i.test(normalized)) return 'dma';
-        if (firstTag.includes('memory') || firstTag.includes('main memory') || lowerText.includes('main memory')) return 'memory';
-
-        return 'other';
-    }
-
     function pushEntry(level, args) {
         let prefix = '';
         if (level === 'error') prefix = '[ERROR] ';
@@ -75,10 +118,12 @@
 
         const indent = '  '.repeat(groupDepth);
         const text = indent + prefix + Array.from(args).map(formatArg).join(' ');
+        const modules = inferLogModules(text);
 
         const entry = {
             level,
-            module: inferLogModule(text),
+            module: getPrimaryLogModule(modules),
+            modules,
             text
         };
 
@@ -123,9 +168,11 @@
         const label = Array.from(args).map(formatArg).join(' ');
         const marker = collapsed ? '[+] ' : '[-] ';
         const text = '  '.repeat(groupDepth) + marker + label;
+        const modules = inferLogModules(text);
         const entry = {
             level: 'info',
-            module: inferLogModule(text),
+            module: getPrimaryLogModule(modules),
+            modules,
             text
         };
 
