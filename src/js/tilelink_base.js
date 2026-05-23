@@ -201,7 +201,7 @@ export class TileLinkBase {
         const entry = this._selectSlaveEntry(address);
         console.log(
             `[${this.name}] TileLink -> ${describeTarget(entry)} DIRECT_WRITE ` +
-            `addr=0x${(address >>> 0).toString(16)} size=${size} access=${accessType} data=${value ?? 0}`
+            `addr=0x${(address >>> 0).toString(16)} size=${size} access=${accessType} data=0x${((value ?? 0) >>> 0).toString(16)}`
         );
         this._writeToTarget(entry.target, address, value, size, accessType);
         console.log(

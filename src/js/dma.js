@@ -262,7 +262,7 @@ export class DMAController {
     }
 
     writeRegister(address, value) {
-        console.log(`[DMA DEBUG] Write to 0x${address.toString(16)} = 0x${value.toString(16)}`);
+        console.log(`[DMA DEBUG] Write to 0x${(address >>> 0).toString(16)} = 0x${(value >>> 0).toString(16)}`);
         switch (address) {
             case 0xFFED0000:
                 console.log(`[DMA DEBUG] CTRL write: enabled=${!!(value & 1)}, start=${!!(value & 2)}`);

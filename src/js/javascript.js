@@ -851,7 +851,7 @@ function updateUIGlobally() {
                 if (hex !== row.cells[1].textContent) row.classList.add('highlight');
                 else row.classList.remove('highlight');
                 row.cells[1].textContent = hex;
-                row.cells[2].textContent = value.toString();
+                row.cells[2].textContent = (value >>> 0).toString();
             }
         }
         const pcRow = document.getElementById('reg-pc');
@@ -861,7 +861,7 @@ function updateUIGlobally() {
             if (hex !== pcRow.cells[1].textContent) pcRow.classList.add('highlight');
             else pcRow.classList.remove('highlight');
             pcRow.cells[1].textContent = hex;
-            pcRow.cells[2].textContent = pc.toString();
+            pcRow.cells[2].textContent = (pc >>> 0).toString();
         }
     }
 

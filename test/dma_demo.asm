@@ -35,16 +35,30 @@ _start:
     li    t4, 3
     sw    t4, 0(t0)
 
-poll_busy:
-    lw    t6, 0(t0)            # read CTRL
-    li    t5, 0x80000000       # BUSY bit
-    and   t6, t6, t5
-    bne   t6, x0, poll_busy    # wait while busy
+    # While DMA is busy, compute sum of src_data (4 words)
+    # CPU does useful work instead of spinning idle
+    li    a0, 0                # a0 = sum accumulator
+    li    a2, 4                # a2 = words remaining
+    # t2 still points to src_data base
 
-    # (Optional) check DONE bit if needed
+do_work:
+    lw    t6, 0(t0)            # check DMA CTRL
+    li    t5, 0x80000000       # BUSY mask
+    and   t6, t6, t5
+    beq   t6, x0, dma_done    # BUSY=0 -> DMA finished
+
+    beq   a2, x0, do_work     # no more work -> keep polling
+    lw    t5, 0(t2)            # load one word from src_data
+    add   a0, a0, t5           # sum += word
+    addi  t2, t2, 4            # advance pointer
+    addi  a2, a2, -1           # decrement counter
+    j     do_work
+
+dma_done:
+    # a0 = sum of src_data (computed while DMA was running)
+    # DMA copy is complete
 
     # Exit with code 0
-    li    a0, 0
     li    a7, 93
     ecall
 

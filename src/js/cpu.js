@@ -444,11 +444,11 @@ export class CPU {
                 return { nextPc: this.pc };
             case 'SW':
                 memoryAddress = (val1_int + imm) | 0;
-                console.log(`[CPU] SW: Ghi value=0x${val2_int.toString(16)} vao dia chi 0x${memoryAddress.toString(16)}`);
-                if (memoryAddress >= 0x100 && memoryAddress < 0x104) {
-                    console.warn(`[CANH BAO] SW dang ghi vao vung nguon DMA tai dia chi 0x${memoryAddress.toString(16)}!`);
-                }
                 if (!this.waitingRequest && !this.pendingResponse) {
+                    console.log(`[CPU] SW: Ghi value=0x${(val2_int >>> 0).toString(16)} vao dia chi 0x${(memoryAddress >>> 0).toString(16)}`);
+                    if (memoryAddress >= 0x100 && memoryAddress < 0x104) {
+                        console.warn(`[CANH BAO] SW dang ghi vao vung nguon DMA tai dia chi 0x${(memoryAddress >>> 0).toString(16)}!`);
+                    }
                     this.writeWordAsync(memoryAddress, val2_int, bus);
                     return { nextPc: this.pc };
                 }
