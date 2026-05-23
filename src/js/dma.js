@@ -290,7 +290,7 @@ export class DMAController {
     }
 
     tick() {
-        console.log(`[DMA DEBUG] Tick: busy=${this.registers.busy}, progress=${this.transferProgress}/${this.numElements}`);
+
         if (this.registers.canStartTransfer()) {
             this.startNextTransfer();
             this.registers.startRequested = false;
@@ -383,7 +383,7 @@ export class DMAController {
     }
 
     performTransferStep() {
-        console.log(`[DMA DEBUG] Transfer step: ${this.transferProgress}/${this.numElements}`);
+
         if (this.transferProgress >= this.numElements) {
             this.completeTransfer();
             return;

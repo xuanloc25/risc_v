@@ -234,6 +234,7 @@ export class SimpleCache {
         const victim = this._selectVictim(setIndex);
         this._prepareVictimForRefill(victim, tag);
         console.log(`[${this.name}] MISS ${opType} addr=0x${address.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`);
+        console.log(`[${this.name}] REFILL_REQUEST addr=0x${blockBase.toString(16)} beats=${this._getBeatCount()}`);
         // Lưu trạng thái refill đang chờ nhận burst responses / direct beats.
         this.pendingFill = {
             mode: 'request', 
@@ -261,7 +262,6 @@ export class SimpleCache {
 
         if (!fill.issued && this.cycle >= fill.issueCycle) {
             if (this._supportsBurstRefill()) {
-                console.log(`[${this.name}] REFILL_REQUEST addr=0x${fill.blockBase.toString(16)} beats=${fill.beatsExpected}`);
                 this.lowerPort.receiveRequest({
                     type: 'fill', 
                     from: this.name, 
@@ -395,6 +395,7 @@ export class SimpleCache {
         const victim = this._selectVictim(setIndex);
         this._prepareVictimForRefill(victim, tag);
         console.log(`[${this.name}] MISS FILL addr=0x${blockBase.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`);
+        console.log(`[${this.name}] REFILL_REQUEST addr=0x${blockBase.toString(16)} beats=${this._getBeatCount()}`);
         this.pendingFill = {
                 mode: 'forward', 
                 victim, 

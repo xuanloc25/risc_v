@@ -75,8 +75,8 @@
 
     if (global.__systemLogStore) return;
 
-    const MAX_EXPORT_LINES = 10000;
-    const EXPORT_TRIM_BATCH = 500;
+    const MAX_EXPORT_LINES = 200000;
+    const EXPORT_TRIM_BATCH = 5000;
     const subscribers = new Set();
     const history = [];
 
