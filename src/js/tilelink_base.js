@@ -132,20 +132,22 @@ export class TileLinkBase {
             Object.assign(this.signals.d, snapshotDChannel(resp));
 
             const opcodeName = describeDOpcode(resp.type);
+            const hasData = resp.type === TL_D_Opcode.AccessAckData;
+            const dataStr = hasData ? ` data=0x${(resp.data >>> 0).toString(16)}` : '';
             console.log(
                 `[${this.name}] ${resp.from} -> TileLink RESPONSE ` +
-                `to=${resp.to} type=${opcodeName} addr=0x${(resp.address >>> 0).toString(16)} data=${resp.data ?? ''}`
+                `to=${resp.to} type=${opcodeName} addr=0x${(resp.address >>> 0).toString(16)}${dataStr}`
             );
             console.log(
                 `[${this.name}][D] route to=${resp.to} type=${opcodeName} ` +
-                `addr=0x${(resp.address >>> 0).toString(16)} data=${resp.data ?? ''}`
+                `addr=0x${(resp.address >>> 0).toString(16)}${dataStr}`
             );
 
             const target = this._resolveResponseTarget(resp.to);
             if (target && typeof target.receiveResponse === 'function') {
                 console.log(
                     `[${this.name}] TileLink -> ${resp.to} RESPONSE ` +
-                    `type=${opcodeName} addr=0x${(resp.address >>> 0).toString(16)} data=${resp.data ?? ''}`
+                    `type=${opcodeName} addr=0x${(resp.address >>> 0).toString(16)}${dataStr}`
                 );
                 target.receiveResponse(resp);
             } else {

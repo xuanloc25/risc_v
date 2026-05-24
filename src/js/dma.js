@@ -517,7 +517,7 @@ export class DMAController {
     receiveResponse(resp) {
         console.log(
             `[DMA] RECEIVE_RESPONSE via=${describeLink(this.activeRequestLink ?? this.defaultLink)} ` +
-            `from=${resp.from} type=${describeDOpcode(resp.type)} addr=${hex(resp.address)} data=${resp.data ?? ''}`
+            `from=${resp.from} type=${describeDOpcode(resp.type)} addr=${hex(resp.address)}${resp.data != null ? ` data=0x${(resp.data >>> 0).toString(16)}` : ''}`
         );
         this.pendingResponse = resp;
     }

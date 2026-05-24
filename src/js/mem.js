@@ -63,7 +63,7 @@ export class Mem {
         const value = readSizedValue(this.mem, address, size);
         console.log(
             `[${this.name}] DIRECT_READ addr=0x${(address >>> 0).toString(16)} ` +
-            `size=${size} data=${value ?? 0}`
+            `size=${size} data=0x${((value ?? 0) >>> 0).toString(16)}`
         );
         return value;
     }
@@ -71,7 +71,7 @@ export class Mem {
     directWrite(address, value, size = 2) {
         console.log(
             `[${this.name}] DIRECT_WRITE addr=0x${(address >>> 0).toString(16)} ` +
-            `size=${size} data=${value ?? 0}`
+            `size=${size} data=0x${((value ?? 0) >>> 0).toString(16)}`
         );
         writeSizedValue(this.mem, address, value, size);
     }
@@ -125,7 +125,7 @@ export class Mem {
 
         console.log(
             `[${this.name}] ${this.name} -> ${bus?.name ?? 'TileLink'} RESPONSE ` +
-            `to=${req.from} type=${describeDOpcode(opD)} addr=0x${(req.address >>> 0).toString(16)} data=${data ?? 0}`
+            `to=${req.from} type=${describeDOpcode(opD)} addr=0x${(req.address >>> 0).toString(16)}${opD === TL_D_Opcode.AccessAckData ? ` data=0x${((data ?? 0) >>> 0).toString(16)}` : ''}`
         );
 
         bus.sendResponse({
@@ -157,7 +157,7 @@ export class Mem {
 
             console.log(
                 `[${this.name}] ${this.name} -> ${bus?.name ?? 'TileLink'} RESPONSE_BEAT ` +
-                `to=${state.req.from} addr=0x${addr.toString(16)} data=${data ?? 0} ` +
+                `to=${state.req.from} addr=0x${addr.toString(16)} data=0x${((data ?? 0) >>> 0).toString(16)} ` +
                 `${beatIndex + 1}/${beatCount}`
             );
 
