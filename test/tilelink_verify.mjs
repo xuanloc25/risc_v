@@ -10,6 +10,10 @@ import { TileLinkBridge } from '../src/js/tilelink_bridge.js';
 import { Port, attachPort } from '../src/js/port_link.js';
 import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic, TL_Param_Logical } from '../src/js/tilelink.js';
 
+// Integration coverage for the on-chip fabric. Each case builds only the
+// modules it needs so a failure points to one path: cache, DMA, MMIO bridge, or
+// MMU-to-cache-to-bus routing.
+
 function readWord(memMap, addr) {
     return ((memMap[addr + 3] ?? 0) << 24) |
         ((memMap[addr + 2] ?? 0) << 16) |
@@ -108,6 +112,8 @@ function tickDmaMemoryUntil(dma, tilelink, mem, predicate, maxTicks = 128) {
 }
 
 function tickMmuCacheBusUntil({ cache, tilelink_UH, tilelink_UL, mem }, predicate, maxTicks = 128) {
+    // Keep the tick order aligned with src/js/soc.js so the test exercises the
+    // same request/response timing as the simulator.
     for (let i = 0; i < maxTicks; i++) {
         cache.tick();
         tilelink_UH.tick();

@@ -10,7 +10,7 @@ src_data:
 dst_data:
     .space 16                  # destination buffer for DMA
 
-    .text
+    .text 0x00400000
     .globl _start
 _start:
     # Load device base addresses

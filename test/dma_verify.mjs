@@ -8,6 +8,8 @@
  * Chạy: node test/dma_verify.mjs
  */
 
+import assert from 'node:assert/strict';
+
 import { assembler } from '../src/js/assembler.js';
 import { simulator }  from '../src/js/soc.js';
 
@@ -78,7 +80,7 @@ srcWords1.forEach((expected, i) => {
     if (!ok) pass1 = false;
     console.log(`  dst[${i}] ${hex(0x400 + i*4)} = ${hex(got)}  ${ok ? 'OK' : `FAIL (expected ${hex(expected)})`}`);
 });
-console.assert(pass1, 'Kịch bản 1 thất bại!');
+assert.equal(pass1, true, 'DMA JS API copy should preserve all source words.');
 console.log(pass1 ? '[PASS] JS API copy OK' : '[FAIL]');
 
 // ════════════════════════════════════════════════════════════════
@@ -145,7 +147,7 @@ srcWords2.forEach((expected, i) => {
     if (!ok) pass2 = false;
     console.log(`  dst[${i}] ${hex(0x600 + i*4)} = ${hex(got)}  ${ok ? 'OK' : `FAIL (expected ${hex(expected)})`}`);
 });
-console.assert(pass2, 'Kịch bản 2 thất bại!');
+assert.equal(pass2, true, 'CPU-driven DMA register copy should preserve all source words.');
 console.log(pass2 ? '[PASS] ASM DMA copy OK' : '[FAIL]');
 
 // ════════════════════════════════════════════════════════════════
@@ -176,12 +178,13 @@ console.log(`\n[After — ${cycles3} cycles]`);
 console.log(`  dst 0x800 = ${hex(got3a)}  (expected ${hex(0x44332211)})`);
 console.log(`  dst 0x804 = ${hex(got3b)}  (expected ${hex(0xDDCCBBAA)})`);
 const pass3 = got3a === 0x44332211 && got3b === 0xDDCCBBAA;
-console.assert(pass3, 'Kịch bản 3 byte-swap thất bại!');
+assert.equal(pass3, true, 'DMA byte-swap should reverse bytes within each 32-bit word.');
 console.log(pass3 ? '[PASS] Byte-swap OK' : '[FAIL]');
 
 // ════════════════════════════════════════════════════════════════
 console.log(`\n${SEP}`);
 const allPass = pass1 && pass2 && pass3;
+assert.equal(allPass, true, 'At least one DMA scenario failed.');
 console.log(allPass
     ? '  Tất cả 3 kịch bản DMA đều PASS'
     : '  Có kịch bản FAIL — kiểm tra log bên trên');

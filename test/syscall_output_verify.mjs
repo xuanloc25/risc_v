@@ -6,7 +6,7 @@ const source = `.data
 msg:
     .asciiz "Hello from syscall!\\n"
 
-.text
+.text 0x00400000
 .globl _start
 _start:
     la a0, msg
@@ -27,6 +27,8 @@ let stdout = '';
 let exitCode = null;
 
 try {
+    // Suppress simulator noise so this test only reports assertion failures and
+    // its final PASS line. The syscall callbacks are the observable contract.
     console.log = () => {};
     console.info = () => {};
     console.warn = () => {};

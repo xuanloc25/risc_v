@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { MMU } from '../src/js/mmu.js';
 import { TL_A_Opcode, TL_D_Opcode } from '../src/js/tilelink.js';
 
+// Fast unit coverage for the MMU in isolation. The larger TileLink tests cover
+// cache/bus integration; these cases pin down translation and port wiring.
+
 function testIdentityFallback() {
     const mmu = new MMU(null, null, {
         cacheabilityPredicate: (addr) => addr < 0x80000000
@@ -75,6 +78,8 @@ function testPermissionFaults() {
 }
 
 function testRequestAndResponsePath() {
+    // The fake ports keep the test deterministic: MMU request translation and
+    // response address restoration can be verified without ticking a full bus.
     const captured = {
         lowerReq: null,
         upperResp: null

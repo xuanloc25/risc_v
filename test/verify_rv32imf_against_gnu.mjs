@@ -12,7 +12,10 @@ const isWindows = process.platform === 'win32';
 const GNU_AS = 'riscv64-unknown-elf-as';
 const GNU_OBJCOPY = 'riscv64-unknown-elf-objcopy';
 const GNU_OBJDUMP = 'riscv64-unknown-elf-objdump';
-const INCLUDE_LOCAL_CORPUS = process.env.INCLUDE_LOCAL_CORPUS === '1';
+// The small local corpus is cheap compared with riscv-tests and catches
+// assembler syntax paths that objdump artifacts may skip. Set
+// INCLUDE_LOCAL_CORPUS=0 only when debugging the riscv-tests pass alone.
+const INCLUDE_LOCAL_CORPUS = process.env.INCLUDE_LOCAL_CORPUS !== '0';
 
 function shQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;

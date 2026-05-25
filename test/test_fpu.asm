@@ -5,7 +5,7 @@ val1: .float 1.5
 val2: .float 2.0
 val3: .float 3.5
 
-.text
+.text 0x00400000
 _start:
     # Load values into floating point registers
     la x10, val1
