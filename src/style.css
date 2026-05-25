@@ -114,19 +114,6 @@ html {
     align-items: center;
 }
 
-.cache-toggle-btn {
-    border-color: #ccc;
-    color: #2d3436;
-    background: #fff;
-    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.cache-toggle-btn.active {
-    border-color: #00b894;
-    color: #00b894;
-    background: #e8fff5;
-}
-
 .separator {
     width: 1px;
     height: 32px;

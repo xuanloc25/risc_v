@@ -48,8 +48,6 @@ const resetButton = document.getElementById('resetButton');
 const speedSlider = document.getElementById('speedSlider');
 const speedValueLabel = document.getElementById('speedValue');
 const clockRateDisplay = document.getElementById('clockRateDisplay');
-const cacheToggleButton = document.getElementById('cacheToggleButton');
-const cacheToggleLabel = document.getElementById('cacheToggleLabel');
 const l1iCacheTableBody = document.getElementById('l1iCacheTableBody');
 const l1dCacheTableBody = document.getElementById('l1dCacheTableBody');
 const l2CacheTableBody = document.getElementById('l2CacheTableBody');
@@ -885,19 +883,11 @@ function updateUIGlobally() {
 
     renderDataSegmentTable();
     renderInstructionView();
-    updateCacheToggleUI();
     renderCacheView();
 
     setTimeout(() => {
         document.querySelectorAll('tr.highlight').forEach(row => row.classList.remove('highlight'));
     }, 500);
-}
-
-function updateCacheToggleUI() {
-    if (!cacheToggleButton || !cacheToggleLabel) return;
-    const on = simulator.useCache;
-    cacheToggleLabel.textContent = on ? 'Cache: ON' : 'Cache: OFF';
-    cacheToggleButton.classList.toggle('active', on);
 }
 
 function renderCacheView() {
@@ -915,7 +905,7 @@ function renderCacheView() {
         tableBody.innerHTML = '';
 
         if (!simulator.useCache) {
-            tableBody.innerHTML = '<tr><td colspan="7">Cache disabled. Toggle cache ON to inspect lines.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="7">Cache disabled.</td></tr>';
             if (statsNode) statsNode.textContent = `${label} disabled`;
             return;
         }
@@ -976,15 +966,6 @@ if (cacheTabL2) cacheTabL2.addEventListener('click', () => setCacheView('l2'));
 setCacheView(currentCacheView);
 
 window.updateUIGlobally = updateUIGlobally;
-
-function toggleCacheAndReset() {
-    if (runState.isRunning) finishRun();
-    simulator.setCacheEnabled(!simulator.useCache);
-    updateCacheToggleUI();
-    console.log(`[UI] Cache toggled -> ${simulator.useCache ? 'ON' : 'OFF'}`);
-    setupUARTCallbacks();
-    setupSyscallCallbacks();
-}
 
 // --- SETUP UART CALLBACKS ---
 function setupUARTCallbacks() {
@@ -1091,11 +1072,6 @@ function handleAssemble() {
             updateUIGlobally();
         }
     }, 10);
-}
-
-// Gán sự kiện toggle cache
-if (cacheToggleButton) {
-    cacheToggleButton.addEventListener('click', toggleCacheAndReset);
 }
 
 function collectBreakpointAddresses() {

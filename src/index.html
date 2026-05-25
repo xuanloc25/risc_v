@@ -99,11 +99,6 @@
                         IPS: <strong id="clockRateDisplay" style="color: #0984e3;">0 Hz</strong>
                     </div>
 
-                    <button class="mdc-button mdc-button--outlined cache-toggle-btn" id="cacheToggleButton"
-                        style="margin-left: 10px;">
-                        <i class="material-icons mdc-button__icon" aria-hidden="true">cached</i>
-                        <span class="mdc-button__label" id="cacheToggleLabel">Cache: ON</span>
-                    </button>
                 </div>
             </div>
 
@@ -499,7 +494,7 @@
                                     <tr>
                                         <td>Cache</td>
                                         <td>Xem L1I, L1D, L2 cache: set, way, valid, dirty, tag, hit/miss.</td>
-                                        <td>Dùng nút Cache: ON/OFF để so sánh hành vi bộ nhớ.</td>
+                                        <td>Dùng Cache view và Systems Log Console để quan sát hành vi bộ nhớ.</td>
                                     </tr>
                                     <tr>
                                         <td>Memory</td>
@@ -567,10 +562,6 @@
                                     <tr>
                                         <td>IPS</td>
                                         <td>Ước lượng số instruction/chu kỳ đang chạy mỗi giây.</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Cache: ON/OFF</td>
-                                        <td>Bật/tắt cache rồi quan sát khác biệt trong Cache view và log.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1222,7 +1213,7 @@ _start:
                                 <li>MMIO như UART/LED/Keyboard/Mouse đi qua TileLink-UL và thường không cache.</li>
                                 <li>Cache view có 3 tab: L1I cho instruction fetch, L1D cho data access, L2 shared
                                     cache.</li>
-                                <li>Khi Cache ON, bảng cache hiển thị set/way/tag/valid/dirty và thống kê
+                                <li>Bảng cache hiển thị set/way/tag/valid/dirty và thống kê
                                     read/write/hit/miss.</li>
                                 <li>MMU hiện có page table/TLB nhỏ ở mức simulator; log MMU giúp thấy translate,
                                     hit/miss và permission fault.</li>
