@@ -20,8 +20,9 @@ example_115200:
     sw t0, 16(t5)        # UART_BAUD
     # → Actual baud: 48M/(16×26) = 115,384 baud (error 0.16%)
     
+    # Direct jal in this assembler uses the canonical "jal rd, label" form.
     la t6, msg_115200
-    jal print_string
+    jal ra, print_string
 
 # ========================================
 # Example 2: 9600 baud (chuẩn low-speed)
@@ -33,7 +34,7 @@ example_9600:
     # → Actual baud: 48M/(16×312) = 9,615 baud (error 0.16%)
     
     la t6, msg_9600
-    jal print_string
+    jal ra, print_string
 
 # ========================================
 # Example 3: 3 Mbaud (maximum với divisor=1)
@@ -45,7 +46,7 @@ example_3mbaud:
     # → Actual baud: 48M/(16×1) = 3,000,000 baud
     
     la t6, msg_3mbaud
-    jal print_string
+    jal ra, print_string
     
     # Exit
     li a7, 93

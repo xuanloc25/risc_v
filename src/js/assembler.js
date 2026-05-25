@@ -786,13 +786,14 @@ export const assembler = {
                 });
 
                 // Chỉ thêm ADDI nếu phần offset thấp khác 0
-                if (lo12 !== 0 || hi20 === 0) {
-                    expandedInstructions.push({
-                        mnemonic: 'addi',
-                        operands: [rdLa, rdLa, lo12.toString()],
-                        address: address + 4
-                    });
-                }
+                // Pass 1 reserves 8 bytes for la, so pass 2 must always emit
+                // both AUIPC and ADDI. Omitting ADDI when lo12 is 0 leaves a
+                // 4-byte hole that the CPU later fetches as an unknown opcode.
+                expandedInstructions.push({
+                    mnemonic: 'addi',
+                    operands: [rdLa, rdLa, lo12.toString()],
+                    address: address + 4
+                });
                 break;
             case 'call':
                 const targetAddressCall = this._parseImmediate(operands[0], 32, false, false, address);

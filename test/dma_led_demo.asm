@@ -30,7 +30,7 @@ pixel_row:
     .word 0x0000FF00, 0x0000FF00, 0x0000FF00, 0x0000FF00
     # 32 words × 4 bytes = 128 bytes = hàng đầu tiên (row 0) của LED 32×32
 
-    .text
+    .text 0x00400000
     .globl _start
 _start:
     # --- Địa chỉ thiết bị ---

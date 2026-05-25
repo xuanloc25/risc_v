@@ -1,39 +1,38 @@
-    # L1: 16 set x 4 way, L2: 64 set x 4 way
-    # Địa chỉ A = 0x0000, cùng set với các địa chỉ cách nhau 0x100 (L1: 16 set, block size 16)
-    # Đảm bảo evict khỏi L1 nhưng không khỏi L2
+# Cache smoke program.
+#
+# Goal: touch several addresses that map to the same L1 set, then read the
+# first address again. The simulator logs should show L1 pressure while the
+# final value proves the memory path still returns the original word.
 
-    li   x1, 0x0000      # addr0 = 0x0000 (set 0)
-    li   x2, 0x1000      # addr1 = 0x1000 (set 0)
-    li   x3, 0x2000      # addr2 = 0x2000 (set 0)
-    li   x4, 0x3000      # addr3 = 0x3000 (set 0)
-    li   x5, 0x4000      # addr4 = 0x4000 (set 0, sẽ evict addr0 khỏi L1 nếu 4-way)
+.text
+.globl _start
+_start:
+    li   x1, 0x0000      # addr0: set 0
+    li   x2, 0x1000      # same L1 set, different tag
+    li   x3, 0x2000      # same L1 set, different tag
+    li   x4, 0x3000      # same L1 set, different tag
+    li   x5, 0x4000      # same L1 set, can evict addr0 in a 4-way L1
 
     li   t0, 0x11223344
 
-    # Bước 1: Nạp block 0x0000 vào L1/L2
-    sw   t0, 0(x1)       # miss, allocate vào L1/L2
+    # Fill addr0 first so the later read has a known expected value.
+    sw   t0, 0(x1)
 
-    # Bước 2: Đầy L1 set 0 bằng 4 block khác
-    sw   t0, 0(x2)       # miss, allocate
-    sw   t0, 0(x3)       # miss, allocate
-    sw   t0, 0(x4)       # miss, allocate
+    # Fill more blocks from the same L1 set to exercise replacement behavior.
+    sw   t0, 0(x2)
+    sw   t0, 0(x3)
+    sw   t0, 0(x4)
+    sw   t0, 0(x5)
 
-    # Bước 3: Truy cập lại addr0, L1 đã bị evict, L2 vẫn còn (vì L2 64 set, 4 way)
-    lw   t1, 0(x1)       # L1 miss, L2 hit
-
+    # Read addr0 after cache pressure. The value is returned as the exit code
+    # for quick manual inspection, while asm_programs_verify.mjs checks that
+    # this sample continues to assemble.
+    lw   t1, 0(x1)
     addi a0, t1, 0
     li   a7, 93
     ecall
 
-
-
-           events: [
-            { cycle: 1,  message: "[L1] MISS(fill) addr=0x1000..." },
-            { cycle: 6,  message: "[L2] MISS(fill) addr=0x1000..." }, 
-            { cycle: 16,message: "[RAM] REQUEST addr=0x1000" },
-            { cycle: 36, message: "[RAM] RETURN addr=0x1000 (+20cy)" },
-            { cycle: 37, message: "[L2] FORWARD(fill) addr=0x1000..." }
-            { cycle: 38, message: "[L1] REFILL(fill) addr=0x1000..." }
-            { cycle: 39, message: "[L1] FORWARD(fill) addr=0x1000..." }
-            { cycle: 40, message: "CPU EXECUTED "  }
-          ],
+# Expected log shape when run in the simulator:
+# - first store to addr0 misses and allocates a block
+# - stores to x2..x5 create more misses in the same L1 set
+# - the final load of addr0 should still return 0x11223344

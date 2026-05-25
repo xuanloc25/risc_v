@@ -460,7 +460,7 @@ export class CPU {
                 }
                 return { nextPc: this.pc };
             case 'LUI': this.registers[decoded.rd] = decoded.imm << 12; break;
-            case 'AUIPC': result_int = (pc + imm) | 0; break;
+            case 'AUIPC': result_int = (pc + (imm << 12)) | 0; break;
             case 'JAL': result_int = pc + 4; nextPc = (pc + imm) | 0; break;
             case 'JALR': result_int = pc + 4; nextPc = (val1_int + imm) & ~1; break;
             case 'BEQ': if (val1_int === val2_int) branchTaken = true; break;

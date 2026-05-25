@@ -38,6 +38,9 @@ function assertHasModules(classifier, line, expectedModules) {
 const win = createWindow();
 const classifier = win.__systemLogClassifier;
 
+// Representative simulator logs often mention several components in one line.
+// The classifier should keep every useful module tag so UI filters can show the
+// same entry under memory, cache, and TileLink views.
 assertHasModules(
     classifier,
     '[Main Memory] Main Memory -> TileLink-UH RESPONSE_BEAT to=L2 Cache addr=0x400000 data=536871059 1/4',
@@ -68,6 +71,8 @@ assertHasModules(classifier, 'System reset.', ['system']);
 win.console.log('[Main Memory] Main Memory -> TileLink-UH RESPONSE_BEAT to=L2 Cache addr=0x400000 data=536871059 1/4');
 const [entry] = win.__systemLogStore.snapshot();
 
+// The primary module is used for default coloring, while modules preserves the
+// full set used by checkbox filters.
 assert.equal(entry.module, 'memory');
 assert.deepEqual(Array.from(entry.modules), ['memory', 'cache', 'tilelink']);
 
