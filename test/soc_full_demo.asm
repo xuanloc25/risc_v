@@ -16,7 +16,7 @@ _start:
     lw    t1, 0(t0)          # first read: expected cache miss/fill
     lw    t2, 0(t0)          # second read: expected cache hit
     beq   t1, t2, mem_ok
-    li    a0, 1              # fail if RAM/cache returned inconsistent data
+    li    a0, 1              # fail if RAM/cache returned inconsistent data 
     j     exit
 
 mem_ok:
