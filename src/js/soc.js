@@ -349,6 +349,10 @@ export const simulator = {
             `progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`
         );
 
+        // Tick order: upstream → downstream (request propagation)
+        // CPU/DMA issue requests → L1 caches → L2 cache → TileLink buses → Memory/peripherals
+        // This ensures each hop costs exactly 1 cycle, matching real hardware behaviour.
+
         try {
             if (cpuActive) {
                 this.cpu.tick();
@@ -362,12 +366,12 @@ export const simulator = {
             this.dma.tick();
         }
 
+        this.iCache.tick();
+        this.dCache.tick();
+        this.l2Cache.tick();
         this.tilelink_UH.tick();
         this.tilelink_UL.tick();
         this.mem.tick(this.tilelink_UH);
-        this.l2Cache.tick();
-        this.iCache.tick();
-        this.dCache.tick();
 
         if (this.uart) {
             this.uart.tick();
