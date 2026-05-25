@@ -3,7 +3,10 @@
     addi x2, x2, 0x678       # lower 12 bits -> final word 0x12345678
     sw   x2, 0(x1)           # store through bus
     lw   x3, 0(x1)           # load back through bus
+    beq  x3, x2, end
+    add x4, x0, x1 
 
+end:
     addi x10, x3, 0          # a0 = loaded value (for visibility)
     addi x17, x0, 93         # a7 = exit syscall
     ecall                    # exit(loaded_value)
