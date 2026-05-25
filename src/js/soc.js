@@ -222,7 +222,11 @@ export const simulator = {
         this.dCache.setEnabled(this.useCache);
         this.l2Cache.setEnabled(this.useCache);
 
-
+        this.uart = uart;
+        this.ledMatrix = ledMatrix;
+        this.keyboard = keyboard;
+        this.mouse = mouse;
+        this.cycleCount = 0;
 
         const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'UART', {
             read: (addr) => uart.readRegister(addr),
@@ -268,12 +272,6 @@ export const simulator = {
             ulToUhBridge: attachPort(this.tilelink_UL, Port.lower('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr))),
             ulToDma: attachPort(this.tilelink_UL, Port.upper('dma', this.dma))
         };
-
-        this.uart = uart;
-        this.ledMatrix = ledMatrix;
-        this.keyboard = keyboard;
-        this.mouse = mouse;
-        this.cycleCount = 0;
 
         // Khôi phục trạng thái ban đầu cho các module và thiết bị ngoại vi
         if (this.ledMatrix) this.ledMatrix.reset();
