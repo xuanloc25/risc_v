@@ -60,6 +60,21 @@ const cacheTabL2 = document.getElementById('cache-tab-l2');
 const cachePanelL1i = document.getElementById('cache-panel-l1i');
 const cachePanelL1d = document.getElementById('cache-panel-l1d');
 const cachePanelL2 = document.getElementById('cache-panel-l2');
+const mmuOverviewStats = document.getElementById('mmuOverviewStats');
+const mmuConfigTableBody = document.getElementById('mmuConfigTableBody');
+const mmuAddressMapTableBody = document.getElementById('mmuAddressMapTableBody');
+const mmuPageTableBody = document.getElementById('mmuPageTableBody');
+const mmuTlbTableBody = document.getElementById('mmuTlbTableBody');
+const mmuHistoryTableBody = document.getElementById('mmuHistoryTableBody');
+const mmuTabOverview = document.getElementById('mmu-tab-overview');
+const mmuTabPageTable = document.getElementById('mmu-tab-page-table');
+const mmuTabTlb = document.getElementById('mmu-tab-tlb');
+const mmuTabHistory = document.getElementById('mmu-tab-history');
+const mmuPanelOverview = document.getElementById('mmu-panel-overview');
+const mmuPanelPageTable = document.getElementById('mmu-panel-page-table');
+const mmuPanelTlb = document.getElementById('mmu-panel-tlb');
+const mmuPanelHistory = document.getElementById('mmu-panel-history');
+const mmuRenderedValues = new Map();
 // Data Segment Controls
 const dataSegmentAddressInput = document.getElementById('dataSegmentAddressInput');
 const goToDataSegmentAddressButton = document.getElementById('goToDataSegmentAddress');
@@ -75,6 +90,7 @@ const bytesPerRow = 32;
 const wordsPerRow = 8;
 let currentRegisterView = 'integer';
 let currentCacheView = 'l1i';
+let currentMmuView = 'overview';
 let activeBreakpoints = new Set();
 const runState = {
     isRunning: false,
@@ -884,10 +900,223 @@ function updateUIGlobally() {
     renderDataSegmentTable();
     renderInstructionView();
     renderCacheView();
+    renderMMUView();
 
     setTimeout(() => {
         document.querySelectorAll('tr.highlight').forEach(row => row.classList.remove('highlight'));
     }, 500);
+}
+
+function renderMMUView() {
+    if (!mmuOverviewStats || !mmuConfigTableBody || !mmuPageTableBody || !mmuTlbTableBody || !mmuHistoryTableBody) return;
+
+    const mmu = simulator.mmu;
+    const formatHex = (value, pad = 8) => {
+        if (value === null || value === undefined) return '-';
+        return '0x' + (value >>> 0).toString(16).padStart(pad, '0');
+    };
+    const formatId = (value) => value === null || value === undefined ? '-' : '0x' + (value >>> 0).toString(16);
+    const formatBool = (value) => value
+        ? '<span class="mmu-status mmu-status-on">Yes</span>'
+        : '<span class="mmu-status mmu-status-off">No</span>';
+    const endpointName = (port, fallback) => port?.lower?.name ?? port?.name ?? port?.constructor?.name ?? fallback;
+    const permissionText = (entry) => `${entry.read ? 'R' : '-'}${entry.write ? 'W' : '-'}${entry.execute ? 'X' : '-'}`;
+    const insertEmptyRow = (body, colspan, text) => {
+        body.innerHTML = '';
+        const row = body.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = colspan;
+        cell.textContent = text;
+    };
+    const markMmuChanged = (element, key, value) => {
+        if (!element || !key) return;
+        const nextValue = String(value);
+        const previousValue = mmuRenderedValues.get(key);
+        if (previousValue !== undefined && previousValue !== nextValue) {
+            element.classList.remove('mmu-value-changed');
+            void element.offsetWidth;
+            element.classList.add('mmu-value-changed');
+        }
+        mmuRenderedValues.set(key, nextValue);
+    };
+    const insertTrackedCell = (row, key, value, { html = false } = {}) => {
+        const cell = row.insertCell();
+        if (html) {
+            cell.innerHTML = value;
+        } else {
+            cell.textContent = value;
+        }
+        markMmuChanged(cell, key, value);
+        return cell;
+    };
+
+    if (!mmu) {
+        mmuRenderedValues.clear();
+        insertEmptyRow(mmuConfigTableBody, 2, 'MMU not initialized.');
+        insertEmptyRow(mmuPageTableBody, 8, 'MMU not initialized.');
+        insertEmptyRow(mmuTlbTableBody, 7, 'MMU not initialized.');
+        insertEmptyRow(mmuHistoryTableBody, 11, 'MMU not initialized.');
+        mmuOverviewStats.textContent = 'MMU not initialized';
+        return;
+    }
+
+    const pageSize = mmu.pageSize ?? 4096;
+    const offsetBits = Math.log2(pageSize);
+    const vpnBits = 32 - offsetBits;
+    const pageTableEntries = Array.from(mmu.pageTable?.entries?.() ?? []).sort(([a], [b]) => a - b);
+    const historyEntries = Array.isArray(mmu.translationHistory) ? mmu.translationHistory : [];
+    const s = mmu.stats ?? {};
+    const translations = s.translations ?? 0;
+    const tlbHits = s.tlbHits ?? 0;
+    const tlbMisses = s.tlbMisses ?? 0;
+    const tlbRefills = s.tlbRefills ?? 0;
+    const tlbEvictions = s.tlbEvictions ?? 0;
+    const pageTableHits = s.pageTableHits ?? 0;
+    const identityFallbacks = s.identityFallbacks ?? 0;
+    const permissionFaults = s.permissionFaults ?? 0;
+    const hitRate = translations > 0 ? `${((tlbHits / translations) * 100).toFixed(1)}%` : '0.0%';
+
+    const overviewMetrics = [
+        ['Translations', translations],
+        ['TLB Hits', tlbHits],
+        ['TLB Misses', tlbMisses],
+        ['TLB Hit Rate', hitRate],
+        ['TLB Refills', tlbRefills],
+        ['TLB Evictions', tlbEvictions],
+        ['Page Table Hits', pageTableHits],
+        ['Identity Fallbacks', identityFallbacks],
+        ['Permission Faults', permissionFaults]
+    ];
+
+    mmuOverviewStats.innerHTML = `
+        <div class="mmu-metric-row">
+            ${overviewMetrics.map(([label, value]) => `
+                <div class="mmu-metric"><span>${label}</span><strong>${value}</strong></div>
+            `).join('')}
+        </div>
+    `;
+    mmuOverviewStats.querySelectorAll('.mmu-metric strong').forEach((metric, index) => {
+        const [label, value] = overviewMetrics[index];
+        markMmuChanged(metric, `overview:${label}`, value);
+    });
+
+    const configRows = [
+        ['Position', 'CPU -> MMU -> L1I/L1D -> L2 -> TileLink-UH'],
+        ['Page size', `${pageSize} bytes (${formatHex(pageSize, 4)})`],
+        ['Offset bits', `${offsetBits}`],
+        ['VPN / PPN bits', `${vpnBits} / ${vpnBits}`],
+        ['Page table entries', `${pageTableEntries.length}`],
+        ['TLB Capacity', `${mmu.tlbSize} entries`],
+        ['TLB Occupied', `${mmu.tlbBlocks.filter(b => b.valid).length} entries`],
+        ['TLB Policy / Eviction', `Set-Associative (${mmu.tlbSets} sets x ${mmu.tlbWays} ways), LRU eviction`],
+        ['Identity fallback', 'Enabled for unmapped bare-metal addresses'],
+        ['Permission checks', 'Read / Write / Execute per mapped page'],
+        ['Fetch route', endpointName(mmu.instructionLowerPort, 'instruction-cache')],
+        ['Data route', endpointName(mmu.dataLowerPort, 'data-cache')],
+        ['Last reference', `${mmu.referenceCounter ?? 0}`]
+    ];
+
+    mmuConfigTableBody.innerHTML = '';
+    configRows.forEach(([name, value]) => {
+        const row = mmuConfigTableBody.insertRow();
+        row.insertCell().textContent = name;
+        insertTrackedCell(row, `config:${name}`, value);
+    });
+
+    if (mmuAddressMapTableBody) {
+        const addressMap = simulator.addressMap ?? [];
+        if (addressMap.length === 0) {
+            insertEmptyRow(mmuAddressMapTableBody, 4, 'Address map metadata is not available.');
+        } else {
+            mmuAddressMapTableBody.innerHTML = '';
+            addressMap.forEach(region => {
+                const row = mmuAddressMapTableBody.insertRow();
+                const range = region.description
+                    ? region.description
+                    : `${formatHex(region.base)} - ${formatHex((region.base + region.size - 1) >>> 0)}`;
+                const regionKey = `address:${region.name}`;
+                insertTrackedCell(row, `${regionKey}:name`, region.name);
+                insertTrackedCell(row, `${regionKey}:range`, range);
+                insertTrackedCell(row, `${regionKey}:cacheable`, formatBool(region.cacheable), { html: true });
+                insertTrackedCell(row, `${regionKey}:fabric`, region.fabric ?? '-');
+            });
+        }
+    }
+
+    if (pageTableEntries.length === 0) {
+        insertEmptyRow(mmuPageTableBody, 8, 'No mapped pages. Current program will use identity fallback unless pages are mapped in code/tests.');
+    } else {
+        mmuPageTableBody.innerHTML = '';
+        pageTableEntries.forEach(([vpn, entry]) => {
+            const row = mmuPageTableBody.insertRow();
+            const ppn = Math.floor((entry.physicalBase >>> 0) / pageSize);
+            const entryKey = `page-table:${vpn}`;
+            insertTrackedCell(row, `${entryKey}:vpn`, formatId(vpn));
+            insertTrackedCell(row, `${entryKey}:va`, formatHex(entry.virtualBase));
+            insertTrackedCell(row, `${entryKey}:ppn`, formatId(ppn));
+            insertTrackedCell(row, `${entryKey}:pa`, formatHex(entry.physicalBase));
+            insertTrackedCell(row, `${entryKey}:perms`, permissionText(entry));
+            insertTrackedCell(row, `${entryKey}:cacheable`, formatBool(entry.cacheable), { html: true });
+            insertTrackedCell(row, `${entryKey}:in-tlb`, formatBool(mmu.tlb?.has?.(vpn)), { html: true });
+            insertTrackedCell(row, `${entryKey}:last-ref`, entry.lastReference ?? 0);
+        });
+    }
+
+    if (!mmu.tlbBlocks || mmu.tlbBlocks.length === 0) {
+        insertEmptyRow(mmuTlbTableBody, 10, 'TLB is empty. A mapped page-table hit will refill it.');
+    } else {
+        mmuTlbTableBody.innerHTML = '';
+        mmu.tlbBlocks.forEach((block) => {
+            const row = mmuTlbTableBody.insertRow();
+            const isLastTranslated = mmu.lastTranslation &&
+                                     mmu.lastTranslation.mode === 'mapped' &&
+                                     mmu.lastTranslation.vpn === block.vpn &&
+                                     block.valid;
+            if (isLastTranslated) {
+                row.classList.add('tlb-highlight');
+            }
+
+            const blockKey = `tlb:${block.set}:${block.way}`;
+            insertTrackedCell(row, `${blockKey}:set`, block.set);
+            insertTrackedCell(row, `${blockKey}:way`, block.way);
+            insertTrackedCell(row, `${blockKey}:valid`, formatBool(block.valid), { html: true });
+            insertTrackedCell(row, `${blockKey}:vpn`, block.valid ? formatId(block.vpn) : '-');
+            insertTrackedCell(row, `${blockKey}:va`, block.valid ? formatHex(block.virtualBase) : '-');
+            const ppn = block.valid ? Math.floor((block.physicalBase >>> 0) / pageSize) : 0;
+            insertTrackedCell(row, `${blockKey}:ppn`, block.valid ? formatId(ppn) : '-');
+            insertTrackedCell(row, `${blockKey}:pa`, block.valid ? formatHex(block.physicalBase) : '-');
+            insertTrackedCell(row, `${blockKey}:perms`, block.valid ? permissionText(block) : '-');
+            insertTrackedCell(row, `${blockKey}:cacheable`, block.valid ? formatBool(block.cacheable) : '-', { html: block.valid });
+            insertTrackedCell(row, `${blockKey}:last-ref`, block.valid ? (block.lastReference ?? 0) : '-');
+        });
+    }
+
+    if (historyEntries.length === 0) {
+        insertEmptyRow(mmuHistoryTableBody, 11, 'No translations yet. Assemble and step/run a program to populate this table.');
+    } else {
+        mmuHistoryTableBody.innerHTML = '';
+        historyEntries.forEach(record => {
+            const row = mmuHistoryTableBody.insertRow();
+            const historyKey = `history:${record.lastReference ?? historyEntries.indexOf(record)}`;
+            insertTrackedCell(row, `${historyKey}:ref`, record.lastReference ?? '-');
+            insertTrackedCell(row, `${historyKey}:source`, record.source ?? '-');
+            insertTrackedCell(row, `${historyKey}:access`, record.accessType ?? '-');
+            insertTrackedCell(row, `${historyKey}:mode`, record.mode ?? '-');
+            insertTrackedCell(row, `${historyKey}:va`, formatHex(record.virtualAddress));
+            insertTrackedCell(row, `${historyKey}:vpn`, formatId(record.vpn));
+            insertTrackedCell(row, `${historyKey}:offset`, formatHex(record.offset, 3));
+            insertTrackedCell(row, `${historyKey}:pa`, formatHex(record.physicalAddress));
+            insertTrackedCell(row, `${historyKey}:ppn`, formatId(record.ppn));
+            insertTrackedCell(row, `${historyKey}:cacheable`, formatBool(record.cacheable), { html: true });
+            const resultText = record.result === 'ok' ? 'OK' : (record.result ?? 'Fault');
+            insertTrackedCell(
+                row,
+                `${historyKey}:result`,
+                `<span class="mmu-status ${record.result === 'ok' ? 'mmu-status-on' : 'mmu-status-fault'}">${resultText}</span>`,
+                { html: true }
+            );
+        });
+    }
 }
 
 function renderCacheView() {
@@ -964,6 +1193,29 @@ if (cacheTabL1i) cacheTabL1i.addEventListener('click', () => setCacheView('l1i')
 if (cacheTabL1d) cacheTabL1d.addEventListener('click', () => setCacheView('l1d'));
 if (cacheTabL2) cacheTabL2.addEventListener('click', () => setCacheView('l2'));
 setCacheView(currentCacheView);
+
+function setMMUView(view) {
+    currentMmuView = view;
+
+    const tabs = [
+        { node: mmuTabOverview, active: view === 'overview' },
+        { node: mmuTabPageTable, active: view === 'page-table' },
+        { node: mmuTabTlb, active: view === 'tlb' },
+        { node: mmuTabHistory, active: view === 'history' }
+    ];
+    tabs.forEach(({ node, active }) => node?.classList.toggle('active', active));
+
+    mmuPanelOverview?.classList.toggle('active-mmu-panel', view === 'overview');
+    mmuPanelPageTable?.classList.toggle('active-mmu-panel', view === 'page-table');
+    mmuPanelTlb?.classList.toggle('active-mmu-panel', view === 'tlb');
+    mmuPanelHistory?.classList.toggle('active-mmu-panel', view === 'history');
+}
+
+if (mmuTabOverview) mmuTabOverview.addEventListener('click', () => setMMUView('overview'));
+if (mmuTabPageTable) mmuTabPageTable.addEventListener('click', () => setMMUView('page-table'));
+if (mmuTabTlb) mmuTabTlb.addEventListener('click', () => setMMUView('tlb'));
+if (mmuTabHistory) mmuTabHistory.addEventListener('click', () => setMMUView('history'));
+setMMUView(currentMmuView);
 
 window.updateUIGlobally = updateUIGlobally;
 
@@ -1620,6 +1872,49 @@ document.addEventListener('DOMContentLoaded', () => {
             if (simulator.uart) {
                 simulator.uart.clearTxBuffer();
             }
+        });
+    }
+
+    // MMU Settings initialization and apply handler
+    const mmuPageSizeSelect = document.getElementById('mmuPageSizeSelect');
+    const mmuTlbSizeSelect = document.getElementById('mmuTlbSizeSelect');
+    const mmuTlbWaysSelect = document.getElementById('mmuTlbWaysSelect');
+    const applyMmuSettingsBtn = document.getElementById('applyMmuSettingsBtn');
+    const setSelectValue = (select, storedValue, fallbackValue) => {
+        if (!select) return;
+        const optionValues = Array.from(select.options).map(option => option.value);
+        select.value = optionValues.includes(storedValue) ? storedValue : fallbackValue;
+    };
+
+    setSelectValue(mmuPageSizeSelect, localStorage.getItem('mmu_page_size') ?? '4096', '4096');
+    setSelectValue(mmuTlbSizeSelect, localStorage.getItem('mmu_tlb_size') ?? '8', '8');
+    setSelectValue(mmuTlbWaysSelect, localStorage.getItem('mmu_tlb_ways') ?? '4', '4');
+
+    if (applyMmuSettingsBtn && mmuPageSizeSelect && mmuTlbSizeSelect && mmuTlbWaysSelect) {
+        applyMmuSettingsBtn.addEventListener('click', () => {
+            const pageSize = parseInt(mmuPageSizeSelect.value, 10);
+            const tlbSize = parseInt(mmuTlbSizeSelect.value, 10);
+            const tlbWays = mmuTlbWaysSelect.value;
+
+            // Validate settings before applying
+            const tlbWaysVal = tlbWays === 'fully' ? tlbSize : parseInt(tlbWays, 10);
+            if (tlbSize % tlbWaysVal !== 0) {
+                alert(`Cấu hình TLB không hợp lệ: Kích thước TLB (${tlbSize}) phải chia hết cho số Way (${tlbWaysVal}).`);
+                return;
+            }
+            if (tlbWaysVal > tlbSize) {
+                alert(`Cấu hình TLB không hợp lệ: Số Way (${tlbWaysVal}) không được vượt quá kích thước TLB (${tlbSize}).`);
+                return;
+            }
+
+            localStorage.setItem('mmu_page_size', pageSize.toString());
+            localStorage.setItem('mmu_tlb_size', tlbSize.toString());
+            localStorage.setItem('mmu_tlb_ways', tlbWays);
+
+            console.log(`[MMU Settings] Applied configuration: Page Size = ${pageSize}B, TLB Size = ${tlbSize}, Associativity = ${tlbWays}`);
+
+            // Re-assemble and reset simulator
+            handleAssemble();
         });
     }
 });

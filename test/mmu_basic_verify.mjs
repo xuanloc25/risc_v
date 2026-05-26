@@ -33,23 +33,53 @@ function testMappedTranslationWithTlbRefill() {
         cacheable: true
     });
 
-    // Clear the TLB but keep the page table so the first access becomes
-    // a software page-table hit and refills the tiny TLB.
-    mmu.reset();
+    assert.equal(mmu.tlbBlocks.filter(block => block.valid).length, 0);
+    assert.equal(mmu.stats.tlbRefills, 0);
 
     const first = mmu.translateAddress(0x4123, 'read');
     assert.equal(first.mode, 'mapped');
+    assert.equal(first.source, 'page-table');
     assert.equal(first.physicalAddress >>> 0, 0x8123);
     assert.equal(mmu.stats.pageTableHits, 1);
     assert.equal(mmu.stats.tlbHits, 0);
+    assert.equal(mmu.stats.tlbMisses, 1);
+    assert.equal(mmu.stats.tlbRefills, 1);
 
     const second = mmu.translateAddress(0x4128, 'read');
     assert.equal(second.mode, 'mapped');
+    assert.equal(second.source, 'tlb');
     assert.equal(second.physicalAddress >>> 0, 0x8128);
     assert.equal(mmu.stats.pageTableHits, 1);
     assert.equal(mmu.stats.tlbHits, 1);
 
     console.log('[MMU] mapped translation + TLB refill test passed');
+}
+
+function testSetAssociativeLruEviction() {
+    const mmu = new MMU(null, null, { tlbSize: 2, tlbWays: 2 });
+
+    mmu.mapPage(0x0000, 0x1000);
+    mmu.mapPage(0x2000, 0x3000);
+    mmu.mapPage(0x4000, 0x5000);
+
+    assert.equal(mmu.tlbBlocks.filter(block => block.valid).length, 0);
+    assert.equal(mmu.stats.tlbEvictions, 0);
+
+    mmu.translateAddress(0x0000, 'read');
+    mmu.translateAddress(0x2000, 'read');
+    mmu.translateAddress(0x0004, 'read');
+    mmu.translateAddress(0x4000, 'read');
+
+    const validVpns = mmu.tlbBlocks
+        .filter(block => block.valid)
+        .map(block => block.vpn)
+        .sort((a, b) => a - b);
+
+    assert.deepEqual(validVpns, [0, 4]);
+    assert.equal(mmu.stats.tlbRefills, 3);
+    assert.equal(mmu.stats.tlbEvictions, 1);
+
+    console.log('[MMU] set-associative LRU eviction test passed');
 }
 
 function testPermissionFaults() {
@@ -168,6 +198,7 @@ function testAttachCpuConnectsBothDirections() {
 function main() {
     testIdentityFallback();
     testMappedTranslationWithTlbRefill();
+    testSetAssociativeLruEviction();
     testPermissionFaults();
     testRequestAndResponsePath();
     testAttachCpuConnectsBothDirections();
