@@ -1,4 +1,4 @@
-﻿import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic } from './tilelink.js';
+import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic } from './tilelink.js';
 
 // TileLink-UL CPU implementation
 export class CPU {
@@ -718,6 +718,42 @@ export class CPU {
                     this._emitSyscallError(errorMsg);
                     console.warn(`\n[Syscall] ${errorMsg}`);
                     this.registers[10] = -1;
+                }
+                break;
+            case 100: // MMU Map Page
+                const virtualBase = arg0 >>> 0;
+                const physicalBase = arg1 >>> 0;
+                const flags = arg2 >>> 0;
+                const mmuMap = this.lowerPort?.lower;
+                if (mmuMap && typeof mmuMap.mapPage === 'function') {
+                    mmuMap.mapPage(virtualBase, physicalBase, {
+                        read: (flags & 1) !== 0,
+                        write: (flags & 2) !== 0,
+                        execute: (flags & 4) !== 0,
+                        cacheable: (flags & 8) !== 0
+                    });
+                    console.log(`[Syscall] MMU Map Page: VA=0x${virtualBase.toString(16)} -> PA=0x${physicalBase.toString(16)} flags=0x${flags.toString(16)}`);
+                } else {
+                    console.warn('[Syscall] MMU Map Page called, but MMU is not connected to CPU or does not support mapPage');
+                }
+                break;
+            case 101: // MMU Unmap Page
+                const unmapVA = arg0 >>> 0;
+                const mmuUnmap = this.lowerPort?.lower;
+                if (mmuUnmap && typeof mmuUnmap.unmapPage === 'function') {
+                    mmuUnmap.unmapPage(unmapVA);
+                    console.log(`[Syscall] MMU Unmap Page: VA=0x${unmapVA.toString(16)}`);
+                } else {
+                    console.warn('[Syscall] MMU Unmap Page called, but MMU is not connected to CPU or does not support unmapPage');
+                }
+                break;
+            case 102: // MMU Clear Mappings
+                const mmuClear = this.lowerPort?.lower;
+                if (mmuClear && typeof mmuClear.clearMappings === 'function') {
+                    mmuClear.clearMappings();
+                    console.log(`[Syscall] MMU Clear Mappings`);
+                } else {
+                    console.warn('[Syscall] MMU Clear Mappings called, but MMU is not connected to CPU or does not support clearMappings');
                 }
                 break;
             case 0:

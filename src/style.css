@@ -562,6 +562,37 @@ li.CodeMirror-hint-active,
     transition: background-color 0.5s ease;
 }
 
+.tlb-highlight td {
+    background-color: #e6ffed !important; /* Soft green highlight for active TLB entry */
+    color: #0f5132 !important;
+    font-weight: 500;
+}
+
+.mmu-value-changed {
+    animation: mmuValuePulse 0.85s ease-out;
+}
+
+.mmu-metric strong.mmu-value-changed {
+    border-radius: 6px;
+    padding: 2px 6px;
+    margin: -2px -6px;
+}
+
+@keyframes mmuValuePulse {
+    0% {
+        background-color: #fff2a8;
+        box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.35), 0 0 0 0 rgba(245, 158, 11, 0.28);
+    }
+    45% {
+        background-color: #dff9fb;
+        box-shadow: inset 0 0 0 1px rgba(9, 132, 227, 0.2), 0 0 0 5px rgba(9, 132, 227, 0.08);
+    }
+    100% {
+        background-color: transparent;
+        box-shadow: inset 0 0 0 0 rgba(9, 132, 227, 0), 0 0 0 0 rgba(9, 132, 227, 0);
+    }
+}
+
 /* --- I/O STYLES (LED Matrix) --- */
 .io-container {
     display: flex;
@@ -1415,4 +1446,189 @@ li.CodeMirror-hint-active,
         max-width: none;
         min-width: 100%;
     }
+}
+
+/* --- MMU LAYOUT & PREMIUM STYLES --- */
+.mmu-layout {
+    display: flex;
+    height: 100%;
+}
+
+.mmu-detail-layout {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    width: 100%;
+}
+
+.mmu-panel {
+    min-width: 0;
+    display: none;
+    overflow: hidden;
+}
+
+.mmu-panel.active-mmu-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.mmu-tabs {
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-white);
+    flex-shrink: 0;
+}
+
+.mmu-panel .table-scroll-container {
+    max-height: calc(100vh - 310px);
+}
+
+.mmu-overview-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    padding: 15px;
+    flex: 1;
+    overflow: auto;
+}
+
+.mmu-overview-section {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.mmu-section-title {
+    background-color: #f1f2f6;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #2d3436;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.mmu-compact-table {
+    flex: 1;
+    overflow: auto;
+}
+
+/* Stats metrics styling */
+.mmu-stats {
+    padding: 12px 15px;
+    font-family: 'Consolas', monospace;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.mmu-stats-inline {
+    border-bottom: 1px solid #eef1f4;
+    background: #fbfcfd;
+    font-size: 0.8rem;
+}
+
+.mmu-metric-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.mmu-metric {
+    background: #fff;
+    border: 1px solid #eef1f4;
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 120px;
+    flex: 1;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+
+.mmu-metric span {
+    font-size: 0.72rem;
+    color: #636e72;
+    text-transform: uppercase;
+    font-family: 'Roboto', sans-serif;
+    font-weight: 500;
+}
+
+.mmu-metric strong {
+    font-size: 1.1rem;
+    color: #2d3436;
+    font-family: 'Consolas', monospace;
+}
+
+/* Badge and status */
+.mmu-status {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.mmu-status-on {
+    background-color: #e6ffed;
+    color: #0f5132;
+    border: 1px solid #badbcc;
+}
+
+.mmu-status-off {
+    background-color: #f8d7da;
+    color: #842029;
+    border: 1px solid #f5c2c7;
+}
+
+.mmu-status-fault {
+    background-color: #fff3cd;
+    color: #664d03;
+    border: 1px solid #ffecb5;
+}
+
+/* --- MMU Settings Panel & Inputs --- */
+.mmu-settings-panel select {
+    border: 1px solid #dfe6e9;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 0.85rem;
+    color: #2d3436;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background-color: #fff;
+    cursor: pointer;
+    min-width: 160px;
+}
+
+.mmu-settings-panel select:focus {
+    border-color: var(--sidebar-active-bg);
+    box-shadow: 0 0 0 3px rgba(9, 132, 227, 0.15);
+}
+
+.mmu-settings-panel button {
+    background-color: var(--sidebar-active-bg) !important;
+    color: white !important;
+    font-weight: 600;
+    transition: background-color 0.2s, transform 0.1s;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+}
+
+.mmu-settings-panel button:hover {
+    background-color: #0773c5 !important;
+    transform: translateY(-1px);
+}
+
+.mmu-settings-panel button:active {
+    transform: translateY(0);
 }

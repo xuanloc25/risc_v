@@ -36,6 +36,10 @@
                 <i class="material-icons">memory</i>
                 <span>Processor</span>
             </div>
+            <div class="sidebar-item" data-target="view-mmu" title="MMU">
+                <i class="material-icons">device_hub</i>
+                <span>MMU</span>
+            </div>
             <div class="sidebar-item" data-target="view-cache" title="Cache">
                 <i class="material-icons">cached</i>
                 <span>Cache</span>
@@ -219,7 +223,158 @@
                 </div>
             </div>
 
-            <!-- VIEW 4: CACHE -->
+            <!-- VIEW 4: MMU -->
+            <div id="view-mmu" class="view-section">
+                <div class="mmu-layout">
+                    <div class="mmu-detail-layout">
+                        <div class="register-tabs mmu-tabs">
+                            <div class="tab-item active" id="mmu-tab-overview">Overview</div>
+                            <div class="tab-item" id="mmu-tab-page-table">Page Table</div>
+                            <div class="tab-item" id="mmu-tab-tlb">TLB</div>
+                            <div class="tab-item" id="mmu-tab-history">History</div>
+                        </div>
+
+                        <div class="memory-panel mmu-panel active-mmu-panel" id="mmu-panel-overview">
+                            <div class="panel-header">MMU Overview</div>
+                            <div class="mmu-stats mmu-stats-inline" id="mmuOverviewStats"></div>
+                            <div class="mmu-overview-grid">
+                                <div class="mmu-overview-section">
+                                    <div class="mmu-section-title">MMU Configuration Settings</div>
+                                    <div class="mmu-settings-panel" style="padding: 12px; border-bottom: 1px solid #eef1f4; display: flex; flex-direction: column; gap: 8px; background: #fff;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="mmuPageSizeSelect" style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">Page Size:</label>
+                                            <select id="mmuPageSizeSelect" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
+                                                <option value="1024">1 KB</option>
+                                                <option value="2048">2 KB</option>
+                                                <option value="4096" selected>4 KB</option>
+                                                <option value="8192">8 KB</option>
+                                            </select>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="mmuTlbSizeSelect" style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">TLB Entries:</label>
+                                            <select id="mmuTlbSizeSelect" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
+                                                <option value="4">4 slots</option>
+                                                <option value="8" selected>8 slots</option>
+                                                <option value="16">16 slots</option>
+                                                <option value="32">32 slots</option>
+                                            </select>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="mmuTlbWaysSelect" style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">Associativity:</label>
+                                            <select id="mmuTlbWaysSelect" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
+                                                <option value="2">2-Way Set-Associative</option>
+                                                <option value="4" selected>4-Way Set-Associative</option>
+                                                <option value="fully">Fully Associative</option>
+                                            </select>
+                                        </div>
+                                        <button id="applyMmuSettingsBtn" class="mdc-button mdc-button--raised" style="width: 100%; margin-top: 4px; height: 32px; font-size: 0.78rem;">
+                                            <span class="mdc-button__label">Apply & Reset Simulator</span>
+                                        </button>
+                                    </div>
+                                    <div class="mmu-section-title">Configuration Parameters</div>
+                                    <div class="table-scroll-container mmu-compact-table" style="max-height: calc(100vh - 540px);">
+                                        <table class="simple-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Parameter</th>
+                                                    <th>Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="mmuConfigTableBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="mmu-overview-section">
+                                    <div class="mmu-section-title">Address Map / Cacheability</div>
+                                    <div class="table-scroll-container mmu-compact-table">
+                                        <table class="simple-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Region</th>
+                                                    <th>Range</th>
+                                                    <th>Cacheable</th>
+                                                    <th>Fabric</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="mmuAddressMapTableBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="memory-panel mmu-panel" id="mmu-panel-page-table">
+                            <div class="panel-header">Software Page Table</div>
+                            <div class="table-scroll-container">
+                                <table class="simple-table">
+                                    <thead>
+                                        <tr>
+                                            <th>VPN</th>
+                                            <th>VA Base</th>
+                                            <th>PPN</th>
+                                            <th>PA Base</th>
+                                            <th>Perms</th>
+                                            <th>Cacheable</th>
+                                            <th>In TLB</th>
+                                            <th>Last Ref</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mmuPageTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="memory-panel mmu-panel" id="mmu-panel-tlb">
+                            <div class="panel-header">Translation Lookaside Buffer</div>
+                            <div class="table-scroll-container">
+                                <table class="simple-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Set</th>
+                                            <th>Way</th>
+                                            <th>Valid</th>
+                                            <th>VPN</th>
+                                            <th>VA Base</th>
+                                            <th>PPN</th>
+                                            <th>PA Base</th>
+                                            <th>Perms</th>
+                                            <th>Cacheable</th>
+                                            <th>Last Ref</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mmuTlbTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="memory-panel mmu-panel" id="mmu-panel-history">
+                            <div class="panel-header">Recent Translations</div>
+                            <div class="table-scroll-container">
+                                <table class="simple-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Ref</th>
+                                            <th>Source</th>
+                                            <th>Access</th>
+                                            <th>Mode</th>
+                                            <th>VA</th>
+                                            <th>VPN</th>
+                                            <th>Offset</th>
+                                            <th>PA</th>
+                                            <th>PPN</th>
+                                            <th>Cacheable</th>
+                                            <th>Result</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mmuHistoryTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 5: CACHE -->
             <div id="view-cache" class="view-section">
                 <div class="cache-layout">
                     <div class="cache-detail-layout">
@@ -295,7 +450,7 @@
                 </div>
             </div>
 
-            <!-- VIEW 5: I/O (LED MATRIX + UART) -->
+            <!-- VIEW 6: I/O (LED MATRIX + UART) -->
             <div id="view-io" class="view-section">
                 <div class="io-container">
                     <!-- LED Matrix Card -->
@@ -399,7 +554,7 @@
                 </div>
             </div>
 
-            <!-- VIEW 6: HELP -->
+            <!-- VIEW 7: HELP -->
             <div id="view-help" class="view-section">
                 <div class="help-layout">
                     <aside class="help-nav-panel" aria-label="Help navigation">
@@ -1215,6 +1370,8 @@ _start:
                                     cache.</li>
                                 <li>Bảng cache hiển thị set/way/tag/valid/dirty và thống kê
                                     read/write/hit/miss.</li>
+                                <li>MMU view hiển thị cấu hình page size, bảng page table, TLB, VPN/PPN,
+                                    cacheability, quyền R/W/X và lịch sử translate gần nhất.</li>
                                 <li>MMU hiện có page table/TLB nhỏ ở mức simulator; log MMU giúp thấy translate,
                                     hit/miss và permission fault.</li>
                                 <li>Dùng Systems Log Console để thấy request/response CPU, MMU, cache, TileLink, DMA

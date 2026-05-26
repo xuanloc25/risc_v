@@ -27,10 +27,33 @@ const MOUSE_BASE_ADDRESS = 0xFF100000;
 const KEYBOARD_BASE_ADDRESS = 0xFFFF0000;
 const DMA_REG_BASE_ADDRESS = 0xFFED0000;
 
+const MMU_PAGE_SIZE_OPTIONS = [1024, 2048, 4096, 8192];
+const MMU_TLB_SIZE_OPTIONS = [4, 8, 16, 32];
+const MMU_TLB_WAY_OPTIONS = [2, 4, 'fully'];
+
 function inRange(addr, base, size) {
     const address = addr >>> 0;
     const start = base >>> 0;
     return address >= start && address < (start + size);
+}
+
+function readStoredNumber(key, fallback, allowedValues) {
+    if (typeof localStorage === 'undefined') return fallback;
+    const value = Number.parseInt(localStorage.getItem(key) ?? '', 10);
+    if (!Number.isFinite(value)) return fallback;
+    if (Array.isArray(allowedValues) && !allowedValues.includes(value)) return fallback;
+    return value;
+}
+
+function readStoredTlbWays(tlbSize) {
+    if (typeof localStorage === 'undefined') return 4;
+    const rawValue = localStorage.getItem('mmu_tlb_ways') ?? '4';
+    const value = rawValue === 'fully' ? 'fully' : Number.parseInt(rawValue, 10);
+    if (!MMU_TLB_WAY_OPTIONS.includes(value)) return 4;
+
+    const waysValue = value === 'fully' ? tlbSize : value;
+    if (waysValue > tlbSize || tlbSize % waysValue !== 0) return 4;
+    return value;
 }
 
 function createMMIOEndpoint(bus, name, { read, write }) {
@@ -154,6 +177,50 @@ export const simulator = {
         const isCacheableAddress = (addr) =>
             !isUlPeripheralAddress(addr) && !dmaRegRange(addr);
 
+        this.addressMap = [
+            {
+                name: 'Main Memory / RAM',
+                description: 'All non-MMIO addresses',
+                cacheable: true,
+                fabric: 'TileLink-UH'
+            },
+            {
+                name: 'UART',
+                base: UART_BASE_ADDRESS,
+                size: 0x14,
+                cacheable: false,
+                fabric: 'TileLink-UL'
+            },
+            {
+                name: 'LED Matrix',
+                base: LED_BASE_ADDRESS,
+                size: LED_SIZE_BYTES,
+                cacheable: false,
+                fabric: 'TileLink-UL'
+            },
+            {
+                name: 'Mouse',
+                base: MOUSE_BASE_ADDRESS,
+                size: 0x14,
+                cacheable: false,
+                fabric: 'TileLink-UL'
+            },
+            {
+                name: 'Keyboard',
+                base: KEYBOARD_BASE_ADDRESS,
+                size: 0x08,
+                cacheable: false,
+                fabric: 'TileLink-UL'
+            },
+            {
+                name: 'DMA Registers',
+                base: DMA_REG_BASE_ADDRESS,
+                size: 0x08,
+                cacheable: false,
+                fabric: 'TileLink-UH'
+            }
+        ];
+
         this.tilelink_UH = new TileLink_UH();
         this.mem = new Mem({ latency: mainMemoryLatency, name: 'Main Memory' });
         this.tilelink_UL = new TileLink_UL();
@@ -173,8 +240,19 @@ export const simulator = {
             name: 'ul-to-uh-bridge'
         });
 
+        const mmuPageSize = isBrowser
+            ? readStoredNumber('mmu_page_size', 4096, MMU_PAGE_SIZE_OPTIONS)
+            : 4096;
+        const mmuTlbSize = isBrowser
+            ? readStoredNumber('mmu_tlb_size', 8, MMU_TLB_SIZE_OPTIONS)
+            : 8;
+        const mmuTlbWays = isBrowser ? readStoredTlbWays(mmuTlbSize) : 4;
+
         this.cpu = new CPU();
         this.mmu = new MMU(null, null, {
+            pageSize: mmuPageSize,
+            tlbSize: mmuTlbSize,
+            tlbWays: mmuTlbWays,
             cacheabilityPredicate: isCacheableAddress
         });
         const CacheConfigL1 = {
