@@ -1632,3 +1632,362 @@ li.CodeMirror-hint-active,
 .mmu-settings-panel button:active {
     transform: translateY(0);
 }
+
+/* --- SoC DIAGRAM PREMIUM STYLES --- */
+#view-processor {
+    padding: 8px 12px 50px;
+    box-sizing: border-box;
+}
+
+.soc-view-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: stretch;
+    overflow: hidden;
+    background-color: var(--bg-light);
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.soc-svg-wrapper {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 100%;
+    max-height: 100%;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    padding: clamp(6px, 0.65vw, 12px);
+    box-sizing: border-box;
+    position: relative;
+    flex: 1 1 auto;
+}
+
+.soc-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+
+/* SoC Block Cards inside foreignObject */
+.soc-block {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 10px;
+    box-sizing: border-box;
+    border-radius: 8px;
+    border: 2px solid #ccc;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1),
+                box-shadow 0.2s cubic-bezier(0.25, 0.8, 0.25, 1),
+                background-color 0.25s ease;
+    user-select: none;
+    position: relative;
+}
+
+.soc-block:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12);
+}
+
+.soc-block i {
+    font-size: 23px;
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    flex-shrink: 0;
+}
+
+.soc-block-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+    padding: 0 8px;
+    box-sizing: border-box;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.soc-block-name {
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: #2d3436;
+    margin: 0;
+    max-width: 100%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.soc-block-status {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.6rem;
+    color: #636e72;
+    margin: 2px 0 0 0;
+    max-width: 100%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.soc-block-address {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.53rem;
+    color: #7f8c8d;
+    margin-top: 2px;
+    max-width: 100%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Color Grouping for SoC Blocks */
+/* 1. Compute Group (RISC-V Core, DMA) */
+.group-compute {
+    background-color: #ffeef0;
+    border-color: #ff7688;
+    color: #d63031;
+}
+.group-compute:hover {
+    background-color: #ffdce0;
+}
+.group-compute i {
+    color: #d63031;
+}
+
+/* 2. Memory Hierarchy (MMU, Cache, Memory) */
+.group-memory {
+    background-color: #e8f4fd;
+    border-color: #74b9ff;
+    color: #0984e3;
+}
+.group-memory:hover {
+    background-color: #d2e9fc;
+}
+.group-memory i {
+    color: #0984e3;
+}
+
+/* 3. Interconnect (TileLink Buses) */
+.group-bus {
+    background-color: #f3f0ff;
+    border-color: #b39ddb;
+    color: #6c5ce7;
+}
+.group-bus:hover {
+    background-color: #e8e2ff;
+}
+.group-bus i {
+    color: #6c5ce7;
+}
+
+/* 4. Peripherals (UART, LED, Key, Mouse) */
+.group-peripheral {
+    background-color: #fefbeb;
+    border-color: #ffe066;
+    color: #e67e22;
+}
+.group-peripheral:hover {
+    background-color: #fff9db;
+}
+.group-peripheral i {
+    color: #e67e22;
+}
+
+/* Diagram Path Connections */
+.flow-line {
+    stroke: #718096;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    opacity: 0.7;
+    pointer-events: none;
+    vector-effect: non-scaling-stroke;
+    transition: stroke 0.6s ease, stroke-dasharray 0.6s ease, stroke-width 0.6s ease, opacity 0.6s ease;
+}
+
+.flow-core {
+    stroke: #5f7f95;
+}
+
+.flow-uh {
+    stroke: #6c5ce7;
+}
+
+.flow-ul {
+    stroke: #e67e22;
+}
+
+.flow-dma {
+    stroke: #ff7688;
+}
+
+.flow-dma-regs {
+    stroke: #b86b6b;
+}
+
+.flow-alias {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.flow-line.active {
+    stroke: #0984e3; /* Vibrant blue transaction highlight */
+    stroke-width: 3.8;
+    stroke-dasharray: 10 6;
+    opacity: 1;
+    animation: flowPulse 0.4s linear infinite;
+    transition: none; /* Instant highlight when triggered */
+}
+
+/* Highlight specifically for write/DMA operations */
+.flow-line.active-write {
+    stroke: #e67e22; /* Amber-orange for write/MMIO operations */
+}
+
+@keyframes flowPulse {
+    to {
+        stroke-dashoffset: -16;
+    }
+}
+
+/* Marker Arrowheads styling */
+.arrow-head {
+    fill: context-stroke;
+}
+
+.soc-pulse {
+    fill: #0984e3;
+    opacity: 0.9;
+    pointer-events: none;
+}
+
+.soc-pulse-write {
+    fill: #e67e22;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .flow-line.active {
+        animation: none;
+    }
+
+    .soc-pulse {
+        display: none;
+    }
+}
+
+/* Address & Description overlays */
+.addr-label {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    fill: #5d6d73;
+    paint-order: stroke;
+    stroke: rgba(255, 255, 255, 0.9);
+    stroke-width: 5px;
+    stroke-linejoin: round;
+}
+
+/* Educational Tooltips / Description Cards */
+.soc-tooltip {
+    position: absolute;
+    bottom: 10px;
+    left: 14px;
+    right: 14px;
+    background: rgba(45, 52, 54, 0.95);
+    color: #dfe6e9;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    z-index: 200;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    opacity: 0;
+    transform: translateY(5px);
+}
+
+.soc-tooltip.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.soc-tooltip i {
+    color: #ffd43b;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.soc-tooltip-content strong {
+    color: #fff;
+}
+
+/* Legend Area */
+.soc-legend {
+    display: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 9px 12px;
+    margin-top: 8px;
+    width: 100%;
+    max-width: 1180px;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 7px 10px;
+    box-sizing: border-box;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: #2d3436;
+}
+
+.legend-color {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    border: 1.5px solid #ccc;
+}
+.legend-compute { background-color: #ffeef0; border-color: #ff7688; }
+.legend-memory { background-color: #e8f4fd; border-color: #74b9ff; }
+.legend-bus { background-color: #f3f0ff; border-color: #b39ddb; }
+.legend-peripheral { background-color: #fefbeb; border-color: #ffe066; }
+
+.legend-bus-type {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 10px;
+    color: #636e72;
+}
+.legend-bus-line {
+    width: 22px;
+    height: 2px;
+    border-radius: 1.5px;
+}
+.legend-line-uh { background-color: #6c5ce7; }
+.legend-line-ul { background-color: #e67e22; }

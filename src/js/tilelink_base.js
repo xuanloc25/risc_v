@@ -56,6 +56,7 @@ export class TileLinkBase {
         this.signals = createTileLinkSignals(`${name} (${variant})`);
         this.signalDefaults = makeChannelDefaults(this.signals);
         this.memoryTarget = null;
+        this.onTraceTransaction = null;
     }
 
     attachUpperPort(nameOrTarget, target = null) {
@@ -117,6 +118,15 @@ export class TileLinkBase {
             );
 
             const slaveEntry = this._selectSlaveEntry(nextReq.address);
+            if (typeof this.onTraceTransaction === 'function') {
+                this.onTraceTransaction('request', {
+                    from: nextReq.from,
+                    type: nextReq.type,
+                    address: nextReq.address,
+                    value: nextReq.value,
+                    slaveName: slaveEntry.name
+                });
+            }
             console.log(
                 `[${this.name}] TileLink -> ${describeTarget(slaveEntry)} REQUEST ` +
                 `from=${nextReq.from} type=${opcodeName} addr=0x${(nextReq.address >>> 0).toString(16)}`
@@ -144,6 +154,15 @@ export class TileLinkBase {
             );
 
             const target = this._resolveResponseTarget(resp.to);
+            if (typeof this.onTraceTransaction === 'function') {
+                this.onTraceTransaction('response', {
+                    to: resp.to,
+                    from: resp.from,
+                    type: resp.type,
+                    address: resp.address,
+                    data: resp.data
+                });
+            }
             if (target && typeof target.receiveResponse === 'function') {
                 console.log(
                     `[${this.name}] TileLink -> ${resp.to} RESPONSE ` +
@@ -187,6 +206,14 @@ export class TileLinkBase {
 
     directRead(address, size = 2, accessType = 'direct') {
         const entry = this._selectSlaveEntry(address);
+        const isRuntime = accessType !== 'peek' && accessType !== 'poke' && accessType !== 'view' && accessType !== 'debug' && accessType !== 'direct-debug' && accessType !== 'peek-word';
+        if (isRuntime && typeof this.onTraceTransaction === 'function') {
+            this.onTraceTransaction('directRead', {
+                address,
+                slaveName: entry.name,
+                size
+            });
+        }
         console.log(
             `[${this.name}] TileLink -> ${describeTarget(entry)} DIRECT_READ ` +
             `addr=0x${(address >>> 0).toString(16)} size=${size} access=${accessType}`
@@ -201,6 +228,15 @@ export class TileLinkBase {
 
     directWrite(address, value, size = 2, accessType = 'direct') {
         const entry = this._selectSlaveEntry(address);
+        const isRuntime = accessType !== 'peek' && accessType !== 'poke' && accessType !== 'view' && accessType !== 'debug' && accessType !== 'direct-debug' && accessType !== 'peek-word';
+        if (isRuntime && typeof this.onTraceTransaction === 'function') {
+            this.onTraceTransaction('directWrite', {
+                address,
+                value,
+                slaveName: entry.name,
+                size
+            });
+        }
         console.log(
             `[${this.name}] TileLink -> ${describeTarget(entry)} DIRECT_WRITE ` +
             `addr=0x${(address >>> 0).toString(16)} size=${size} access=${accessType} data=0x${((value ?? 0) >>> 0).toString(16)}`

@@ -17,6 +17,7 @@ CodeMirror.defineSimpleMode("riscv", {
 import { assembler } from './assembler.js';
 import { simulator } from './soc.js';
 import { configureRiscvEditorHints } from './editor_hint.js';
+import { SOC_NODES, renderSocDiagram, updateSocTraceHighlights } from './soc_diagram.js';
 
 // --- THAM CHIẾU DOM ---
 let instructionInput; // Sẽ được khởi tạo bởi CodeMirror
@@ -901,10 +902,241 @@ function updateUIGlobally() {
     renderInstructionView();
     renderCacheView();
     renderMMUView();
+    renderSocView();
 
     setTimeout(() => {
         document.querySelectorAll('tr.highlight').forEach(row => row.classList.remove('highlight'));
     }, 500);
+}
+
+function escapeSocTooltipHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function renderSocView() {
+    const socContainer = document.querySelector('.soc-view-container');
+    if (!socContainer || !simulator) return;
+    renderSocDiagram(socContainer, simulator);
+
+    // 1. Update RISC-V Core Status
+    const cpuStatusText = document.getElementById('soc-status-cpu');
+    if (cpuStatusText && simulator.cpu) {
+        const pcHex = '0x' + (simulator.cpu.pc >>> 0).toString(16).padStart(8, '0');
+        let instrText = 'NOP';
+        if (assembler && assembler.binaryCode) {
+            const instr = assembler.binaryCode.find(i => i.address === simulator.cpu.pc);
+            if (instr) {
+                instrText = disassembleInstruction(parseInt(instr.hex, 16));
+            }
+        }
+        cpuStatusText.textContent = `${pcHex} (${instrText})`;
+    }
+
+    // 2. Update MMU Status
+    const mmuStatusText = document.getElementById('soc-status-mmu');
+    if (mmuStatusText && simulator.mmu) {
+        const mmu = simulator.mmu;
+        if (mmu.lastTranslation) {
+            const lt = mmu.lastTranslation;
+            const resultText = lt.result === 'ok' ? '' : ` (${lt.result})`;
+            mmuStatusText.textContent = `0x${lt.virtualAddress.toString(16)} -> 0x${lt.physicalAddress.toString(16)}${resultText}`;
+        } else {
+            mmuStatusText.textContent = mmu.pageTable && mmu.pageTable.size > 0 ? 'Mapped Mode' : 'Identity Mode';
+        }
+    }
+
+    // 3. Update Caches Status
+    const l1iStatusText = document.getElementById('soc-status-l1i');
+    if (l1iStatusText && simulator.iCache) {
+        const s = simulator.iCache.statistics;
+        const total = s.numHit + s.numMiss;
+        const hitRate = total > 0
+            ? `${((s.numHit / total) * 100).toFixed(1)}%`
+            : '100%';
+        l1iStatusText.textContent = `Hit Rate: ${hitRate}`;
+    }
+
+    const l1dStatusText = document.getElementById('soc-status-l1d');
+    if (l1dStatusText && simulator.dCache) {
+        const s = simulator.dCache.statistics;
+        const total = s.numHit + s.numMiss;
+        const hitRate = total > 0
+            ? `${((s.numHit / total) * 100).toFixed(1)}%`
+            : '100%';
+        l1dStatusText.textContent = `Hit Rate: ${hitRate}`;
+    }
+
+    const l2StatusText = document.getElementById('soc-status-l2');
+    if (l2StatusText && simulator.l2Cache) {
+        const s = simulator.l2Cache.statistics;
+        const total = s.numHit + s.numMiss;
+        const hitRate = total > 0
+            ? `${((s.numHit / total) * 100).toFixed(1)}%`
+            : '100%';
+        l2StatusText.textContent = `Hit Rate: ${hitRate}`;
+    }
+
+    // 4. Update DMA Controller Status
+    const dmaStatusText = document.getElementById('soc-status-dma');
+    if (dmaStatusText && simulator.dma) {
+        const dma = simulator.dma;
+        if (dma.registers && dma.registers.busy) {
+            dmaStatusText.textContent = `Busy: ${dma.transferProgress}/${dma.numElements}`;
+        } else {
+            dmaStatusText.textContent = 'Idle';
+        }
+    }
+
+    // 5. Update Buses Status
+    const tlUhStatusText = document.getElementById('soc-status-tl-uh');
+    if (tlUhStatusText && simulator.tilelink_UH) {
+        const isBusy = simulator.tilelink_UH.requestQueue.length > 0 || simulator.tilelink_UH.inFlight;
+        tlUhStatusText.textContent = isBusy ? `Busy (Queue: ${simulator.tilelink_UH.requestQueue.length})` : 'Idle';
+    }
+
+    const tlUlStatusText = document.getElementById('soc-status-tl-ul');
+    if (tlUlStatusText && simulator.tilelink_UL) {
+        const isBusy = simulator.tilelink_UL.requestQueue.length > 0 || simulator.tilelink_UL.inFlight;
+        tlUlStatusText.textContent = isBusy ? `Busy (Queue: ${simulator.tilelink_UL.requestQueue.length})` : 'Idle';
+    }
+
+    // 6. Update Main Memory Status
+    const memoryStatusText = document.getElementById('soc-status-memory');
+    if (memoryStatusText && simulator.trace) {
+        memoryStatusText.textContent = `Read: ${simulator.trace.memoryReadCount} / Write: ${simulator.trace.memoryWriteCount}`;
+    }
+
+    // 7. Update UART Status
+    const uartStatusText = document.getElementById('soc-status-uart');
+    if (uartStatusText && simulator.uart) {
+        uartStatusText.textContent = `TX: ${simulator.uart.txBuffer?.length || 0} / RX: ${simulator.uart.rxBuffer?.length || 0}`;
+    }
+
+    // 8. Update LED Matrix Status
+    const ledStatusText = document.getElementById('soc-status-led');
+    if (ledStatusText && simulator.trace) {
+        ledStatusText.textContent = `Writes: ${simulator.trace.ledWriteCount} words`;
+    }
+
+    // 9. Update Keyboard Status
+    const keyboardStatusText = document.getElementById('soc-status-keyboard');
+    if (keyboardStatusText && simulator.keyboard) {
+        const count = simulator.keyboard.buffer?.length || 0;
+        keyboardStatusText.textContent = count > 0 ? `Buffer: ${count} keys` : 'Empty';
+    }
+
+    // 10. Update Mouse Status
+    const mouseStatusText = document.getElementById('soc-status-mouse');
+    if (mouseStatusText && simulator.mouse) {
+        mouseStatusText.textContent = `x=${simulator.mouse.x || 0}, y=${simulator.mouse.y || 0}`;
+    }
+
+    const trace = simulator.trace;
+    if (trace) {
+        updateSocTraceHighlights(trace);
+    }
+}
+
+function setupSocInteractivity() {
+    const tooltip = document.getElementById('soc-tooltip');
+    const tooltipText = document.getElementById('soc-tooltip-text');
+
+    Object.entries(SOC_NODES).forEach(([id, node]) => {
+        const element = document.getElementById(`block-${id}`);
+        if (!element) return;
+        if (element.dataset.socInteractiveBound === 'true') return;
+        element.dataset.socInteractiveBound = 'true';
+
+        // Hover event for tooltips
+        element.addEventListener('mouseenter', () => {
+            const description = node.tooltip || node.desc;
+            if (tooltip && tooltipText && description) {
+                let extra = '';
+                if (simulator && simulator.trace) {
+                    const lastTx = simulator.trace.lastTransactions
+                        .filter(tx => {
+                            if (id === 'cpu') return tx.linkName === 'cpuToMmu';
+                            if (id === 'mmu') return tx.linkName === 'cpuToMmu' || tx.linkName.startsWith('mmu');
+                            if (id === 'l1i') return tx.linkName === 'mmuToL1I' || tx.linkName === 'l1iToL2';
+                            if (id === 'l1d') return tx.linkName === 'mmuToL1D' || tx.linkName === 'l1dToL2';
+                            if (id === 'l2') return tx.linkName === 'l1iToL2' || tx.linkName === 'l1dToL2' || tx.linkName === 'l2ToUh';
+                            if (id === 'tl-uh') return tx.linkName.startsWith('uh');
+                            if (id === 'tl-ul') return tx.linkName.startsWith('ul') || tx.linkName.endsWith('ulBridge');
+                            if (id === 'memory') return tx.linkName === 'uhToMainMemory';
+                            if (id === 'dma') return tx.linkName.toLowerCase().includes('dma');
+                            if (id === 'uart') return tx.linkName === 'ulToUart';
+                            if (id === 'led') return tx.linkName === 'ulToLedMatrix';
+                            if (id === 'keyboard') return tx.linkName === 'ulToKeyboard';
+                            if (id === 'mouse') return tx.linkName === 'ulToMouse';
+                            return false;
+                        })
+                        .pop(); // Get most recent transaction
+                    if (lastTx) {
+                        extra = `<br><span style="color:#00ff00;font-family:monospace;font-size:0.75rem;">Last Transaction: ${escapeSocTooltipHtml(lastTx.description)}</span>`;
+                    }
+                }
+
+                const blockName = node.name || element.querySelector('.soc-block-name')?.textContent || id;
+                tooltipText.innerHTML = `<strong>${escapeSocTooltipHtml(blockName)}:</strong> ${escapeSocTooltipHtml(description)}${extra}`;
+                tooltip.classList.add('visible');
+            }
+        });
+
+        element.addEventListener('mouseleave', () => {
+            if (tooltip) tooltip.classList.remove('visible');
+        });
+
+        // Click event for navigation or log filtering
+        element.addEventListener('click', () => {
+            const tab = node.targetTab;
+            const cacheView = node.cacheView;
+            const logModule = node.logModule;
+            const focusId = node.focusId;
+
+            if (tab) {
+                // Switch sidebar tab
+                const sidebarItem = document.querySelector(`.sidebar-item[data-target="${tab}"]`);
+                if (sidebarItem) sidebarItem.click();
+
+                // If cache, also switch to corresponding L1I/L1D/L2 tab
+                if (cacheView) {
+                    setCacheView(cacheView);
+                }
+
+                // If peripheral, focus input element
+                if (focusId) {
+                    setTimeout(() => {
+                        const targetInput = document.getElementById(focusId);
+                        if (targetInput) targetInput.focus();
+                    }, 50);
+                }
+            } else if (logModule) {
+                // Set Systems Log module filter
+                const filterBtn = document.querySelector(`.log-filter-chip[data-log-module="${logModule}"]`);
+                if (filterBtn) {
+                    // Open the log terminal drawer if it is closed
+                    const logTerminal = document.getElementById('systemLogTerminal');
+                    if (logTerminal && !logTerminal.classList.contains('expanded')) {
+                        const toggleBtn = document.getElementById('logToggleBtn');
+                        if (toggleBtn) toggleBtn.click();
+                    }
+                    filterBtn.click();
+                }
+            }
+        });
+
+        element.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            element.click();
+        });
+    });
 }
 
 function renderMMUView() {
@@ -1659,6 +1891,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setRegisterView('integer');
         updateUIGlobally();
         setupUARTCallbacks(); // Setup UART callbacks lần đầu
+        setupSocInteractivity(); // Initialize SoC diagram tooltips and navigation
     }
 
     const sidebarItems = document.querySelectorAll('.sidebar-item');

@@ -12,8 +12,10 @@ import { Keyboard } from './keyboard.js';
 import { MousePeripheral } from './mouse.js';
 import { Port, attachPort } from './port_link.js';
 import {
+    TL_A_Opcode,
     TL_D_Opcode,
     applyTileLinkAtomic,
+    getOpcodeName,
     getTransferSizeLog2,
     isTileLinkAtomic,
     isTileLinkRead,
@@ -26,6 +28,25 @@ const UART_BASE_ADDRESS = 0x10000000;
 const MOUSE_BASE_ADDRESS = 0xFF100000;
 const KEYBOARD_BASE_ADDRESS = 0xFFFF0000;
 const DMA_REG_BASE_ADDRESS = 0xFFED0000;
+
+const LINK_COMPONENTS = {
+    cpuToMmu: { src: 'CPU', dst: 'MMU' },
+    mmuToL1I: { src: 'MMU', dst: 'L1I Cache' },
+    mmuToL1D: { src: 'MMU', dst: 'L1D Cache' },
+    l1iToL2: { src: 'L1I Cache', dst: 'L2 Cache' },
+    l1dToL2: { src: 'L1D Cache', dst: 'L2 Cache' },
+    l2ToUh: { src: 'L2 Cache', dst: 'TileLink-UH' },
+    uhToMainMemory: { src: 'TileLink-UH', dst: 'Main Memory' },
+    uhToDma: { src: 'DMA', dst: 'TileLink-UH' },
+    uhToDmaRegs: { src: 'TileLink-UH', dst: 'DMA' },
+    uhToUlBridge: { src: 'TileLink-UH', dst: 'Bridge (UH->UL)' },
+    ulToUhBridge: { src: 'TileLink-UL', dst: 'Bridge (UL->UH)' },
+    ulToUart: { src: 'TileLink-UL', dst: 'UART' },
+    ulToLedMatrix: { src: 'TileLink-UL', dst: 'LED Matrix' },
+    ulToKeyboard: { src: 'TileLink-UL', dst: 'Keyboard' },
+    ulToMouse: { src: 'TileLink-UL', dst: 'Mouse' },
+    ulToDma: { src: 'TileLink-UL', dst: 'DMA' }
+};
 
 const MMU_PAGE_SIZE_OPTIONS = [1024, 2048, 4096, 8192];
 const MMU_TLB_SIZE_OPTIONS = [4, 8, 16, 32];
@@ -118,6 +139,83 @@ export const simulator = {
     cycleCount: 0,
     useCache: true,
 
+    trace: {
+        activeLinks: {}, // pathName -> { expiresAt, isWrite }
+        lastTransactions: [], // recent transactions queue
+        memoryReadCount: 0,
+        memoryWriteCount: 0,
+        ledWriteCount: 0,
+        
+        record(linkName, details = null) {
+            const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            const isWrite = details?.isWrite || false;
+            this.activeLinks[linkName] = {
+                expiresAt: now + 400, // 400ms TTL
+                isWrite
+            };
+            
+            if (linkName === 'uhToMainMemory') {
+                if (isWrite) this.memoryWriteCount++;
+                else this.memoryReadCount++;
+            } else if (linkName === 'ulToLedMatrix') {
+                if (isWrite) this.ledWriteCount++;
+            }
+
+            if (details) {
+                const addrHex = details.address !== undefined ? '0x' + (details.address >>> 0).toString(16).toUpperCase() : '';
+                const comps = LINK_COMPONENTS[linkName] || { src: details.from || 'Bus', dst: details.slaveName || linkName };
+                
+                let desc = '';
+                if (details.type === 'request') {
+                    const opName = typeof details.opcode === 'number' 
+                        ? getOpcodeName(TL_A_Opcode, details.opcode) 
+                        : (details.opcode || 'Access');
+                    desc = `${comps.src} ${opName} ${addrHex} -> ${comps.dst}`;
+                } else if (details.type === 'response') {
+                    const opName = typeof details.opcode === 'number' 
+                        ? getOpcodeName(TL_D_Opcode, details.opcode) 
+                        : (details.opcode || 'Ack');
+                    desc = `${comps.dst} ${opName} -> ${comps.src}`;
+                } else if (details.type === 'directRead') {
+                    desc = `CPU Direct Read ${addrHex} -> ${comps.dst}`;
+                } else if (details.type === 'directWrite') {
+                    desc = `CPU Direct Write ${addrHex} -> ${comps.dst}`;
+                } else {
+                    desc = details.description || `${details.from || 'Bus'} access to ${addrHex}`;
+                }
+
+                this.lastTransactions.push({
+                    time: now,
+                    linkName,
+                    description: desc
+                });
+                if (this.lastTransactions.length > 5) {
+                    this.lastTransactions.shift();
+                }
+            }
+        },
+        
+        isLinkActive(linkName) {
+            const entry = this.activeLinks[linkName];
+            if (!entry) return false;
+            const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            return now < entry.expiresAt;
+        },
+
+        isLinkWrite(linkName) {
+            const entry = this.activeLinks[linkName];
+            return entry ? entry.isWrite : false;
+        },
+
+        clear() {
+            this.activeLinks = {};
+            this.lastTransactions = [];
+            this.memoryReadCount = 0;
+            this.memoryWriteCount = 0;
+            this.ledWriteCount = 0;
+        }
+    },
+
     reset() {
         this.init();
     },
@@ -128,6 +226,7 @@ export const simulator = {
     },
 
     init() {
+        this.trace.clear();
         const isBrowser = typeof document !== 'undefined';
 
         let ledMatrix = null;
@@ -350,6 +449,148 @@ export const simulator = {
             ulToUhBridge: attachPort(this.tilelink_UL, Port.lower('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr))),
             ulToDma: attachPort(this.tilelink_UL, Port.upper('dma', this.dma))
         };
+
+        // Wrap point-to-point ports to track transaction flows
+        const wrapPort = (port, name) => {
+            if (!port) return;
+            const origSendReq = port.sendRequest;
+            const origRecvReq = port.receiveRequest;
+            const origSendResp = port.sendResponse;
+            const origRecvResp = port.receiveResponse;
+
+            port.sendRequest = (from, req) => {
+                const isWrite = req && (isTileLinkWrite(req.type) || isTileLinkAtomic(req.type));
+                this.trace.record(name, {
+                    type: 'request',
+                    from,
+                    address: req?.address,
+                    isWrite,
+                    opcode: req?.type,
+                    value: req?.value
+                });
+                return origSendReq.call(port, from, req);
+            };
+            port.receiveRequest = (req) => {
+                const isWrite = req && (isTileLinkWrite(req.type) || isTileLinkAtomic(req.type));
+                this.trace.record(name, {
+                    type: 'request',
+                    from: req?.from,
+                    address: req?.address,
+                    isWrite,
+                    opcode: req?.type,
+                    value: req?.value
+                });
+                return origRecvReq.call(port, req);
+            };
+            port.sendResponse = (resp) => {
+                this.trace.record(name, {
+                    type: 'response',
+                    from: resp?.from,
+                    to: resp?.to,
+                    address: resp?.address,
+                    isWrite: false,
+                    opcode: resp?.type,
+                    data: resp?.data
+                });
+                return origSendResp.call(port, resp);
+            };
+            port.receiveResponse = (resp) => {
+                this.trace.record(name, {
+                    type: 'response',
+                    from: resp?.from,
+                    to: resp?.to,
+                    address: resp?.address,
+                    isWrite: false,
+                    opcode: resp?.type,
+                    data: resp?.data
+                });
+                return origRecvResp.call(port, resp);
+            };
+        };
+
+        for (const [key, port] of Object.entries(this.ports)) {
+            wrapPort(port, key);
+        }
+
+        // Attach transaction trace listeners to TileLink-UH and TileLink-UL
+        const handleTileLinkTrace = (busName, type, details) => {
+            let linkName = null;
+            let isWrite = false;
+
+            if (type === 'request') {
+                const op = details.type;
+                isWrite = isTileLinkWrite(op) || isTileLinkAtomic(op);
+                
+                if (details.slaveName === 'Main Memory') {
+                    linkName = 'uhToMainMemory';
+                } else if (details.slaveName === 'DMA Controller') {
+                    linkName = 'uhToDmaRegs';
+                } else if (details.slaveName === 'uh-to-ul-bridge') {
+                    linkName = 'uhToUlBridge';
+                } else if (details.slaveName === 'UART') {
+                    linkName = 'ulToUart';
+                } else if (details.slaveName === 'LED Matrix') {
+                    linkName = 'ulToLedMatrix';
+                } else if (details.slaveName === 'Keyboard') {
+                    linkName = 'ulToKeyboard';
+                } else if (details.slaveName === 'Mouse') {
+                    linkName = 'ulToMouse';
+                } else if (details.slaveName === 'ul-to-uh-bridge') {
+                    linkName = 'ulToUhBridge';
+                }
+            } else if (type === 'response') {
+                isWrite = false;
+                
+                if (details.from === 'Main Memory') {
+                    linkName = 'uhToMainMemory';
+                } else if (details.from === 'DMA Controller') {
+                    linkName = 'uhToDmaRegs';
+                } else if (details.from === 'uh-to-ul-bridge') {
+                    linkName = 'uhToUlBridge';
+                } else if (details.from === 'UART') {
+                    linkName = 'ulToUart';
+                } else if (details.from === 'LED Matrix') {
+                    linkName = 'ulToLedMatrix';
+                } else if (details.from === 'Keyboard') {
+                    linkName = 'ulToKeyboard';
+                } else if (details.from === 'Mouse') {
+                    linkName = 'ulToMouse';
+                } else if (details.from === 'ul-to-uh-bridge') {
+                    linkName = 'ulToUhBridge';
+                }
+            } else if (type === 'directRead' || type === 'directWrite') {
+                isWrite = (type === 'directWrite');
+
+                if (details.slaveName === 'Main Memory') {
+                    linkName = 'uhToMainMemory';
+                } else if (details.slaveName === 'DMA Controller') {
+                    linkName = 'uhToDmaRegs';
+                } else if (details.slaveName === 'UART') {
+                    linkName = 'ulToUart';
+                } else if (details.slaveName === 'LED Matrix') {
+                    linkName = 'ulToLedMatrix';
+                } else if (details.slaveName === 'Keyboard') {
+                    linkName = 'ulToKeyboard';
+                } else if (details.slaveName === 'Mouse') {
+                    linkName = 'ulToMouse';
+                }
+            }
+
+            if (linkName) {
+                this.trace.record(linkName, {
+                    type,
+                    from: details.from,
+                    to: details.to,
+                    address: details.address,
+                    isWrite,
+                    opcode: details.type,
+                    value: details.value !== undefined ? details.value : details.data
+                });
+            }
+        };
+
+        this.tilelink_UH.onTraceTransaction = (type, details) => handleTileLinkTrace('TileLink-UH', type, details);
+        this.tilelink_UL.onTraceTransaction = (type, details) => handleTileLinkTrace('TileLink-UL', type, details);
 
         // Khôi phục trạng thái ban đầu cho các module và thiết bị ngoại vi
         if (this.ledMatrix) this.ledMatrix.reset();
