@@ -98,6 +98,8 @@ function createMMIOEndpoint(bus, name, { read, write }) {
     };
 }
 
+let _stalledSince = null; // { pc } — tracks current stall for log dedup
+
 export const simulator = {
     cpu: null,
     mmu: null,
@@ -128,6 +130,7 @@ export const simulator = {
     },
 
     init() {
+        _stalledSince = null;
         const isBrowser = typeof document !== 'undefined';
 
         const uartRange = (addr) => inRange(addr, UART_BASE_ADDRESS, 0x14);
@@ -258,6 +261,7 @@ export const simulator = {
         this.keyboard = new Keyboard(KEYBOARD_BASE_ADDRESS);
         this.mouse = new MousePeripheral(MOUSE_BASE_ADDRESS);
         this.cycleCount = 0;
+        
 
         if (isBrowser) {
             const kbInput = document.getElementById('keyboardInput');
@@ -383,11 +387,17 @@ export const simulator = {
             return;
         }
 
-        console.log(
-            `[Cycle ${currentCycle}] CPU active=${cpuActive} pc=0x${this.cpu.pc.toString(16)} ` +
+        const pcNow = this.cpu.pc;
+        const cycleLabel =
+            `[Cycle ${currentCycle}] CPU active=${cpuActive} pc=0x${pcNow.toString(16)} ` +
             `| DMA busy=${this.dma?.registers?.busy ?? false} ` +
-            `progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`
-        );
+            `progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`;
+        const isNewStall = _stalledSince === null || pcNow !== _stalledSince.pc;
+
+        // Buffer component logs so we can print the cycle header only when needed
+        const componentLogs = [];
+        const origLog = console.log;
+        console.log = (...args) => componentLogs.push(args.map(String).join(' '));
 
         // Tick order: upstream → downstream (request propagation)
         // CPU/DMA issue requests → L1 caches → L2 cache → TileLink buses → Memory/peripherals
@@ -398,8 +408,11 @@ export const simulator = {
                 this.cpu.tick();
             }
         } catch (e) {
+            console.log = origLog;
             this.cpu.isRunning = false;
             console.error(e);
+            this.cycleCount++;
+            return;
         }
 
         if (this.dma) {
@@ -415,6 +428,22 @@ export const simulator = {
 
         if (this.uart) {
             this.uart.tick();
+        }
+
+        console.log = origLog;
+
+        // Print cycle header + buffered logs only when PC changed (new stall) or components logged
+        if (isNewStall || componentLogs.length > 0) {
+            origLog(cycleLabel);
+            for (const line of componentLogs) {
+                for (const subLine of String(line).split(/\r?\n/)) {
+                    origLog('    ' + subLine);
+                }
+            }
+        }
+
+        if (isNewStall) {
+            _stalledSince = { pc: pcNow };
         }
 
         this.cycleCount++;
