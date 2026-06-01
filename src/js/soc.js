@@ -324,7 +324,7 @@ export const simulator = {
             ulToUhBridge: attachPort(this.tilelink_UL, Port.lower('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr))),
             ulToDma: attachPort(this.tilelink_UL, Port.upper('dma', this.dma))
         };
-s
+
         console.info('[ARCH] RISC-V Core -> MMU -> Cache -> TileLink-UH -> Main Memory');
         console.info('[CACHE] L1I: 16 sets x 4 ways, L1D: 16 sets x 4 ways, L2: 64 sets x 4 ways');
         console.info('[ARCH] TileLink-UH <-> TileLink-UL; DMA Controller attached to both links');
