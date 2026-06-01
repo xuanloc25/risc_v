@@ -98,8 +98,6 @@ export class MMU {
 
     attachLowerPort(lowerPort) {
         this.lowerPort = lowerPort;
-        this.instructionLowerPort = lowerPort;
-        this.dataLowerPort = lowerPort;
     }
 
     attachInstructionLowerPort(lowerPort) {

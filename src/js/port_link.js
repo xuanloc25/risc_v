@@ -177,6 +177,22 @@ export function attachPort(hostOrUpper, portOrLower, name = '') {
     return Port.link(name, hostOrUpper, portOrLower).attach();
 }
 
+export function attachInstructionPort(upper, lower, name = '') {
+    const port = Port.link(name, upper, lower).attach();
+    if (typeof upper.attachInstructionLowerPort === 'function') {
+        upper.attachInstructionLowerPort(port);
+    }
+    return port;
+}
+
+export function attachDataPort(upper, lower, name = '') {
+    const port = Port.link(name, upper, lower).attach();
+    if (typeof upper.attachDataLowerPort === 'function') {
+        upper.attachDataLowerPort(port);
+    }
+    return port;
+}
+
 export function connectPorts(upper, lower, name = '') {
     return attachPort(upper, lower, name);
 }
