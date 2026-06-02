@@ -42,10 +42,11 @@ export class Mem {
 
     receiveRequest(req) {
         if (this.pendingRequest || this.burstState) return;
-        console.log(
-            `[${this.name}] RECEIVE_REQUEST from=${req.from} type=${describeAOpcode(req.type)} ` +
-            `addr=0x${(req.address >>> 0).toString(16)} size=${getTransferSizeLog2(req, 2)}`
-        );
+            console.log(
+                `[${this.name}] RECEIVE_REQUEST from=${req.from} type=${describeAOpcode(req.type)} ` +
+                `addr=0x${(req.address >>> 0).toString(16)} size=${getTransferSizeLog2(req, 2)}` +
+                ` ${[(this.upperPorts.find(p=>p.upper?.name===req.from)?.upper?.missLatency ?? this.upperPorts.find(p=>p.target?.name===req.from)?.target?.missLatency ?? 0), (this.upperPorts.find(p=>p.upper?.name===req.from)?.upper?.lowerPort?.missLatency ?? this.upperPorts.find(p=>p.target?.name===req.from)?.target?.lowerPort?.missLatency ?? 0), this.latency].map(v => v ? 'latency = ' + v : null).filter(Boolean).join('; ')}`
+            );
         this.pendingRequest = {
             req,
             readyCycle: this.cycle + this.latency
