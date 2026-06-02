@@ -2007,14 +2007,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const mouseCoordinatesDisplay = document.getElementById('mouseCoordinates');
 
     const sendMouseToPeripheral = (x, y, buttonMask, isClick = false) => {
-        if (typeof simulator !== 'undefined' && simulator.mem && simulator.mem.mouse) {
-            simulator.mem.mouse.reportEvent(x, y, buttonMask, isClick);
+        if (typeof simulator !== 'undefined' && simulator.mouse) {
+            simulator.mouse.reportEvent(x, y, buttonMask, isClick);
         }
     };
 
     if (ledCanvas && mouseCoordinatesDisplay) {
-        // Mouse move event
-        ledCanvas.addEventListener('mousemove', (event) => {
+        // Pointer move event
+        ledCanvas.addEventListener('pointermove', (event) => {
             const rect = ledCanvas.getBoundingClientRect();
             const x = Math.floor(event.clientX - rect.left);
             const y = Math.floor(event.clientY - rect.top);
@@ -2022,8 +2022,8 @@ document.addEventListener('DOMContentLoaded', () => {
             sendMouseToPeripheral(x, y, event.buttons & 0x7, false);
         });
 
-        // Mouse click event - hiển thị tọa độ và log ra console
-        ledCanvas.addEventListener('click', (event) => {
+        // Pointer down event - hiển thị tọa độ và log ra console
+        ledCanvas.addEventListener('pointerdown', (event) => {
             const rect = ledCanvas.getBoundingClientRect();
             const x = Math.floor(event.clientX - rect.left);
             const y = Math.floor(event.clientY - rect.top);
@@ -2045,8 +2045,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 500);
         });
 
-        // Mouse leave event - reset display
-        ledCanvas.addEventListener('mouseleave', () => {
+        ledCanvas.addEventListener('pointerup', (event) => {
+            const rect = ledCanvas.getBoundingClientRect();
+            const x = Math.floor(event.clientX - rect.left);
+            const y = Math.floor(event.clientY - rect.top);
+            sendMouseToPeripheral(x, y, 0, false);
+        });
+
+        // Pointer leave event - reset display
+        ledCanvas.addEventListener('pointerleave', (event) => {
+            if (event.pointerType !== 'mouse') return;
             mouseCoordinatesDisplay.textContent = 'x=0, y=0';
             mouseCoordinatesDisplay.style.color = '#0984e3';
             sendMouseToPeripheral(0, 0, 0, false);

@@ -142,7 +142,7 @@ export const simulator = {
     useCache: true,
 
     trace: {
-        activeLinks: {}, // pathName -> { expiresAt, isWrite }
+        activeLinks: {}, // pathName -> { cycle, expiresAt, isWrite }
         lastTransactions: [], // recent transactions queue
         memoryReadCount: 0,
         memoryWriteCount: 0,
@@ -152,7 +152,8 @@ export const simulator = {
             const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
             const isWrite = details?.isWrite || false;
             this.activeLinks[linkName] = {
-                expiresAt: now + 400, // 400ms TTL
+                cycle: simulator.cycleCount,
+                expiresAt: now + 400,
                 isWrite
             };
             
@@ -201,7 +202,9 @@ export const simulator = {
             const entry = this.activeLinks[linkName];
             if (!entry) return false;
             const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-            return now < entry.expiresAt;
+            if (now < entry.expiresAt) return true;
+            delete this.activeLinks[linkName];
+            return false;
         },
 
         isLinkWrite(linkName) {
@@ -365,14 +368,17 @@ export const simulator = {
         if (isBrowser) {
             const kbInput = document.getElementById('keyboardInput');
             if (kbInput) {
-                kbInput.addEventListener('keydown', (e) => {
-                    e.preventDefault();
-                    if (e.key.length === 1) {
-                        this.keyboard.pressKey(e.key.charCodeAt(0));
-                    } else if (e.key === 'Enter') {
-                        this.keyboard.pressKey(10);
-                    }
-                });
+                if (!kbInput.__riscvKeyboardHandlerAttached) {
+                    kbInput.addEventListener('keydown', (e) => {
+                        e.preventDefault();
+                        if (e.key.length === 1) {
+                            this.keyboard.pressKey(e.key.charCodeAt(0));
+                        } else if (e.key === 'Enter') {
+                            this.keyboard.pressKey(10);
+                        }
+                    });
+                    kbInput.__riscvKeyboardHandlerAttached = true;
+                }
 
                 this.keyboard.onUpdate = () => {
                     const statusSpan = document.getElementById('keyboardStatus');
