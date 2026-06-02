@@ -21,15 +21,15 @@ _start:
     la    t2, src_data
     la    t3, dst_data
 
-    # Enable DMA (bit0)
-    li    t4, 1
-    sw    t4, 0(t0)
-
     # Queue descriptor: src, dst, config
     sw    t2, 0(t1)            # source address
     sw    t3, 0(t1)            # destination address
     li    t5, 0xA0000010       # config: dstMode=2, srcMode=2, len=16 bytes
     sw    t5, 0(t1)
+
+    # Enable DMA (bit0)
+    li    t4, 1
+    sw    t4, 0(t0)
 
     # Start transfer: EN|START
     li    t4, 3

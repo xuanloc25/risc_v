@@ -12,6 +12,10 @@ import {
     writeSizedValue
 } from './tilelink.js';
 
+function hex(value) {
+    return `0x${(value >>> 0).toString(16)}`;
+}
+
 function clearChannel(channel, defaults) {
     Object.assign(channel, defaults);
 }
@@ -114,7 +118,7 @@ export class TileLinkBase {
             const opcodeName = describeAOpcode(nextReq.type);
             console.log(
                 `[${this.name}][A] issue from=${nextReq.from} type=${opcodeName} ` +
-                `addr=0x${(nextReq.address >>> 0).toString(16)} val=${nextReq.value ?? ''}`
+                `addr=0x${(nextReq.address >>> 0).toString(16)} val=${hex(nextReq.value ?? '')}`
             );
 
             const slaveEntry = this._selectSlaveEntry(nextReq.address);

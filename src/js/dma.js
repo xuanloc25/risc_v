@@ -56,14 +56,74 @@ export class DMARegisters {
         this.busy = false;
         this.done = false;
         this.error = false;
-        this.fifoFull = false;
-        this.fifoEmpty = true;
-
         this.descriptorFifo = [];
         this.fifoDepth = 8;
         this.currentDescriptorWords = [];
 
+        // Data FIFO for payloads (separate from descriptor FIFO)
+        this.dataFifo = [];
+        this.dataFifoDepth = 64;
+
         console.log(`[DMA] Registers initialized. FIFO depth: ${this.fifoDepth}`);
+    }
+
+    // Descriptor FIFO computed helpers
+    get fifoCount() {
+        return this.descriptorFifo.length;
+    }
+
+    get fifoEmpty() {
+        return this.descriptorFifo.length === 0;
+    }
+
+    get fifoFull() {
+        return this.descriptorFifo.length >= this.fifoDepth;
+    }
+
+    // Data FIFO computed helpers
+    get dataFifoCount() {
+        return this.dataFifo.length;
+    }
+
+    get dataFifoEmpty() {
+        return this.dataFifo.length === 0;
+    }
+
+    get dataFifoFull() {
+        return this.dataFifo.length >= this.dataFifoDepth;
+    }
+
+    // Return a snapshot of data FIFO contents (as unsigned 32-bit numbers)
+    dumpDataFifo() {
+        return this.dataFifo.map(v => v >>> 0);
+    }
+
+    writeDataFifo(word) {
+        if (this.dataFifoFull) {
+            return false;
+        }
+        this.dataFifo.push(word >>> 0);
+        // Log FIFO snapshot to system log console
+        try {
+            const hexContents = this.dataFifo.map(v => '0x' + (v >>> 0).toString(16));
+            console.log(`[DMA][DATAFIFO] PUSH value=0x${(word>>>0).toString(16)} count=${this.dataFifo.length} contents=${hexContents.join(',')}`);
+        } catch (e) {
+            console.log('[DMA][DATAFIFO] PUSH (error formatting contents)');
+        }
+        return true;
+    }
+
+    readDataFifo() {
+        if (this.dataFifoEmpty) return null;
+        const v = this.dataFifo.shift();
+        // Log FIFO snapshot after pop
+        try {
+            const hexContents = this.dataFifo.map(x => '0x' + (x >>> 0).toString(16));
+            console.log(`[DMA][DATAFIFO] POP value=0x${(v>>>0).toString(16)} count=${this.dataFifo.length} contents=${hexContents.join(',')}`);
+        } catch (e) {
+            console.log('[DMA][DATAFIFO] POP (error formatting contents)');
+        }
+        return v >>> 0;
     }
 
     readCtrl() {
@@ -77,6 +137,12 @@ export class DMARegisters {
 
         if (this.fifoEmpty) ctrl |= (1 << 27);
         if (this.fifoFull) ctrl |= (1 << 28);
+        // Data FIFO status: bits 24 = empty, 25 = full
+        if (this.dataFifoEmpty) ctrl |= (1 << 24);
+        if (this.dataFifoFull) ctrl |= (1 << 25);
+        // Data FIFO count (8 bits) at bits [8..15]
+        const dataCount = (this.dataFifo?.length ?? 0) & 0xFF;
+        ctrl |= (dataCount << 8);
         if (this.error) ctrl |= (1 << 29);
         if (this.done) ctrl |= (1 << 30);
         if (this.busy) ctrl |= (1 << 31);
@@ -132,8 +198,7 @@ export class DMARegisters {
             this.descriptorFifo.push(descriptor);
             this.currentDescriptorWords = [];
 
-            this.fifoEmpty = false;
-            this.fifoFull = (this.descriptorFifo.length >= this.fifoDepth);
+            // descriptor FIFO status is computed via getters
 
             console.log(`[DMA] Descriptor added: ${descriptor.toString()}`);
             console.log(`[DMA] FIFO status: ${this.descriptorFifo.length}/${this.fifoDepth} entries`);
@@ -146,8 +211,8 @@ export class DMARegisters {
         if (this.fifoEmpty) return null;
 
         const descriptor = this.descriptorFifo.shift();
-        this.fifoEmpty = (this.descriptorFifo.length === 0);
-        this.fifoFull = false;
+
+        // descriptor FIFO status is computed via getters
 
         console.log(`[DMA] Retrieved descriptor: ${descriptor.toString()}`);
         console.log(`[DMA] FIFO entries remaining: ${this.descriptorFifo.length}`);
@@ -162,8 +227,9 @@ export class DMARegisters {
         this.startRequested = false;
         this.descriptorFifo = [];
         this.currentDescriptorWords = [];
-        this.fifoEmpty = true;
-        this.fifoFull = false;
+        // clear data FIFO as well
+        this.dataFifo = [];
+        // FIFO status flags are computed; arrays cleared above
         console.log('[DMA] Reset completed');
     }
 
@@ -416,7 +482,11 @@ export class DMAController {
                     if (this.bswap) {
                         data = this.swapBytes(data, this.getElementSize(this.srcMode));
                     }
-                    this.latchedData = data;
+                    // Push payload into data FIFO; stall if FIFO is full
+                    if (!this.registers.writeDataFifo(data)) {
+                        console.log('[DMA] Data FIFO full, stalling read completion');
+                        return;
+                    }
                     this.pendingResponse = null;
                     this.waitingRequest = null;
                     this.activeRequestLink = null;
@@ -427,7 +497,12 @@ export class DMAController {
 
             if (this.transferStage === 'write') {
                 if (!this.waitingRequest && !this.pendingResponse) {
-                    const writeReq = this.buildWriteRequest(this.latchedDstAddr, this.latchedData, this.dstMode);
+                    const dataToWrite = this.registers.readDataFifo();
+                    if (dataToWrite == null) {
+                        console.log('[DMA] Data FIFO empty, stalling write');
+                        return;
+                    }
+                    const writeReq = this.buildWriteRequest(this.latchedDstAddr, dataToWrite, this.dstMode);
                     const requestLink = this._resolveLink(this.latchedDstAddr);
                     this.waitingRequest = writeReq;
                     this.activeRequestLink = requestLink;
