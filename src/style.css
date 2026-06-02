@@ -106,12 +106,15 @@ html {
     padding: 0 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     flex-shrink: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .toolbar-group {
     display: flex;
     gap: 12px;
     align-items: center;
+    min-width: max-content;
 }
 
 .separator {
@@ -599,10 +602,12 @@ li.CodeMirror-hint-active,
     flex-wrap: wrap;
     gap: 20px;
     padding: 20px;
+    padding-bottom: 70px;
     justify-content: center;
     align-items: flex-start;
     overflow: auto;
     height: 100%;
+    box-sizing: border-box;
 }
 
 .io-device-card {
@@ -611,11 +616,26 @@ li.CodeMirror-hint-active,
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     width: 340px;
+    max-width: 100%;
     /* Vừa đủ cho canvas 320px + padding */
     overflow: hidden;
     display: flex;
     flex-direction: column;
     transition: transform 0.2s;
+}
+
+#view-io .io-device-card {
+    flex: 0 1 340px;
+}
+
+#view-io .io-device-card:nth-child(2) {
+    flex-basis: 600px;
+    width: auto !important;
+}
+
+#view-io .io-device-card:nth-child(3) {
+    flex-basis: 300px;
+    width: auto !important;
 }
 
 .io-device-card:hover {
@@ -646,7 +666,7 @@ li.CodeMirror-hint-active,
 .led-matrix-body {
     background-color: #636e72;
     /* Nền xám đậm làm nổi bật LED */
-    min-height: 340px;
+    min-height: auto;
 }
 
 .uart-console-body {
@@ -661,6 +681,43 @@ li.CodeMirror-hint-active,
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
     cursor: crosshair;
     border-radius: 2px;
+    width: min(320px, 100%);
+    height: auto;
+    aspect-ratio: 1 / 1;
+}
+
+#view-io .io-device-card:nth-child(3) .io-body {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 8px;
+}
+
+#keyboardInput {
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.uart-console-body>div:last-of-type>div {
+    flex-wrap: wrap;
+}
+
+#uartInput {
+    min-width: 0;
+}
+
+@media (max-width: 520px) {
+    .uart-console-body>div:last-of-type>div {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+
+    #uartInput {
+        grid-column: 1 / -1;
+        width: 100% !important;
+    }
 }
 
 .io-footer {
