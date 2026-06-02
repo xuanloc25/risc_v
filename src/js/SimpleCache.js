@@ -234,7 +234,7 @@ export class SimpleCache {
         const victim = this._selectVictim(setIndex);
         this._prepareVictimForRefill(victim, tag);
         console.log(`[${this.name}] MISS ${opType} addr=0x${address.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`);
-        console.log(`[${this.name}] REFILL_REQUEST addr=0x${blockBase.toString(16)} beats=${this._getBeatCount()}`);
+        console.log(`[${this.name}] REFILL_REQUEST addr=0x${blockBase.toString(16)} beats=${this._getBeatCount()} ${[this.missLatency, (this.lowerPort?.missLatency ?? this.lowerPort?.latency ?? 0), (this.lowerPort?.lowerPort?.memoryTarget?.latency ?? this.lowerPort?.lowerPort?.latency ?? (this.lowerPort?.memoryTarget?.latency ?? 0))].map(v => v ? 'latency = ' + v : null).filter(Boolean).join('; ')}`);
         // Lưu trạng thái refill đang chờ nhận burst responses / direct beats.
         this.pendingFill = {
             mode: 'request', 
@@ -395,7 +395,7 @@ export class SimpleCache {
         const victim = this._selectVictim(setIndex);
         this._prepareVictimForRefill(victim, tag);
         console.log(`[${this.name}] MISS FILL addr=0x${blockBase.toString(16)} set=${setIndex} tag=0x${tag.toString(16)}`);
-        console.log(`[${this.name}] REFILL_REQUEST addr=0x${blockBase.toString(16)} beats=${this._getBeatCount()}`);
+        console.log(`[${this.name}] REFILL_REQUEST addr=0x${blockBase.toString(16)} beats=${this._getBeatCount()} ${[this.missLatency, (this.lowerPort?.missLatency ?? this.lowerPort?.latency ?? 0), (this.lowerPort?.lowerPort?.memoryTarget?.latency ?? this.lowerPort?.lowerPort?.latency ?? (this.lowerPort?.memoryTarget?.latency ?? 0))].map(v => v ? 'latency = ' + v : null).filter(Boolean).join('; ')}`);
         this.pendingFill = {
                 mode: 'forward', 
                 victim, 
