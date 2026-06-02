@@ -72,14 +72,6 @@ function createCache(options = {}) {
     });
 }
 
-function tickPath(tilelink, target, count = 1) {
-    for (let i = 0; i < count; i++) {
-        tilelink.tick();
-        target.tick(tilelink);
-        tilelink.tick();
-    }
-}
-
 function tickUntil(tilelink, target, predicate, maxTicks = 64) {
     for (let i = 0; i < maxTicks; i++) {
         tilelink.tick();
@@ -109,6 +101,19 @@ function tickDmaMemoryUntil(dma, tilelink, mem, predicate, maxTicks = 128) {
         if (predicate()) return i + 1;
     }
     throw new Error('Timed out waiting for DMA transfer');
+}
+
+function tickDmaFabricUntil({ dma, tilelink_UH, tilelink_UL, mem }, predicate, maxTicks = 128) {
+    for (let i = 0; i < maxTicks; i++) {
+        dma.tick();
+        tilelink_UH.tick();
+        tilelink_UL.tick();
+        mem.tick(tilelink_UH);
+        tilelink_UH.tick();
+        tilelink_UL.tick();
+        if (predicate()) return i + 1;
+    }
+    throw new Error('Timed out waiting for DMA fabric transfer');
 }
 
 function tickMmuCacheBusUntil({ cache, tilelink_UH, tilelink_UL, mem }, predicate, maxTicks = 128) {
@@ -290,22 +295,93 @@ function testDmaWordIncrementingTransfer() {
 }
 
 function testDmaRegisterMmio() {
+    const DMA_REG_BASE = 0xFFED0000;
+    const dmaRegRange = (addr) => addr >= DMA_REG_BASE && addr < DMA_REG_BASE + 0x08;
     const tilelink_UH = new TileLink_UH();
-    const dma = new DMAController(tilelink_UH);
+    const tilelink_UL = new TileLink_UL();
+    const dma = new DMAController({
+        tilelink_UH,
+        tilelink_UL,
+        registerLink: tilelink_UL,
+        selectLinkForAddress: () => tilelink_UH
+    });
     const master = makeMaster();
+    const uhToUlBridge = new TileLinkBridge(tilelink_UH, tilelink_UL, { name: 'uh-to-ul-bridge' });
 
     attachPort(tilelink_UH, Port.upper('cpu', master));
-    attachPort(tilelink_UH, Port.lower('dma-regs', dma, () => true));
+    attachPort(tilelink_UH, Port.lower('uh-to-ul-bridge', uhToUlBridge, dmaRegRange));
+    attachPort(tilelink_UL, Port.lower('DMA Controller', dma, dmaRegRange));
 
-    tilelink_UH.sendRequest('cpu', { type: TL_A_Opcode.PutFullData, address: 0xFFED0000, value: 1, size: 2 });
-    tickPath(tilelink_UH, dma, 1);
+    const logs = captureLogs(() => {
+        tilelink_UH.sendRequest('cpu', { type: TL_A_Opcode.PutFullData, address: DMA_REG_BASE, value: 1, size: 2 });
+        tilelink_UH.tick();
 
-    tilelink_UH.sendRequest('cpu', { type: TL_A_Opcode.Get, address: 0xFFED0000, size: 2 });
-    tickPath(tilelink_UH, dma, 1);
+        tilelink_UH.sendRequest('cpu', { type: TL_A_Opcode.Get, address: DMA_REG_BASE, size: 2 });
+        tilelink_UH.tick();
+    });
 
     assert.equal(master.responses[0].type, TL_D_Opcode.AccessAck);
     assert.equal(master.responses[1].type, TL_D_Opcode.AccessAckData);
     assert.equal(master.responses[1].data & 0x1, 1);
+    assert.ok(logs.some((line) => line.includes('[uh-to-ul-bridge] BRIDGE_REQUEST TileLink-UH->TileLink-UL')), 'DMA config UH -> UL bridge request log is missing');
+    assert.ok(logs.some((line) => line.includes('[TileLink-UL] TileLink -> DMA Controller DIRECT_WRITE')), 'DMA config UL -> DMA direct write log is missing');
+    assert.ok(logs.some((line) => line.includes('[TileLink-UL] TileLink -> DMA Controller DIRECT_READ')), 'DMA config UL -> DMA direct read log is missing');
+}
+
+function testDmaIoUsesUhUlBridge() {
+    const LED_BASE = 0xFF000000;
+    const ledRange = (addr) => addr >= LED_BASE && addr < LED_BASE + 0x10;
+    const tilelink_UH = new TileLink_UH();
+    const tilelink_UL = new TileLink_UL();
+    const mem = new Mem({ burstBeatLatency: 0, name: 'Main Memory' });
+    const dma = new DMAController({
+        tilelink_UH,
+        tilelink_UL,
+        registerLink: tilelink_UL,
+        selectLinkForAddress: () => tilelink_UH
+    });
+    const ledWrites = [];
+    const ledEndpoint = {
+        directRead() {
+            return 0;
+        },
+        directWrite(address, value, size, accessType) {
+            ledWrites.push({ address: address >>> 0, value: value >>> 0, size, accessType });
+        }
+    };
+    const uhToUlBridge = new TileLinkBridge(tilelink_UH, tilelink_UL, { name: 'uh-to-ul-bridge' });
+
+    mem.loadMemoryMap({
+        0x300: 0x44,
+        0x301: 0x33,
+        0x302: 0x22,
+        0x303: 0x11
+    });
+
+    attachPort(tilelink_UH, Port.upper('dma', dma));
+    attachPort(tilelink_UH, Port.lower('uh-to-ul-bridge', uhToUlBridge, ledRange));
+    attachPort(tilelink_UH, Port.lower('Main Memory', mem, (addr) => !ledRange(addr)));
+
+    attachPort(tilelink_UL, Port.lower('LED Matrix', ledEndpoint, ledRange));
+
+    const logs = captureLogs(() => {
+        dma.registers.writeCtrl(1);
+        dma.registers.writeDescriptor(0x300);
+        dma.registers.writeDescriptor(LED_BASE);
+        dma.registers.writeDescriptor(DMADescriptor.createConfig(1, 0, 3, 3));
+        dma.registers.writeCtrl(3);
+        tickDmaFabricUntil({ dma, tilelink_UH, tilelink_UL, mem }, () => !dma.isBusy && ledWrites.length === 1);
+    });
+
+    assert.equal(ledWrites.length, 1);
+    assert.equal(ledWrites[0].address >>> 0, LED_BASE >>> 0);
+    assert.equal(ledWrites[0].value >>> 0, 0x11223344);
+    assert.ok(logs.some((line) => line.includes('[DMA] TileLink route src=0x300 via=TileLink-UH dst=0xff000000 via=TileLink-UH')), 'DMA IO route should start on TileLink-UH');
+    assert.ok(logs.some((line) => line.includes('[TileLink-UH] TileLink -> uh-to-ul-bridge REQUEST from=dma')), 'DMA IO UH -> UL bridge request log is missing');
+    assert.ok(logs.some((line) => line.includes('[uh-to-ul-bridge] BRIDGE_DIRECT_WRITE TileLink-UH->TileLink-UL')), 'DMA IO UH -> UL direct write log is missing');
+    assert.ok(logs.some((line) => line.includes('[TileLink-UL] TileLink -> LED Matrix DIRECT_WRITE')), 'DMA IO UL peripheral write log is missing');
+    assert.ok(logs.some((line) => line.includes('[uh-to-ul-bridge] BRIDGE_RESPONSE TileLink-UL->TileLink-UH')), 'DMA IO UL -> UH bridge response log is missing');
+    assert.ok(logs.some((line) => line.includes('[DMA] RECEIVE_RESPONSE via=TileLink-UH')), 'DMA IO response should return via TileLink-UH');
 }
 
 function testDirectMemoryLatency() {
@@ -516,6 +592,7 @@ testUhAtomicsThroughSimpleCache();
 testDmaByteTransfer();
 testDmaWordIncrementingTransfer();
 testDmaRegisterMmio();
+testDmaIoUsesUhUlBridge();
 testDirectMemoryLatency();
 testMmuAndSplitBusRouting();
 testTileLinkBridgeInteractionLogs();

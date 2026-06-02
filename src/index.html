@@ -8,7 +8,8 @@
 
     <!-- CodeMirror Styles -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.css">
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.css">
 
     <!-- Material Design & Icons -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -32,9 +33,9 @@
                 <i class="material-icons">code</i>
                 <span>Editor</span>
             </div>
-            <div class="sidebar-item" data-target="view-processor" title="Processor">
+            <div class="sidebar-item" data-target="view-processor" title="SoC">
                 <i class="material-icons">memory</i>
-                <span>Processor</span>
+                <span>SoC</span>
             </div>
             <div class="sidebar-item" data-target="view-mmu" title="MMU">
                 <i class="material-icons">device_hub</i>
@@ -214,12 +215,54 @@
                 </div>
             </div>
 
-            <!-- VIEW 3: PROCESSOR (Placeholder) -->
+            <!-- VIEW 3: SoC Schematic View -->
             <div id="view-processor" class="view-section">
-                <div class="placeholder-view">
-                    <i class="material-icons">memory</i>
-                    <h2>Processor Datapath</h2>
-                    <p>Visual simulation of the processor datapath is coming soon.</p>
+                <div class="soc-view-container">
+                    <div class="soc-svg-wrapper">
+                        <!-- SVG Diagram container. Nodes and orthogonal edges are rendered from js/soc_diagram.js. -->
+                        <svg class="soc-svg" viewBox="0 0 1180 620" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"
+                            aria-label="RISC-V SoC block diagram"></svg>
+
+                        <!-- Hover Info card container (Tooltips) -->
+                        <div class="soc-tooltip" id="soc-tooltip">
+                            <i class="material-icons">help_outline</i>
+                            <div class="soc-tooltip-content" id="soc-tooltip-text">
+                                Hover over any block to learn about its architecture and specifications.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Legend area -->
+                    <div class="soc-legend">
+                        <div class="legend-item">
+                            <div class="legend-color legend-compute"></div>
+                            <span>Compute / Master Blocks</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-memory"></div>
+                            <span>Memory & Caches</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-bus"></div>
+                            <span>TileLink Interconnect</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color legend-peripheral"></div>
+                            <span>MMIO Peripherals</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-bus-type">
+                                <div class="legend-bus-line legend-line-uh"></div>
+                                TileLink-UH Coherent Bus (High-Speed)
+                            </span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-bus-type">
+                                <div class="legend-bus-line legend-line-ul"></div>
+                                TileLink-UL Bus (Low-Speed/MMIO)
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -240,39 +283,53 @@
                             <div class="mmu-overview-grid">
                                 <div class="mmu-overview-section">
                                     <div class="mmu-section-title">MMU Configuration Settings</div>
-                                    <div class="mmu-settings-panel" style="padding: 12px; border-bottom: 1px solid #eef1f4; display: flex; flex-direction: column; gap: 8px; background: #fff;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                                            <label for="mmuPageSizeSelect" style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">Page Size:</label>
-                                            <select id="mmuPageSizeSelect" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
+                                    <div class="mmu-settings-panel"
+                                        style="padding: 12px; border-bottom: 1px solid #eef1f4; display: flex; flex-direction: column; gap: 8px; background: #fff;">
+                                        <div
+                                            style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="mmuPageSizeSelect"
+                                                style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">Page
+                                                Size:</label>
+                                            <select id="mmuPageSizeSelect"
+                                                style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
                                                 <option value="1024">1 KB</option>
                                                 <option value="2048">2 KB</option>
                                                 <option value="4096" selected>4 KB</option>
                                                 <option value="8192">8 KB</option>
                                             </select>
                                         </div>
-                                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                                            <label for="mmuTlbSizeSelect" style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">TLB Entries:</label>
-                                            <select id="mmuTlbSizeSelect" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
+                                        <div
+                                            style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="mmuTlbSizeSelect"
+                                                style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">TLB
+                                                Entries:</label>
+                                            <select id="mmuTlbSizeSelect"
+                                                style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
                                                 <option value="4">4 slots</option>
                                                 <option value="8" selected>8 slots</option>
                                                 <option value="16">16 slots</option>
                                                 <option value="32">32 slots</option>
                                             </select>
                                         </div>
-                                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                                            <label for="mmuTlbWaysSelect" style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">Associativity:</label>
-                                            <select id="mmuTlbWaysSelect" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
+                                        <div
+                                            style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="mmuTlbWaysSelect"
+                                                style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">Associativity:</label>
+                                            <select id="mmuTlbWaysSelect"
+                                                style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
                                                 <option value="2">2-Way Set-Associative</option>
                                                 <option value="4" selected>4-Way Set-Associative</option>
                                                 <option value="fully">Fully Associative</option>
                                             </select>
                                         </div>
-                                        <button id="applyMmuSettingsBtn" class="mdc-button mdc-button--raised" style="width: 100%; margin-top: 4px; height: 32px; font-size: 0.78rem;">
+                                        <button id="applyMmuSettingsBtn" class="mdc-button mdc-button--raised"
+                                            style="width: 100%; margin-top: 4px; height: 32px; font-size: 0.78rem;">
                                             <span class="mdc-button__label">Apply & Reset Simulator</span>
                                         </button>
                                     </div>
                                     <div class="mmu-section-title">Configuration Parameters</div>
-                                    <div class="table-scroll-container mmu-compact-table" style="max-height: calc(100vh - 540px);">
+                                    <div class="table-scroll-container mmu-compact-table"
+                                        style="max-height: calc(100vh - 540px);">
                                         <table class="simple-table">
                                             <thead>
                                                 <tr>
@@ -1198,7 +1255,8 @@ _start:
                             <div class="help-callout">
                                 Đặt syscall ID trong <code>a7</code>, đặt arguments trong <code>a0</code>,
                                 <code>a1</code>, <code>a2</code>, sau đó gọi <code>ecall</code>. Trong trình duyệt, các
-                                syscall in/exit hiển thị trong Console / Binary Output; UART MMIO vẫn dùng cho I/O thiết bị.
+                                syscall in/exit hiển thị trong Console / Binary Output; UART MMIO vẫn dùng cho I/O thiết
+                                bị.
                             </div>
                             <table class="help-table">
                                 <thead>
