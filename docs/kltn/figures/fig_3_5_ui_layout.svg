@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 712" font-family="Segoe UI, Arial, sans-serif">
+  <style>
+    .bg{fill:#eef1f4}
+    .panel{fill:#ffffff;stroke:#cfd6dd;stroke-width:1}
+    .bar{fill:#f5f6f8;stroke:#cfd6dd;stroke-width:1}
+    .side{fill:#2d3436}
+    .sideLbl{fill:#cdd2d6;font-size:11px;text-anchor:middle}
+    .sideLblA{fill:#ffffff;font-size:11px;text-anchor:middle;font-weight:bold}
+    .icon{fill:#4b5358}
+    .iconA{fill:#0984e3}
+    .btnLblW{font-size:12px;fill:#ffffff;text-anchor:middle;font-weight:bold}
+    .btnLbl{font-size:12px;fill:#2d3436;text-anchor:middle}
+    .h{font-size:12px;fill:#2d3436;font-weight:bold}
+    .t{font-size:11px;fill:#636e72}
+    .code{font-size:11px;fill:#2d3436;font-family:Consolas,monospace}
+    .mut{font-size:10px;fill:#9aa3ab}
+    .cap{font-size:13px;fill:#2d3436;font-weight:bold;text-anchor:middle}
+    .gut{fill:#f0f2f4}
+  </style>
+
+  <!-- canvas -->
+  <rect x="72" y="56" width="968" height="624" class="bg"/>
+
+  <!-- ===== Sidebar ===== -->
+  <rect x="0" y="0" width="72" height="680" class="side"/>
+  <!-- active accent for Editor -->
+  <rect x="0" y="34" width="4" height="60" fill="#0984e3"/>
+  <!-- items: Editor(active), SoC, MMU, Cache, Memory, I/O, Help -->
+  <rect x="24" y="44" width="24" height="24" rx="4" class="iconA"/><text x="36" y="84" class="sideLblA">Editor</text>
+  <rect x="24" y="132" width="24" height="24" rx="4" class="icon"/><text x="36" y="172" class="sideLbl">SoC</text>
+  <rect x="24" y="220" width="24" height="24" rx="4" class="icon"/><text x="36" y="260" class="sideLbl">MMU</text>
+  <rect x="24" y="308" width="24" height="24" rx="4" class="icon"/><text x="36" y="348" class="sideLbl">Cache</text>
+  <rect x="24" y="396" width="24" height="24" rx="4" class="icon"/><text x="36" y="436" class="sideLbl">Memory</text>
+  <rect x="24" y="484" width="24" height="24" rx="4" class="icon"/><text x="36" y="524" class="sideLbl">I/O</text>
+  <rect x="24" y="600" width="24" height="24" rx="4" class="icon"/><text x="36" y="640" class="sideLbl">Help</text>
+
+  <!-- ===== Toolbar ===== -->
+  <rect x="72" y="0" width="968" height="56" class="bar"/>
+  <rect x="88" y="14" width="116" height="28" rx="4" fill="#6c5ce7"/><text x="146" y="33" class="btnLblW">ASSEMBLE</text>
+  <line x1="216" y1="12" x2="216" y2="44" stroke="#cfd6dd"/>
+  <rect x="230" y="14" width="70" height="28" rx="4" class="panel"/><text x="265" y="33" class="btnLbl">RESET</text>
+  <rect x="308" y="14" width="64" height="28" rx="4" fill="#00b894"/><text x="340" y="33" class="btnLblW">RUN</text>
+  <rect x="380" y="14" width="80" height="28" rx="4" class="panel"/><text x="420" y="33" class="btnLbl">PAUSE</text>
+  <rect x="468" y="14" width="70" height="28" rx="4" class="panel"/><text x="503" y="33" class="btnLbl">STOP</text>
+  <rect x="546" y="14" width="64" height="28" rx="4" class="panel"/><text x="578" y="33" class="btnLbl">STEP</text>
+  <line x1="624" y1="12" x2="624" y2="44" stroke="#cfd6dd"/>
+  <text x="644" y="26" class="t">Speed: 1x</text>
+  <rect x="644" y="34" width="150" height="4" rx="2" fill="#cfd6dd"/><circle cx="650" cy="36" r="6" fill="#0984e3"/>
+  <text x="830" y="33" class="h">IPS: <tspan fill="#0984e3">0 Hz</tspan></text>
+
+  <!-- ===== Main content: Editor view ===== -->
+  <!-- Left: code editor -->
+  <rect x="88" y="72" width="544" height="372" class="panel"/>
+  <rect x="88" y="72" width="32" height="372" class="gut"/>
+  <text x="128" y="90" class="h">Trình soạn thảo (CodeMirror) — RISC-V assembly</text>
+  <text x="128" y="116" class="code">.data</text>
+  <text x="128" y="134" class="code">msg: .asciiz "Hello\n"</text>
+  <text x="128" y="160" class="code">.text</text>
+  <text x="128" y="178" class="code">.globl _start</text>
+  <text x="128" y="196" class="code">_start:</text>
+  <text x="128" y="214" class="code">    la   a0, msg</text>
+  <text x="128" y="232" class="code">    li   a7, 4</text>
+  <text x="128" y="250" class="code">    ecall</text>
+  <text x="100" y="116" class="mut">1</text><text x="100" y="134" class="mut">2</text>
+  <text x="100" y="160" class="mut">3</text><text x="100" y="178" class="mut">4</text>
+  <text x="100" y="196" class="mut">5</text><text x="100" y="214" class="mut">6</text>
+  <text x="100" y="232" class="mut">7</text><text x="100" y="250" class="mut">8</text>
+
+  <!-- Left: console / binary output -->
+  <rect x="88" y="456" width="544" height="200" class="panel"/>
+  <rect x="88" y="456" width="544" height="24" class="bar"/>
+  <text x="98" y="472" class="h">Console / Binary Output</text>
+  <text x="98" y="500" class="code">0x00500513  (00000000010100000000001010010011)</text>
+  <text x="98" y="518" class="code">0x00400297  (...)</text>
+  <text x="98" y="544" class="code">--- Running ---</text>
+  <text x="98" y="562" class="code">Hello</text>
+
+  <!-- Right: registers -->
+  <rect x="648" y="72" width="120" height="26" rx="4" class="panel"/><text x="708" y="89" class="h" text-anchor="middle">Registers</text>
+  <rect x="648" y="96" width="120" height="3" fill="#0984e3"/>
+  <rect x="772" y="72" width="124" height="26" rx="4" class="panel"/><text x="834" y="89" class="t" text-anchor="middle">Floating Point</text>
+  <rect x="648" y="104" width="376" height="552" class="panel"/>
+  <rect x="648" y="104" width="376" height="24" class="bar"/>
+  <text x="660" y="120" class="h">Name</text><text x="800" y="120" class="h">Value (Hex)</text><text x="960" y="120" class="h">Dec</text>
+  <!-- rows -->
+  <g class="code">
+    <text x="660" y="146">x0  (zero)</text><text x="800" y="146">0x00000000</text><text x="960" y="146">0</text>
+    <text x="660" y="170">x1  (ra)</text><text x="800" y="170">0x00400014</text><text x="960" y="170">4194324</text>
+    <text x="660" y="194">x2  (sp)</text><text x="800" y="194">0x7ffffff0</text><text x="960" y="194">...</text>
+  </g>
+  <rect x="648" y="204" width="376" height="24" fill="#fff3cd"/>
+  <g class="code">
+    <text x="660" y="220">x10 (a0)</text><text x="800" y="220">0x10010000</text><text x="960" y="220">...</text>
+    <text x="660" y="244">x17 (a7)</text><text x="800" y="244">0x00000004</text><text x="960" y="244">4</text>
+  </g>
+  <text x="660" y="276" class="mut">… (x0–x31)</text>
+
+  <!-- caption -->
+  <text x="520" y="700" class="cap">Hình 3.5. Giao diện web tổng quan (đang hiển thị khung Editor)</text>
+</svg>

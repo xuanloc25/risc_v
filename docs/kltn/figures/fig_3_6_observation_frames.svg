@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 868" font-family="Segoe UI, Arial, sans-serif">
+  <style>
+    .panel{fill:#ffffff;stroke:#cfd6dd;stroke-width:1}
+    .bar{fill:#f5f6f8;stroke:#cfd6dd;stroke-width:1}
+    .h{font-size:11px;fill:#2d3436;font-weight:bold}
+    .sec{font-size:13px;fill:#2d3436;font-weight:bold}
+    .t{font-size:11px;fill:#636e72}
+    .code{font-size:11px;fill:#2d3436;font-family:Consolas,monospace}
+    .cap{font-size:13px;fill:#2d3436;font-weight:bold;text-anchor:middle}
+    .row{stroke:#eef1f4;stroke-width:1}
+  </style>
+
+  <!-- ========== A) Register frame ========== -->
+  <text x="40" y="26" class="sec">a) Khung thanh ghi (trong khung nhìn Editor)</text>
+  <!-- tabs -->
+  <rect x="40" y="40" width="120" height="26" rx="4" class="panel"/><text x="100" y="57" class="h" text-anchor="middle">Registers</text>
+  <rect x="40" y="64" width="120" height="3" fill="#0984e3"/>
+  <rect x="164" y="40" width="124" height="26" rx="4" class="panel"/><text x="226" y="57" class="t" text-anchor="middle">Floating Point</text>
+
+  <!-- integer table -->
+  <rect x="40" y="78" width="460" height="232" class="panel"/>
+  <rect x="40" y="78" width="460" height="24" class="bar"/>
+  <text x="52" y="94" class="h">Name</text><text x="230" y="94" class="h">Value (Hex)</text><text x="400" y="94" class="h">Dec</text>
+  <g class="code">
+    <text x="52" y="122">x0  (zero)</text><text x="230" y="122">0x00000000</text><text x="400" y="122">0</text>
+    <text x="52" y="148">x1  (ra)</text><text x="230" y="148">0x00400014</text><text x="400" y="148">4194324</text>
+    <text x="52" y="174">x2  (sp)</text><text x="230" y="174">0x7ffffff0</text><text x="400" y="174">2147483632</text>
+  </g>
+  <rect x="40" y="184" width="460" height="26" fill="#fff3cd"/>
+  <g class="code">
+    <text x="52" y="202">x10 (a0)</text><text x="230" y="202">0x10010000</text><text x="400" y="202">268500992</text>
+    <text x="52" y="228">x17 (a7)</text><text x="230" y="228">0x00000004</text><text x="400" y="228">4</text>
+  </g>
+  <text x="52" y="262" class="t">… đủ x0–x31; ô tô vàng = giá trị vừa thay đổi</text>
+
+  <!-- fp table -->
+  <rect x="540" y="78" width="460" height="232" class="panel"/>
+  <rect x="540" y="78" width="460" height="24" class="bar"/>
+  <text x="552" y="94" class="h">Register</text><text x="700" y="94" class="h">Float Value</text><text x="870" y="94" class="h">Hex (Bits)</text>
+  <g class="code">
+    <text x="552" y="122">f0  (ft0)</text><text x="700" y="122">0.0</text><text x="870" y="122">0x00000000</text>
+    <text x="552" y="148">f10 (fa0)</text><text x="700" y="148">3.14</text><text x="870" y="148">0x4048f5c3</text>
+    <text x="552" y="174">f12 (fa2)</text><text x="700" y="174">-1.5</text><text x="870" y="174">0xbfc00000</text>
+  </g>
+  <text x="552" y="208" class="t">… đủ f0–f31 (RV32F single precision)</text>
+
+  <!-- ========== B) Memory frame ========== -->
+  <text x="40" y="356" class="sec">b) Khung bộ nhớ (trong khung nhìn Memory)</text>
+
+  <!-- Instruction Memory -->
+  <rect x="40" y="372" width="960" height="190" class="panel"/>
+  <rect x="40" y="372" width="960" height="24" class="bar"/>
+  <text x="52" y="388" class="h">Instruction Memory</text>
+  <rect x="40" y="396" width="960" height="22" fill="#fafbfc"/>
+  <text x="52" y="411" class="h">Bkpt</text><text x="110" y="411" class="h">Address</text><text x="240" y="411" class="h">Code</text><text x="380" y="411" class="h">Basic</text><text x="560" y="411" class="h">Source</text>
+  <g class="code">
+    <circle cx="62" cy="434" r="5" fill="#d63031"/>
+    <text x="110" y="438">0x00400000</text><text x="240" y="438">0x00500513</text><text x="380" y="438">addi a0,zero,5</text><text x="560" y="438">li a0, 5</text>
+    <text x="110" y="462">0x00400004</text><text x="240" y="462">0x00400297</text><text x="380" y="462">auipc t0,0x0</text><text x="560" y="462">la a0, msg</text>
+    <text x="110" y="486">0x00400008</text><text x="240" y="486">0x00428513</text><text x="380" y="486">addi a0,t0,4</text><text x="560" y="486"> </text>
+    <text x="110" y="510">0x0040000c</text><text x="240" y="510">0x00400893</text><text x="380" y="510">addi a7,zero,4</text><text x="560" y="510">li a7, 4</text>
+    <text x="110" y="534">0x00400010</text><text x="240" y="534">0x00000073</text><text x="380" y="534">ecall</text><text x="560" y="534">ecall</text>
+  </g>
+
+  <!-- Data Segment -->
+  <rect x="40" y="578" width="960" height="240" class="panel"/>
+  <rect x="40" y="578" width="960" height="24" class="bar"/>
+  <text x="52" y="594" class="h">Data Segment</text>
+  <!-- controls -->
+  <rect x="430" y="580" width="280" height="20" rx="3" fill="#fff" stroke="#cfd6dd"/><text x="440" y="594" class="t">Go to Address (e.g. 0x10010000)</text>
+  <rect x="718" y="580" width="44" height="20" rx="3" class="panel"/><text x="740" y="594" class="t" text-anchor="middle">Go</text>
+  <rect x="770" y="580" width="120" height="20" rx="3" class="panel"/><text x="830" y="594" class="t" text-anchor="middle">Toggle Hex/ASCII</text>
+  <!-- header -->
+  <rect x="40" y="602" width="960" height="22" fill="#fafbfc"/>
+  <g class="h">
+    <text x="52" y="617">Address</text>
+    <text x="190" y="617">+0</text><text x="290" y="617">+4</text><text x="390" y="617">+8</text><text x="490" y="617">+c</text>
+    <text x="590" y="617">+10</text><text x="690" y="617">+14</text><text x="790" y="617">+18</text><text x="890" y="617">+1c</text>
+  </g>
+  <g class="code">
+    <text x="52" y="644">0x10010000</text>
+    <text x="190" y="644">6c6c6548</text><text x="290" y="644">00000a6f</text><text x="390" y="644">00000000</text><text x="490" y="644">00000000</text>
+    <text x="590" y="644">00000000</text><text x="690" y="644">00000000</text><text x="790" y="644">00000000</text><text x="890" y="644">00000000</text>
+    <text x="52" y="668">0x10010020</text>
+    <text x="190" y="668">00000000</text><text x="290" y="668">00000000</text><text x="390" y="668">00000000</text><text x="490" y="668">00000000</text>
+    <text x="590" y="668">00000000</text><text x="690" y="668">00000000</text><text x="790" y="668">00000000</text><text x="890" y="668">00000000</text>
+  </g>
+  <text x="52" y="700" class="t">Nút "Toggle Hex/ASCII" chuyển giữa hiển thị thập lục phân và ký tự ASCII</text>
+
+  <!-- caption -->
+  <text x="520" y="852" class="cap">Hình 3.6. Các khung quan sát thanh ghi và bộ nhớ</text>
+</svg>
