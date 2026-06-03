@@ -23,8 +23,7 @@ _start:
     # config = (dstMode<<30) | (srcMode<<28) | (bswap<<27) | numElements
     # Config: srcMode=2, dstMode=0, numElements=10 -> 0x2000000A
 
-    lui t5, 0x20000
-    addi t5, t5, 10
+    li t5, 0x2000000A
     sw    t5, 0(t2)
 
     # Enable DMA (CTRL = 1)
