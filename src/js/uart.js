@@ -34,6 +34,7 @@ export class UART {
         this.bitsPerFrame = 10;           // START + 8 data + STOP
         this.txCyclesRemaining = 0;       // Cycles until TX ready again
         this.rxCyclesRemaining = 0;       // Cycles until RX ready
+        this.pendingTx = null;           // Char scheduled for transmission completion
         
         // Callbacks for UI updates
         this.onTransmit = null;   // Called when character is transmitted
@@ -118,23 +119,19 @@ export class UART {
             console.warn('[UART] TX not ready, dropping character');
             return;
         }
-        
-        this.txBuffer.push(charCode);
-        
-        // Notify UI callback
-        if (typeof this.onTransmit === 'function') {
-            this.onTransmit(charCode);
-        }
-        
+
+        // Schedule character to be considered "transmitted" when countdown reaches 0
+        this.pendingTx = charCode;
+
         // Calculate transmission delay based on baud rate
         // Time per byte = bits_per_frame / baud_rate (seconds)
         // CPU cycles = time * cpu_frequency
         const cyclesPerByte = Math.floor((this.bitsPerFrame * this.cpuFrequency) / this.baudRate);
-        
+
         this.txReady = false;
         this.txCyclesRemaining = cyclesPerByte;
-        
-        console.log(`[UART] Transmitting 0x${charCode.toString(16)}, will be ready in ${cyclesPerByte} cycles (${(cyclesPerByte/this.cpuFrequency*1000000).toFixed(2)} μs)`);
+
+        console.log(`[UART] Transmitting 0x${charCode.toString(16)}, will complete in ${cyclesPerByte} cycles (${(cyclesPerByte/this.cpuFrequency*1000000).toFixed(2)} μs)`);
     }
     
     // Receive a character (called when CPU reads from UART_RX)
@@ -193,6 +190,7 @@ export class UART {
         this.rxInterruptEnable = false;
         this.txCyclesRemaining = 0;
         this.rxCyclesRemaining = 0;
+        this.pendingTx = null;
         this.baudDivisor = 26; // Reset to default (115200 @ 48MHz/16x)
         this.baudRate = this.peripheralClock / (this.oversampling * this.baudDivisor);
     }
@@ -207,6 +205,14 @@ export class UART {
             }
             if (this.txCyclesRemaining === 0) {
                 this.txReady = true;
+                // Finalize transmission: push to buffer and notify UI
+                if (this.pendingTx !== null) {
+                    this.txBuffer.push(this.pendingTx);
+                    if (typeof this.onTransmit === 'function') {
+                        this.onTransmit(this.pendingTx);
+                    }
+                    this.pendingTx = null;
+                }
                 console.log('[UART] ✅ TX ready again after countdown');
             }
         }
