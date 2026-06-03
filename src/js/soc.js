@@ -314,7 +314,7 @@ export const simulator = {
         const CacheConfigL1 = {
             numSets: 16,
             numWays: 4,
-            blockSize: 64,
+            blockSize: 128,
             hitLatency: 1,
             missLatency: 5,
             isCacheable: isCacheableAddress
@@ -322,7 +322,7 @@ export const simulator = {
         const CacheConfigL2 = {
             numSets: 64,
             numWays: 4,
-            blockSize: 64,
+            blockSize: 128,
             hitLatency: 2,
             missLatency: 10,
             isCacheable: isCacheableAddress

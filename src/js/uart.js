@@ -16,6 +16,8 @@ export class UART {
         // Buffers
         this.txBuffer = [];       // Output buffer (characters sent to console)
         this.rxBuffer = [];       // Input buffer (characters from user input)
+        this.txQueue = [];        // Pending transmit queue (queued while TX busy)
+        this.txQueueDepth = 16;   // Max queued bytes
         
         // Status flags
         this.txReady = true;      // TX ready to accept new character
@@ -35,6 +37,7 @@ export class UART {
         this.txCyclesRemaining = 0;       // Cycles until TX ready again
         this.rxCyclesRemaining = 0;       // Cycles until RX ready
         this.pendingTx = null;           // Char scheduled for transmission completion
+
         
         // Callbacks for UI updates
         this.onTransmit = null;   // Called when character is transmitted
@@ -89,10 +92,13 @@ export class UART {
                 // Bit 1: RX Available (1 = has data to read)
                 // Bit 2: TX Interrupt Enable
                 // Bit 3: RX Interrupt Enable
-                return (this.txReady ? 0x01 : 0x00) |
-                       (this.rxAvailable ? 0x02 : 0x00) |
-                       (this.txInterruptEnable ? 0x04 : 0x00) |
-                       (this.rxInterruptEnable ? 0x08 : 0x00);
+                  // Bit 4: TX Busy (1 = transmitting or queue not empty)
+                  const txBusy = (this.pendingTx !== null) || (this.txQueue && this.txQueue.length > 0) || (this.txCyclesRemaining > 0);
+                  return (this.txReady ? 0x01 : 0x00) |
+                      (this.rxAvailable ? 0x02 : 0x00) |
+                      (this.txInterruptEnable ? 0x04 : 0x00) |
+                      (this.rxInterruptEnable ? 0x08 : 0x00) |
+                      (txBusy ? 0x10 : 0x00);
                        
             case this.UART_CTRL:
                 // Control register
@@ -115,23 +121,32 @@ export class UART {
     
     // Transmit a character (called when CPU writes to UART_TX)
     transmit(charCode) {
-        if (!this.txReady) {
-            console.warn('[UART] TX not ready, dropping character');
+        // If a transmission is already in progress, enqueue the byte if there's space
+        if (this.pendingTx !== null) {
+            if (this.txQueue.length < this.txQueueDepth) {
+                this.txQueue.push(charCode & 0xFF);
+                // txReady reflects whether there's space to accept another byte
+                this.txReady = this.txQueue.length < this.txQueueDepth;
+                console.log(`[UART] TX busy; queued 0x${(charCode & 0xFF).toString(16)} (queue=${this.txQueue.length})`);
+            } else {
+                console.warn('[UART] TX queue full, dropping character');
+            }
             return;
         }
 
-        // Schedule character to be considered "transmitted" when countdown reaches 0
-        this.pendingTx = charCode;
+        // No current transmission: schedule character to be considered "transmitted" when countdown reaches 0
+        this.pendingTx = charCode & 0xFF;
 
         // Calculate transmission delay based on baud rate
         // Time per byte = bits_per_frame / baud_rate (seconds)
         // CPU cycles = time * cpu_frequency
         const cyclesPerByte = Math.floor((this.bitsPerFrame * this.cpuFrequency) / this.baudRate);
 
-        this.txReady = false;
+        // Accept the byte; txReady indicates whether more bytes can be accepted into queue
+        this.txReady = this.txQueue.length < this.txQueueDepth;
         this.txCyclesRemaining = cyclesPerByte;
 
-        console.log(`[UART] Transmitting 0x${charCode.toString(16)}, will complete in ${cyclesPerByte} cycles (${(cyclesPerByte/this.cpuFrequency*1000000).toFixed(2)} μs)`);
+        console.log(`[UART] Transmitting 0x${this.pendingTx.toString(16)}, will complete in ${cyclesPerByte} cycles (${(cyclesPerByte/this.cpuFrequency*1000000).toFixed(2)} μs)`);
     }
     
     // Receive a character (called when CPU reads from UART_RX)
@@ -204,7 +219,6 @@ export class UART {
                 console.log(`[UART TICK] TX cycles remaining: ${this.txCyclesRemaining}`);
             }
             if (this.txCyclesRemaining === 0) {
-                this.txReady = true;
                 // Finalize transmission: push to buffer and notify UI
                 if (this.pendingTx !== null) {
                     this.txBuffer.push(this.pendingTx);
@@ -213,7 +227,20 @@ export class UART {
                     }
                     this.pendingTx = null;
                 }
-                console.log('[UART] ✅ TX ready again after countdown');
+
+                // If there's queued bytes, start the next transmission immediately
+                if (this.txQueue.length > 0) {
+                    const next = this.txQueue.shift();
+                    this.pendingTx = next;
+                    const cyclesPerByte = Math.floor((this.bitsPerFrame * this.cpuFrequency) / this.baudRate);
+                    this.txCyclesRemaining = cyclesPerByte;
+                    // txReady true if queue still has space
+                    this.txReady = this.txQueue.length < this.txQueueDepth;
+                    console.log(`[UART] Dequeued 0x${next.toString(16)}; will complete in ${cyclesPerByte} cycles (queue=${this.txQueue.length})`);
+                } else {
+                    this.txReady = true;
+                    console.log('[UART] ✅ TX ready again after countdown');
+                }
             }
         }
         
