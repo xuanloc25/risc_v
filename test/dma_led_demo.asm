@@ -48,9 +48,12 @@ _start:
     # --- Đẩy descriptor vào FIFO (3 lần SW vào cùng 1 địa chỉ DESC) ---
     sw    t2, 0(t1)            # word 1: source address = pixel_row
     sw    t3, 0(t1)            # word 2: dest address   = LED Matrix base
-    li    t5, 0xF0000020       # word 3: config
-    #   0xF0000020 = (dstMode=3 << 30) | (srcMode=3 << 28) | 32 elements
-    #   → 32 lần đọc/ghi 4 bytes, src tăng 4 mỗi lần, dst tăng 4 mỗi lần
+    # New mapping: want word-increment for both src/dst, 32 elements
+    # => dstMode=1 (inc), srcMode=1 (inc), srcWidth=2 (32-bit), dstWidth=2 (32-bit)
+    # config = (1<<30)|(1<<28)|(2<<26)|(2<<24)|32 = 0x5A000020
+    li    t5, 0x5A000020       # word 3: config (new mapping)
+    #   0x5A000020 = dstMode=1, srcMode=1, srcWidth=2, dstWidth=2, 32 elements
+    #   → 32 reads/writes of 4 bytes, src/dst increment by 4 each transfer
     sw    t5, 0(t1)
 
     # --- Kích hoạt transfer (EN | START) ---

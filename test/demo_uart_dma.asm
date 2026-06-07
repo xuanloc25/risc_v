@@ -19,11 +19,12 @@ _start:
     sw    t0, 0(t2)        # descriptor.word0 = source address
     sw    t1, 0(t2)        # descriptor.word1 = dest address (UART TX)
 
-    # Config: srcMode=2 (increment by 1), dstMode=0 (fixed), bswap=0
-    # config = (dstMode<<30) | (srcMode<<28) | (bswap<<27) | numElements
-    # Config: srcMode=2, dstMode=0, numElements=10 -> 0x2000000A
+    # New mapping: dstMode[31:30], srcMode[29:28], srcWidth[27:26], dstWidth[25:24], bswap[20], numElements[15:0]
+    # Old intent: src byte-increment, dst fixed, numElements=10
+    # => srcMode=1 (increment), srcWidth=0 (byte), dstMode=0 (fixed), dstWidth=0 (byte)
+    # config = (0<<30) | (1<<28) | (0<<26) | (0<<24) | 10 = 0x1000000A
 
-    li t5, 0x2000000A
+    li t5, 0x1820000A
     sw    t5, 0(t2)
 
     # Enable DMA (CTRL = 1)

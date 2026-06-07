@@ -284,7 +284,7 @@ function testDmaWordIncrementingTransfer() {
     dma.registers.writeCtrl(1);
     dma.registers.writeDescriptor(0x500);
     dma.registers.writeDescriptor(0x600);
-    dma.registers.writeDescriptor(DMADescriptor.createConfig(2, 0, 3, 3));
+    dma.registers.writeDescriptor(DMADescriptor.createConfig(2, 0, 1, 1, 2, 2));
     dma.registers.writeCtrl(3);
 
     tickDmaMemoryUntil(dma, tilelink_UH, mem, () => !dma.isBusy && !dma.registers.startRequested);
@@ -368,7 +368,7 @@ function testDmaIoUsesUhUlBridge() {
         dma.registers.writeCtrl(1);
         dma.registers.writeDescriptor(0x300);
         dma.registers.writeDescriptor(LED_BASE);
-        dma.registers.writeDescriptor(DMADescriptor.createConfig(1, 0, 3, 3));
+        dma.registers.writeDescriptor(DMADescriptor.createConfig(1, 0, 1, 1, 2, 2));
         dma.registers.writeCtrl(3);
         tickDmaFabricUntil({ dma, tilelink_UH, tilelink_UL, mem }, () => !dma.isBusy && ledWrites.length === 1);
     });

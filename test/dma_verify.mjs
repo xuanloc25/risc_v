@@ -112,7 +112,7 @@ _start:
 
     sw    t2, 0(t1)             # src addr
     sw    t3, 0(t1)             # dst addr
-    li    t5, 0xA0000010        # config: dstMode=2,srcMode=2,len=16
+    li    t5, 0xAA000010        # config: dstMode=2,srcMode=2,srcWidth=2,dstWidth=2,len=16 (new mapping)
     sw    t5, 0(t1)             # config word
 
     # Bước 3: Enable + Start (bit0|bit1 = 3)
@@ -166,8 +166,8 @@ console.log(`[Source] 0x700 = ${hex(peekWord(0x700))}`);
 console.log(`[Source] 0x704 = ${hex(peekWord(0x704))}`);
 
 // config: dstMode=3 (word-stride), srcMode=3 (word-stride), bswap=1, numElements=2 (2×4-byte words = 8 bytes)
-// swapBytes(data, 4) reverses all 4 bytes → 0x11223344 → 0x44332211
-const bswapConfig = (3 << 30) | (3 << 28) | (1 << 27) | 2;
+// Using new mapping: bits dstMode/srcMode/srcWidth/dstWidth/bswap/numElements
+const bswapConfig = (3 << 30) | (3 << 28) | (2 << 26) | (2 << 24) | (1 << 20) | 2;
 simulator.dma.start(0x700, 0x800, 2);   // 2 elements placeholder, configWord overridden below
 simulator.dma.registers.descriptorFifo[0].configWord = bswapConfig >>> 0;
 const cycles3 = runUntilDone();
