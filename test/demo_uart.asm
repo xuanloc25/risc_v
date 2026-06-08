@@ -13,8 +13,8 @@ _start:
 
 wait_tx_ready_A:
     lw    x3, 8(x1)        # UART_STATUS
-    andi  x3, x3, 1        # bit0 = TX ready
-    beq   x3, x0, wait_tx_ready_A
+    andi  x3, x3, 16       # bit4 = TX busy
+    bne   x3, x0, wait_tx_ready_A
 
     # Send 'B'
     addi  x2, x0, 66       # 'B'
@@ -22,8 +22,8 @@ wait_tx_ready_A:
 
 wait_tx_ready_B:
     lw    x3, 8(x1)        # UART_STATUS
-    andi  x3, x3, 1        # bit0 = TX ready
-    beq   x3, x0, wait_tx_ready_B
+    andi  x3, x3, 16       # bit4 = TX busy
+    bne   x3, x0, wait_tx_ready_B
 
     # Send 'C'
     addi  x2, x0, 67       # 'C'
@@ -31,8 +31,8 @@ wait_tx_ready_B:
 
 wait_tx_ready_C:
     lw    x3, 8(x1)        # UART_STATUS
-    andi  x3, x3, 1        # bit0 = TX ready
-    beq   x3, x0, wait_tx_ready_C
+    andi  x3, x3, 16       # bit4 = TX busy
+    bne   x3, x0, wait_tx_ready_C
 
     addi  x17, x0, 93    # ecall: exit
     addi  x10, x0, 0     # exit code 0

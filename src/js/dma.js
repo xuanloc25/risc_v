@@ -27,14 +27,14 @@ export class DMADescriptor {
     parseConfig() {
         const config = this.configWord >>> 0;
         return {
-            dstMode: (config >>> 30) & 0x3,
-            srcMode: (config >>> 28) & 0x3,
-            srcWidth: (config >>> 26) & 0x3,
-            dstWidth: (config >>> 24) & 0x3,
-            burstSize: (config >>> 21) & 0x7,
-            bswap: (config >>> 20) & 0x1,
-            reserved: (config >>> 16) & 0xF,
-            numElements: config & 0xFFFF
+            dstMode: (config >>> 30) & 0x3,     // bits [31:30] destination address mode: 0=fixed,1=inc,2=dec
+            srcMode: (config >>> 28) & 0x3,     // bits [29:28] source address mode
+            srcWidth: (config >>> 26) & 0x3,    // bits [27:26] source element width: 0=8-bit,1=16-bit,2=32-bit
+            dstWidth: (config >>> 24) & 0x3,    // bits [25:24] destination element width
+            burstSize: (config >>> 21) & 0x7,   // bits [23:21] burst size code (0=1 beat, 1=4, 2=8, ...)
+            bswap: (config >>> 20) & 0x1,       // bit 20: byte-swap (endian) enable
+            reserved: (config >>> 16) & 0xF,    // bits [19:16] reserved (unused)
+            numElements: config & 0xFFFF        // bits [15:0] number of destination elements (count)
         };
     }
 
@@ -294,13 +294,11 @@ export class DMAController {
         this.waitingRequest = null;
         this.pendingResponse = null;
         this.activeRequestLink = null;
-        this.latchedData = 0;
-        this.latchedSrcAddr = 0;
-        this.latchedDstAddr = 0;
         this.burstRemainingReads = 0;
         this.burstRemainingWrites = 0;
-        this.burstDataBuffer = [];
         this.pendingRegReq = null;
+
+        // Note: use `waitingRequest` object to hold a queued request so the send occurs next tick
 
         console.log('[DMA] Controller initialized');
     }
@@ -373,6 +371,18 @@ export class DMAController {
     }
 
     tick() {
+
+        // If a request was queued in `waitingRequest` last tick, send it now (one-cycle delay)
+        if (this.waitingRequest && this.waitingRequest.req && !this.waitingRequest.__sent) {
+            try {
+                console.log(`[DMA] Sending queued request via=${describeLink(this.waitingRequest.link)} addr=0x${(this.waitingRequest.req.address>>>0).toString(16)}`);
+                this.waitingRequest.link.sendRequest(this.waitingRequest.from, this.waitingRequest.req);
+                this.waitingRequest.__sent = true;
+                this.activeRequestLink = this.waitingRequest.link;
+            } catch (e) {
+                console.error('[DMA] Error sending queued request', e);
+            }
+        }
 
         if (this.registers.canStartTransfer()) {
             this.startNextTransfer();
@@ -454,10 +464,8 @@ export class DMAController {
         this.waitingRequest = null;
         this.pendingResponse = null;
         this.activeRequestLink = null;
-        this.latchedData = 0;
         this.burstRemainingReads = 0;
         this.burstRemainingWrites = 0;
-        this.burstDataBuffer = [];
 
         this.registers.busy = true;
         this.registers.done = false;
@@ -528,13 +536,11 @@ export class DMAController {
                     const readReq = this.buildReadRequest(addr, this.srcWidth);
                     const requestLink = this._resolveLink(addr);
                     
-                    this.waitingRequest = readReq;
-                    this.activeRequestLink = requestLink;
+                    this.waitingRequest = { req: readReq, link: requestLink, from: 'dma', __sent: false };
                     console.log(
-                        `[DMA] BURST_READ via=${describeLink(requestLink)} ` +
+                        `[DMA] BURST_READ queued via=${describeLink(requestLink)} ` +
                         `beat=${this.burstRemainingReads} addr=0x${addr.toString(16)} width=${srcElemSize}B`
                     );
-                    requestLink.sendRequest('dma', readReq);
                     return;
                 }
 
@@ -591,14 +597,12 @@ export class DMAController {
                     const writeReq = this.buildWriteRequest(addr, dataToWrite, this.dstWidth);
                     const requestLink = this._resolveLink(addr);
                     
-                    this.waitingRequest = writeReq;
-                    this.activeRequestLink = requestLink;
+                    this.waitingRequest = { req: writeReq, link: requestLink, from: 'dma', __sent: false };
                     console.log(
-                        `[DMA] BURST_WRITE via=${describeLink(requestLink)} ` +
+                        `[DMA] BURST_WRITE queued via=${describeLink(requestLink)} ` +
                         `element=${this.transferProgress + 1}/${this.numElements} ` +
                         `addr=0x${addr.toString(16)} data=0x${dataToWrite.toString(16)}`
                     );
-                    requestLink.sendRequest('dma', writeReq);
                     return;
                 }
 
@@ -677,6 +681,8 @@ export class DMAController {
                 throw new Error(`Invalid write width: ${width}`);
         }
     }
+
+        // Note: requests are queued by setting `this.waitingRequest = { req, link, from, __sent:false }`.
 
     receiveResponse(resp) {
         console.log(

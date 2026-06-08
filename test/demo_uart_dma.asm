@@ -1,32 +1,32 @@
 .data
 msg:
-    .ascii "Hello DMA\n"
-
+    .ascii "Hello DMA!\n"
 .text
 .globl _start
 _start:
-    # Load addresses
-    la    t0, msg           # t0 = source address (in RAM .data)
-    li    t1, 0x10000000    # t1 = UART TX register (dest)
+    # --- 1. KHỞI TẠO TẤT CẢ THANH GHI Ở ĐẦU CHƯƠNG TRÌNH ---
+    # Việc gom hằng số lên đầu giúp CPU giải mã (Decode) ổn định, không bị bẫy timing cache
+    la    t0, msg           # t0 = source address (address of the message)
+    li    t1, 0x10000000    # t1 = UART base address
     li    t2, 0xFFED0004    # t2 = DMA DESC register (write-only)
     li    t3, 0xFFED0000    # t3 = DMA CTRL register
+    li    t5, 0x1820000A    # t5 = Khởi tạo trước cấu hình DMA (Né tránh dùng chung t0)
 
     # Make UART very fast: set baud divisor = 1
     li    t4, 1
     sw    t4, 16(t1)        # UART_BAUD (offset 0x10)
 
-    # Push descriptor: src, dst, config
-    sw    t0, 0(t2)        # descriptor.word0 = source address
-    sw    t1, 0(t2)        # descriptor.word1 = dest address (UART TX)
+    # --- 2. ĐẨY DESCRIPTOR VÀO DMA FIFO ---
+    # Word0 = source address
+    sw    t0, 0(t2)
+    
+    # Word1 = destination address (UART TX register/base)
+    sw    t1, 0(t2)
+    
+    # Word2 = config (Bây giờ lấy trực tiếp từ t5 an toàn tuyệt đối)
+    sw    t5, 0(t2)         # Kích hoạt hoàn tất 3/3 từ khóa Descriptor!
 
-    # New mapping: dstMode[31:30], srcMode[29:28], srcWidth[27:26], dstWidth[25:24], bswap[20], numElements[15:0]
-    # Old intent: src byte-increment, dst fixed, numElements=10
-    # => srcMode=1 (increment), srcWidth=0 (byte), dstMode=0 (fixed), dstWidth=0 (byte)
-    # config = (0<<30) | (1<<28) | (0<<26) | (0<<24) | 10 = 0x1000000A
-
-    li t5, 0x1820000A
-    sw    t5, 0(t2)
-
+    # --- 3. ĐIỀU KHIỂN HOẠT ĐỘNG DMA ---
     # Enable DMA (CTRL = 1)
     li    t4, 1
     sw    t4, 0(t3)
@@ -36,14 +36,15 @@ _start:
     sw    t4, 0(t3)
 
 wait_done:
+    # Poll DMA CTRL for DONE bit (bit 2)
     lw    t6, 0(t3)
-    andi  t6, t6, 4        # check DONE bit (bit2)
+    andi  t6, t6, 4
     beq   t6, x0, wait_done
 
-    # Ensure UART finished transmitting: wait for UART_STATUS.bit0 (TX ready)
+    # Wait until UART transmitter is idle (check TX busy at UART_STATUS offset 0x08)
 wait_uart:
-    lw    t6, 8(t1)       # read UART_STATUS (offset 0x08)
-    andi  t6, t6, 0x10    # TX busy bit (bit4)
+    lw    t6, 8(t1)
+    andi  t6, t6, 0x10    # TX busy bit (bit4); loop while busy
     bne   t6, x0, wait_uart
 
     # Exit (ecall)
