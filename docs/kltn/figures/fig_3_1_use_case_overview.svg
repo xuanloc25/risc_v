@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="15.5cm" height="9.47cm" viewBox="20 54 900 550" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Sơ đồ use case tổng quát</title>
+  <desc id="desc">Người học tương tác với các nhóm chức năng chính của trình mô phỏng SoC RISC-V; các chức năng được trình bày bằng ô chữ nhật và nối bằng đường thẳng gấp khúc.</desc>
+  <defs>
+    <marker id="assocEnd" markerWidth="10" markerHeight="10" refX="9" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#2d3436"/>
+    </marker>
+    <marker id="aEnd" markerWidth="10" markerHeight="10" refX="9" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#636e72"/>
+    </marker>
+  </defs>
+  <style>
+    .frame{fill:none;stroke:#9aa3ad;stroke-width:1.35;stroke-dasharray:5 4}
+    .actorBox{fill:#ffffff;stroke:#2d3436;stroke-width:1.6}
+    .assoc{stroke:#2d3436;stroke-width:1.45;fill:none}
+    .assocArrow{stroke:#2d3436;stroke-width:1.45;fill:none;marker-end:url(#assocEnd)}
+    .rel{stroke:#636e72;stroke-width:1.35;stroke-dasharray:5 4;fill:none;marker-end:url(#aEnd)}
+    .relStem{stroke:#636e72;stroke-width:1.35;stroke-dasharray:5 4;fill:none}
+    .main{fill:#e8e9fb;stroke:#2d3436;stroke-width:1.4}
+    .run{fill:#fde8e8;stroke:#2d3436;stroke-width:1.4}
+    .observe{fill:#efe9f5;stroke:#2d3436;stroke-width:1.4}
+    .detail{fill:#fdfbe0;stroke:#2d3436;stroke-width:1.25}
+    .lbl{font-size:16.2px;fill:#2d3436;font-weight:700;text-anchor:middle}
+    .small{font-size:14.5px;fill:#636e72;text-anchor:middle}
+  </style>
+  <rect width="940" height="640" fill="#ffffff"/>
+
+  <!-- Actor -->
+  <rect x="42" y="302" width="112" height="60" class="actorBox"/>
+  <text x="98" y="336" class="lbl">Người học</text>
+
+  <!-- System boundary -->
+  <rect x="190" y="64" width="708" height="530" rx="8" class="frame"/>
+
+  <!-- Association trunk keeps the diagram readable without curved links -->
+  <line x1="154" y1="332" x2="170" y2="332" class="assoc"/>
+  <line x1="170" y1="122" x2="170" y2="542" class="assoc"/>
+
+  <!-- Main use cases (left column) -->
+  <rect x="250" y="96" width="245" height="52" class="main"/>
+  <text x="372.5" y="118" class="lbl">Soạn thảo chương trình</text>
+  <text x="372.5" y="134" class="small">Hợp ngữ</text>
+  <line x1="170" y1="122" x2="250" y2="122" class="assocArrow"/>
+
+  <rect x="250" y="166" width="245" height="52" class="main"/>
+  <text x="372.5" y="188" class="lbl">Biên dịch chương trình</text>
+  <text x="372.5" y="204" class="small">Assemble và báo lỗi</text>
+  <line x1="170" y1="192" x2="250" y2="192" class="assocArrow"/>
+
+  <rect x="250" y="236" width="245" height="52" class="run"/>
+  <text x="372.5" y="258" class="lbl">Nạp và chạy</text>
+  <text x="372.5" y="274" class="small">Chương trình</text>
+  <line x1="170" y1="262" x2="250" y2="262" class="assocArrow"/>
+
+  <rect x="250" y="306" width="245" height="52" class="main"/>
+  <text x="372.5" y="337" class="lbl">Chạy từng bước</text>
+  <line x1="170" y1="332" x2="250" y2="332" class="assocArrow"/>
+
+  <rect x="250" y="376" width="245" height="52" class="main"/>
+  <text x="372.5" y="398" class="lbl">Tương tác thiết bị</text>
+  <text x="372.5" y="414" class="small">Ngoại vi</text>
+  <line x1="170" y1="402" x2="250" y2="402" class="assocArrow"/>
+
+  <rect x="250" y="446" width="245" height="52" class="main"/>
+  <text x="372.5" y="468" class="lbl">Cấu hình tham số</text>
+  <text x="372.5" y="484" class="small">MMU / Cache</text>
+  <line x1="170" y1="472" x2="250" y2="472" class="assocArrow"/>
+
+  <rect x="250" y="516" width="245" height="52" class="main"/>
+  <text x="372.5" y="538" class="lbl">Tra cứu hướng dẫn</text>
+  <text x="372.5" y="554" class="small">Help</text>
+  <line x1="170" y1="542" x2="250" y2="542" class="assocArrow"/>
+
+  <!-- Observation use case (header) connected to the trunk over the top -->
+  <rect x="540" y="96" width="330" height="56" class="observe"/>
+  <text x="705" y="129" class="lbl">Quan sát trạng thái hệ thống</text>
+  <path d="M170 122 L170 82 L705 82 L705 96" class="assocArrow"/>
+
+  <!-- Decomposition into specific observation panes (tree under "Quan sát") -->
+  <path d="M705 152 L705 506" class="relStem"/>
+
+  <rect x="540" y="222" width="150" height="56" class="detail"/>
+  <text x="615" y="255" class="lbl">Xem thanh ghi</text>
+  <rect x="720" y="222" width="150" height="56" class="detail"/>
+  <text x="795" y="255" class="lbl">Xem bộ nhớ</text>
+  <path d="M705 250 L690 250" class="rel"/>
+  <path d="M705 250 L720 250" class="rel"/>
+
+  <rect x="540" y="350" width="150" height="56" class="detail"/>
+  <text x="615" y="383" class="lbl">Xem bộ nhớ đệm</text>
+  <rect x="720" y="350" width="150" height="56" class="detail"/>
+  <text x="795" y="383" class="lbl">Xem MMU</text>
+  <path d="M705 378 L690 378" class="rel"/>
+  <path d="M705 378 L720 378" class="rel"/>
+
+  <rect x="540" y="478" width="150" height="56" class="detail"/>
+  <text x="615" y="502" class="lbl">Xem sơ đồ SoC</text>
+  <text x="615" y="518" class="small">Và giao dịch bus</text>
+  <rect x="720" y="478" width="150" height="56" class="detail"/>
+  <text x="795" y="511" class="lbl">Xem nhật ký</text>
+  <path d="M705 506 L690 506" class="rel"/>
+  <path d="M705 506 L720 506" class="rel"/>
+</svg>

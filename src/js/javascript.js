@@ -721,6 +721,8 @@ function disassembleInstruction(instructionWord) {
         const rs2 = `x${decoded.rs2}`;
         const op = decoded.opName.toLowerCase();
 
+        if (op === 'ecall' || op === 'ebreak') return op;
+
         switch (decoded.type) {
             case 'R': return `${op} ${rd}, ${rs1}, ${rs2}`;
             case 'I':
@@ -749,6 +751,14 @@ function renderInstructionView() {
 
     instructionViewBody.innerHTML = '';
     const pc = simulator.cpu.pc;
+
+    if (assembler.binaryCode.length === 0) {
+        const row = instructionViewBody.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 5;
+        cell.textContent = 'No instructions assembled.';
+        return;
+    }
 
     const sourceLineMap = new Map();
     assembler.instructionLines.forEach(lineInfo => {

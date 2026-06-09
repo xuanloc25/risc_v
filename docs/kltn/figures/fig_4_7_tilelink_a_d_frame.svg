@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="6.0in" height="3.6in" viewBox="0 0 960 576" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Cấu trúc một giao dịch TileLink trên kênh A và kênh D</title>
+  <desc id="desc">Khung kênh A từ master sang slave gồm opcode, param, size, source, address, mask và data; khung kênh D trả về master gồm opcode, size, source, data và denied. Hệ thống chỉ dùng hai kênh A/D, không có B/C/E.</desc>
+
+  <defs>
+    <marker id="arrowEnd" markerWidth="11" markerHeight="11" refX="8.8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#2d3436"/>
+    </marker>
+  </defs>
+
+  <style>
+    .bg{fill:#ffffff}
+    .endpoint{fill:#f8fafc;stroke:#2d3436;stroke-width:1.7}
+    .master{fill:#eaf6ff}
+    .slave{fill:#e8f5e9}
+    .panel{stroke:#2d3436;stroke-width:1.7}
+    .chanA{fill:#efe9f5}
+    .chanD{fill:#fff7df}
+    .field{stroke:#2d3436;stroke-width:1.15}
+    .opcode{fill:#fde8e8}
+    .param{fill:#f5f7fb}
+    .size{fill:#f5f7fb}
+    .source{fill:#eaf6ff}
+    .address{fill:#e8e9fb}
+    .mask{fill:#f0ecf8}
+    .data{fill:#fff4c2}
+    .denied{fill:#fce8e6}
+    .route{fill:none;stroke:#2d3436;stroke-width:2.4;marker-end:url(#arrowEnd)}
+    .return{fill:none;stroke:#0b7285;stroke-width:2.3;marker-end:url(#arrowEnd)}
+    .hint{fill:#ffffff;stroke:#d4d8de;stroke-width:1.1}
+    .noteBox{fill:#f8fafc;stroke:#9aa3ad;stroke-width:1.2;stroke-dasharray:7 5}
+    .endpointTitle{font-size:18px;fill:#2d3436;font-weight:850;text-anchor:middle}
+    .endpointSub{font-size:13.5px;fill:#52616f;font-weight:700;text-anchor:middle}
+    .chanTitle{font-size:18px;fill:#2d3436;font-weight:850;text-anchor:middle}
+    .chanSub{font-size:14px;fill:#52616f;font-weight:700;text-anchor:middle}
+    .fieldName{font-size:16.5px;fill:#2d3436;font-weight:850;text-anchor:middle}
+    .fieldSub{font-size:12.9px;fill:#2d3436;font-weight:700;text-anchor:middle}
+    .mono{font-family:Consolas, "Courier New", monospace}
+    .arrowLabel{font-size:15.5px;fill:#2d3436;font-weight:800;text-anchor:middle}
+    .noteText{font-size:16px;fill:#2d3436;font-weight:850;text-anchor:middle}
+  </style>
+
+  <rect class="bg" x="0" y="0" width="960" height="576"/>
+
+  <!-- Endpoints -->
+  <rect x="34" y="156" width="112" height="252" rx="10" class="endpoint master"/>
+  <text x="90" y="218" class="endpointTitle">Master</text>
+  <text x="90" y="246" class="endpointSub">Thành phần</text>
+  <text x="90" y="266" class="endpointSub">Chủ động</text>
+  <text x="90" y="337" class="endpointSub">CPU / DMA</text>
+
+  <rect x="814" y="156" width="112" height="252" rx="10" class="endpoint slave"/>
+  <text x="870" y="218" class="endpointTitle">Slave</text>
+  <text x="870" y="246" class="endpointSub">Thành phần</text>
+  <text x="870" y="266" class="endpointSub">Bị động</text>
+  <text x="870" y="337" class="endpointSub">Mem / MMIO</text>
+
+  <!-- Channel A frame -->
+  <rect x="150" y="74" width="660" height="154" rx="12" class="panel chanA"/>
+  <text x="480" y="108" class="chanTitle">Khung kênh A</text>
+  <text x="480" y="132" class="chanSub">master yêu cầu</text>
+
+  <g transform="translate(168 150)">
+    <rect x="0" y="0" width="146" height="68" rx="6" class="field opcode"/>
+    <text x="73" y="25" class="fieldName mono">opcode</text>
+    <text x="73" y="45" class="fieldSub mono">Get / PutFullData</text>
+    <text x="73" y="61" class="fieldSub mono">ArithmeticData</text>
+
+    <rect x="146" y="0" width="70" height="68" rx="6" class="field param"/>
+    <text x="181" y="31" class="fieldName mono">param</text>
+    <text x="181" y="53" class="fieldSub">tham số</text>
+
+    <rect x="216" y="0" width="62" height="68" rx="6" class="field size"/>
+    <text x="247" y="31" class="fieldName mono">size</text>
+    <text x="247" y="53" class="fieldSub">log2</text>
+
+    <rect x="278" y="0" width="94" height="68" rx="6" class="field source"/>
+    <text x="325" y="27" class="fieldName mono">source</text>
+    <text x="325" y="49" class="fieldSub">tên master</text>
+
+    <rect x="372" y="0" width="106" height="68" rx="6" class="field address"/>
+    <text x="425" y="31" class="fieldName mono">address</text>
+    <text x="425" y="53" class="fieldSub">địa chỉ</text>
+
+    <rect x="478" y="0" width="68" height="68" rx="6" class="field mask"/>
+    <text x="512" y="31" class="fieldName mono">mask</text>
+    <text x="512" y="53" class="fieldSub">4 bit</text>
+
+    <rect x="546" y="0" width="96" height="68" rx="6" class="field data"/>
+    <text x="594" y="31" class="fieldName mono">data</text>
+    <text x="594" y="53" class="fieldSub">dữ liệu</text>
+  </g>
+
+  <path d="M146,282 L814,282" class="route"/>
+  <rect x="332" y="260" width="296" height="32" rx="7" class="hint"/>
+  <text x="480" y="282" class="arrowLabel">Định tuyến theo địa chỉ tới slave</text>
+
+  <!-- Channel D frame -->
+  <rect x="150" y="310" width="660" height="146" rx="12" class="panel chanD"/>
+  <text x="480" y="344" class="chanTitle">Khung kênh D</text>
+  <text x="480" y="368" class="chanSub">slave phản hồi</text>
+
+  <g transform="translate(168 382)">
+    <rect x="0" y="0" width="174" height="58" rx="6" class="field opcode"/>
+    <text x="87" y="19" class="fieldName mono">opcode</text>
+    <text x="87" y="38" class="fieldSub mono">AccessAck</text>
+    <text x="87" y="53" class="fieldSub mono">AccessAckData</text>
+
+    <rect x="174" y="0" width="72" height="58" rx="6" class="field size"/>
+    <text x="210" y="24" class="fieldName mono">size</text>
+    <text x="210" y="45" class="fieldSub">log2</text>
+
+    <rect x="246" y="0" width="150" height="58" rx="6" class="field source"/>
+    <text x="321" y="24" class="fieldName mono">source</text>
+    <text x="321" y="45" class="fieldSub">đích = tên master</text>
+
+    <rect x="396" y="0" width="145" height="58" rx="6" class="field data"/>
+    <text x="468.5" y="19" class="fieldName mono">data</text>
+    <text x="468.5" y="38" class="fieldSub">chỉ có với</text>
+    <text x="468.5" y="53" class="fieldSub mono">AccessAckData</text>
+
+    <rect x="541" y="0" width="101" height="58" rx="6" class="field denied"/>
+    <text x="591.5" y="24" class="fieldName mono">denied</text>
+    <text x="591.5" y="45" class="fieldSub">từ chối</text>
+  </g>
+
+  <path d="M870,408 V490 H90 V408" class="return"/>
+  <rect x="361" y="474" width="238" height="32" rx="7" class="hint"/>
+  <text x="480" y="496" class="arrowLabel">Phản hồi quay về đúng master</text>
+
+  <rect x="286" y="530" width="388" height="32" rx="7" class="noteBox"/>
+  <text x="480" y="552" class="noteText">Chỉ hai kênh A/D — không có B/C/E</text>
+</svg>

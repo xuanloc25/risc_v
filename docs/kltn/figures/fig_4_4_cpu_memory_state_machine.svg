@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="6.0in" height="5.0in" viewBox="0 0 960 800" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Máy trạng thái truy cập bộ nhớ của lõi xử lý</title>
+  <desc id="desc">Sơ đồ máy trạng thái truy cập bộ nhớ của CPU: FETCH nạp lệnh, DECODE/EXEC giải mã và thực thi, WAIT chờ phản hồi dữ liệu, REPLAY thực hiện lại lệnh sau khi có phản hồi.</desc>
+
+  <defs>
+    <marker id="arrowEnd" markerWidth="11" markerHeight="11" refX="8.5" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#2d3436"/>
+    </marker>
+  </defs>
+
+  <style>
+    .bg{fill:#ffffff}
+    .panel{fill:#f8fafc;stroke:#2d3436;stroke-width:1.7}
+    .stateBox{stroke:#2d3436;stroke-width:1.7}
+    .fetch{fill:#d6e4f5}
+    .decode{fill:#fcf3cf}
+    .wait{fill:#fff4e6}
+    .replay{fill:#e8e9fb}
+    .labelBg{fill:#ffffff;stroke:#d4d8de;stroke-width:1.1}
+    .flow{fill:none;stroke:#2d3436;stroke-width:2.1;marker-end:url(#arrowEnd)}
+    .altFlow{fill:none;stroke:#2d3436;stroke-width:1.9;stroke-dasharray:7 5;marker-end:url(#arrowEnd)}
+    .external{fill:none;stroke:#0b7285;stroke-width:2;stroke-dasharray:8 5;marker-end:url(#arrowEnd)}
+    .stateTitle{font-size:25px;fill:#2d3436;font-weight:850;text-anchor:middle}
+    .stateSub{font-size:16px;fill:#52616f;font-weight:700;text-anchor:middle}
+    .labelTitle{font-size:17.6px;fill:#2d3436;font-weight:850;text-anchor:middle}
+    .labelText{font-size:16px;fill:#2d3436;font-weight:750;text-anchor:middle}
+    .labelMono{font-family:Consolas, "Courier New", monospace;font-size:15.2px;fill:#2d3436;font-weight:750;text-anchor:middle}
+    .labelKey{font-family:Consolas, "Courier New", monospace;font-size:16.8px;fill:#2d3436;font-weight:850;text-anchor:middle}
+    .extText{font-family:Consolas, "Courier New", monospace;font-size:15.8px;fill:#0b7285;font-weight:850;text-anchor:middle}
+  </style>
+
+  <rect class="bg" x="0" y="0" width="960" height="800"/>
+
+  <!-- Outer visual boundary -->
+  <rect x="42" y="54" width="888" height="650" rx="12" class="panel"/>
+
+  <!-- State transitions -->
+  <path d="M340,160 L620,160" class="flow"/>
+  <path d="M750,214 L750,500" class="flow"/>
+  <path d="M620,554 L340,554" class="flow"/>
+  <path d="M210,500 L210,214" class="flow"/>
+
+  <!-- Non-memory instruction branch -->
+  <path d="M750,106 C750,60 660,60 620,60 L340,60 C300,60 210,60 210,106" class="altFlow"/>
+
+  <!-- WAIT self-loop -->
+  <path d="M880,532 C924,532 924,610 880,590" class="flow"/>
+
+  <!-- External response arrow pointing into WAIT -> REPLAY transition -->
+  <path d="M480,722 L480,650" class="external"/>
+
+  <!-- Edge labels -->
+  <rect x="384" y="192" width="192" height="34" rx="7" class="labelBg"/>
+  <text x="480" y="216" class="labelMono">fetchPending</text>
+
+  <rect x="350" y="76" width="260" height="76" rx="7" class="labelBg"/>
+  <text x="480" y="101" class="labelTitle">không truy cập bộ nhớ</text>
+  <text x="480" y="126" class="labelMono">instructionCount++</text>
+  <text x="480" y="147" class="labelMono">pc ← nextPc/pc+4</text>
+
+  <rect x="594" y="280" width="286" height="134" rx="7" class="labelBg"/>
+  <text x="737" y="309" class="labelTitle">load / store / atomic</text>
+  <text x="737" y="335" class="labelMono">sendRequest</text>
+  <text x="737" y="360" class="labelMono">waitingRequest +</text>
+  <text x="737" y="383" class="labelMono">replayInstruction</text>
+  <text x="737" y="405" class="labelText">pc giữ nguyên (stall)</text>
+
+  <rect x="350" y="586" width="260" height="58" rx="7" class="labelBg"/>
+  <text x="480" y="610" class="labelKey">receiveResponse</text>
+  <text x="480" y="636" class="labelText">đặt pendingResponse</text>
+
+  <rect x="232" y="294" width="324" height="114" rx="7" class="labelBg"/>
+  <text x="394" y="320" class="labelTitle">decode lại cùng lệnh</text>
+  <text x="394" y="347" class="labelText">pha hoàn tất: lấy dữ liệu, ghi rd</text>
+  <text x="394" y="373" class="labelMono">xóa waitingRequest/pendingResponse</text>
+  <text x="394" y="398" class="labelMono">instructionCount++</text>
+
+  <rect x="650" y="622" width="250" height="62" rx="7" class="labelBg"/>
+  <text x="775" y="647" class="labelMono">chưa có pendingResponse</text>
+  <text x="775" y="674" class="labelText">dừng chu kỳ</text>
+
+  <rect x="318" y="722" width="324" height="38" rx="7" class="labelBg"/>
+  <text x="480" y="748" class="extText">receiveResponse(AccessAckData)</text>
+
+  <!-- States -->
+  <rect x="80" y="106" width="260" height="108" rx="24" class="stateBox fetch"/>
+  <text x="210" y="153" class="stateTitle">FETCH</text>
+  <text x="210" y="183" class="stateSub">nạp lệnh</text>
+
+  <rect x="620" y="106" width="260" height="108" rx="24" class="stateBox decode"/>
+  <text x="750" y="153" class="stateTitle">DECODE/EXECUTE</text>
+  <text x="750" y="183" class="stateSub">giải mã &amp; thực thi</text>
+
+  <rect x="620" y="500" width="260" height="108" rx="24" class="stateBox wait"/>
+  <text x="750" y="547" class="stateTitle">WAIT</text>
+  <text x="750" y="577" class="stateSub">chờ phản hồi dữ liệu</text>
+
+  <rect x="80" y="500" width="260" height="108" rx="24" class="stateBox replay"/>
+  <text x="210" y="547" class="stateTitle">REPLAY</text>
+  <text x="210" y="577" class="stateSub">thực hiện lại lệnh</text>
+</svg>

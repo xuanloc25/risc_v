@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 930 490" role="img" aria-labelledby="title desc">
+  <title id="title">RV32I instruction formats</title>
+  <desc id="desc">Six 32-bit RV32I instruction formats: R, I, S, B, U, and J.</desc>
+
+  <!-- Outer frame -->
+  <rect x="34" y="24" width="862" height="422" rx="6" fill="none" stroke="#9AA3AD" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="465" y="54" text-anchor="middle" font-size="24" font-weight="bold" fill="#2D3436">RV32I instruction formats (32-bit)</text>
+
+  <!-- Legend -->
+  <rect x="170" y="74" width="18" height="12" rx="2" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+  <text x="194" y="85" font-size="13" font-weight="600" fill="#636E72">register fields</text>
+  
+  <rect x="300" y="74" width="18" height="12" rx="2" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+  <text x="324" y="85" font-size="13" font-weight="600" fill="#636E72">immediate fields</text>
+  
+  <rect x="430" y="74" width="18" height="12" rx="2" fill="#EFE9F5" stroke="#2D3436" stroke-width="1.35"/>
+  <text x="454" y="85" font-size="13" font-weight="600" fill="#636E72">function fields</text>
+  
+  <rect x="560" y="74" width="18" height="12" rx="2" fill="#FDE8E8" stroke="#2D3436" stroke-width="1.35"/>
+  <text x="584" y="85" font-size="13" font-weight="600" fill="#636E72">opcode</text>
+
+  <!-- Row labels -->
+  <text x="84" y="135" text-anchor="middle" font-size="20" font-weight="bold" fill="#2D3436">R-type</text>
+  <text x="84" y="192" text-anchor="middle" font-size="20" font-weight="bold" fill="#2D3436">I-type</text>
+  <text x="84" y="249" text-anchor="middle" font-size="20" font-weight="bold" fill="#2D3436">S-type</text>
+  <text x="84" y="306" text-anchor="middle" font-size="20" font-weight="bold" fill="#2D3436">B-type</text>
+  <text x="84" y="363" text-anchor="middle" font-size="20" font-weight="bold" fill="#2D3436">U-type</text>
+  <text x="84" y="420" text-anchor="middle" font-size="20" font-weight="bold" fill="#2D3436">J-type</text>
+
+  <!-- R-type -->
+  <g transform="translate(150 108)">
+    <rect width="154" height="40" fill="#EFE9F5" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="77" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">funct7</text>
+    <text x="77" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">31:25</text>
+    
+    <rect x="154" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="209" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rs2</text>
+    <text x="209" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">24:20</text>
+    
+    <rect x="264" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="319" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rs1</text>
+    <text x="319" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">19:15</text>
+    
+    <rect x="374" width="66" height="40" fill="#EFE9F5" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="407" y="18" text-anchor="middle" font-size="12" font-weight="bold" fill="#2D3436">funct3</text>
+    <text x="407" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">14:12</text>
+    
+    <rect x="440" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="495" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rd</text>
+    <text x="495" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">11:7</text>
+    
+    <rect x="550" width="154" height="40" fill="#FDE8E8" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="627" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">opcode</text>
+    <text x="627" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">6:0</text>
+  </g>
+
+  <!-- I-type -->
+  <g transform="translate(150 165)">
+    <rect width="264" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="132" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">imm[11:0]</text>
+    <text x="132" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">31:20</text>
+    
+    <rect x="264" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="319" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rs1</text>
+    <text x="319" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">19:15</text>
+    
+    <rect x="374" width="66" height="40" fill="#EFE9F5" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="407" y="18" text-anchor="middle" font-size="12" font-weight="bold" fill="#2D3436">funct3</text>
+    <text x="407" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">14:12</text>
+    
+    <rect x="440" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="495" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rd</text>
+    <text x="495" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">11:7</text>
+    
+    <rect x="550" width="154" height="40" fill="#FDE8E8" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="627" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">opcode</text>
+    <text x="627" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">6:0</text>
+  </g>
+
+  <!-- S-type -->
+  <g transform="translate(150 222)">
+    <rect width="154" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="77" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">imm[11:5]</text>
+    <text x="77" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">31:25</text>
+    
+    <rect x="154" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="209" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rs2</text>
+    <text x="209" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">24:20</text>
+    
+    <rect x="264" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="319" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rs1</text>
+    <text x="319" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">19:15</text>
+    
+    <rect x="374" width="66" height="40" fill="#EFE9F5" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="407" y="18" text-anchor="middle" font-size="12" font-weight="bold" fill="#2D3436">funct3</text>
+    <text x="407" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">14:12</text>
+    
+    <rect x="440" width="110" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="495" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">imm[4:0]</text>
+    <text x="495" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">11:7</text>
+    
+    <rect x="550" width="154" height="40" fill="#FDE8E8" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="627" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">opcode</text>
+    <text x="627" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">6:0</text>
+  </g>
+
+  <!-- B-type -->
+  <g transform="translate(150 279)">
+    <rect width="34" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="17" y="16" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#2D3436">imm</text>
+    <text x="17" y="30" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#2D3436">[12]</text>
+    
+    <rect x="34" width="120" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="94" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">imm[10:5]</text>
+    <text x="94" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">30:25</text>
+    
+    <rect x="154" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="209" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rs2</text>
+    <text x="209" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">24:20</text>
+    
+    <rect x="264" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="319" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rs1</text>
+    <text x="319" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">19:15</text>
+    
+    <rect x="374" width="66" height="40" fill="#EFE9F5" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="407" y="18" text-anchor="middle" font-size="12" font-weight="bold" fill="#2D3436">funct3</text>
+    <text x="407" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">14:12</text>
+    
+    <rect x="440" width="76" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="478" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">imm[4:1]</text>
+    <text x="478" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">11:8</text>
+    
+    <rect x="516" width="34" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="533" y="16" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#2D3436">imm</text>
+    <text x="533" y="30" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#2D3436">[11]</text>
+    
+    <rect x="550" width="154" height="40" fill="#FDE8E8" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="627" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">opcode</text>
+    <text x="627" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">6:0</text>
+  </g>
+
+  <!-- U-type -->
+  <g transform="translate(150 336)">
+    <rect width="440" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="220" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">imm[31:12]</text>
+    <text x="220" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">31:12</text>
+    
+    <rect x="440" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="495" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rd</text>
+    <text x="495" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">11:7</text>
+    
+    <rect x="550" width="154" height="40" fill="#FDE8E8" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="627" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">opcode</text>
+    <text x="627" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">6:0</text>
+  </g>
+
+  <!-- J-type -->
+  <g transform="translate(150 393)">
+    <rect width="34" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="17" y="16" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#2D3436">imm</text>
+    <text x="17" y="30" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#2D3436">[20]</text>
+    
+    <rect x="34" width="208" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="138" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">imm[10:1]</text>
+    <text x="138" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">30:21</text>
+    
+    <rect x="242" width="34" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="259" y="16" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#2D3436">imm</text>
+    <text x="259" y="30" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#2D3436">[11]</text>
+    
+    <rect x="276" width="164" height="40" fill="#FDFBE0" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="358" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">imm[19:12]</text>
+    <text x="358" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">19:12</text>
+    
+    <rect x="440" width="110" height="40" fill="#E8E9FB" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="495" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">rd</text>
+    <text x="495" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">11:7</text>
+    
+    <rect x="550" width="154" height="40" fill="#FDE8E8" stroke="#2D3436" stroke-width="1.35"/>
+    <text x="627" y="18" text-anchor="middle" font-size="16" font-weight="bold" fill="#2D3436">opcode</text>
+    <text x="627" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#636E72">6:0</text>
+  </g>
+
+  <!-- Note -->
+  <text x="465" y="472" text-anchor="middle" font-size="14" font-style="italic" fill="#636E72">
+    Immediate labels use produced immediate bit numbers; lower text shows instruction bit positions.
+  </text>
+</svg>

@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="6.0in" height="5.625in" viewBox="0 0 960 900" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Cấu trúc MMU và đường dịch địa chỉ</title>
+  <desc id="desc">Sơ đồ dịch địa chỉ trong MMU: VA tách thành VPN và offset; VPN tra TLB, nếu trượt thì tra bảng trang hoặc dùng ánh xạ đồng nhất; sau đó kiểm tra quyền R/W/X, ghép nền vật lý với offset thành PA, gắn cờ cacheable và chuyển tới L1I hoặc L1D. Khối thống kê và lịch sử nhận tín hiệu từ quá trình dịch.</desc>
+
+  <defs>
+    <marker id="arrowEnd" markerWidth="11" markerHeight="11" refX="8.8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#2d3436"/>
+    </marker>
+    <marker id="arrowMuted" markerWidth="10" markerHeight="10" refX="8.2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8.5,4.5 L0,9 Z" fill="#636e72"/>
+    </marker>
+  </defs>
+
+  <style>
+    .bg{fill:#ffffff}
+    .box{stroke:#2d3436;stroke-width:1.6}
+    .addr{fill:#e8e9fb}
+    .offset{fill:#fdfbe0}
+    .tlb{fill:#eaf6ff}
+    .page{fill:#fcf3cf}
+    .decision{fill:#ffffff;stroke:#2d3436;stroke-width:1.7}
+    .reload{fill:#e6f4ea}
+    .identity{fill:#f4f8fb}
+    .perm{fill:#fde8e8}
+    .out{fill:#e6f4ea}
+    .fault{fill:#fdecea}
+    .stats{fill:#f8fafc;stroke:#2d3436;stroke-width:1.5}
+    .slot{fill:#ffffff;stroke:#8fa3b8;stroke-width:1.1}
+    .flow{fill:none;stroke:#2d3436;stroke-width:2;marker-end:url(#arrowEnd)}
+    .thinFlow{fill:none;stroke:#2d3436;stroke-width:1.65;marker-end:url(#arrowEnd)}
+    .dash{fill:none;stroke:#636e72;stroke-width:1.55;stroke-dasharray:7 5;marker-end:url(#arrowMuted)}
+    .titleText{font-size:26px;fill:#1f2d3d;font-weight:850;text-anchor:middle}
+    .boxTitle{font-size:24px;fill:#2d3436;font-weight:850;text-anchor:middle}
+    .boxText{font-size:19px;fill:#2d3436;font-weight:750;text-anchor:middle}
+    .label{font-size:18px;fill:#2d3436;font-weight:850;text-anchor:middle}
+    .mono{font-family:Consolas, "Courier New", monospace}
+  </style>
+
+  <rect class="bg" x="0" y="0" width="960" height="900"/>
+
+  <!-- Virtual address input -->
+  <rect x="40" y="34" width="400" height="92" rx="9" class="box addr"/>
+  <text x="240" y="59" class="titleText">VA (địa chỉ ảo)</text>
+  <rect x="58" y="73" width="226" height="36" rx="6" class="box" fill="#ffffff"/>
+  <text x="171" y="96" class="boxTitle mono">VPN</text>
+  <rect x="298" y="73" width="124" height="36" rx="6" class="box offset"/>
+  <text x="360" y="96" class="boxTitle mono">offset</text>
+
+  <!-- Access kind -->
+  <rect x="490" y="34" width="205" height="140" rx="9" class="box perm"/>
+  <text x="592.5" y="66" class="boxTitle">Loại thao tác</text>
+  <text x="592.5" y="96" class="boxText mono">fetch → X</text>
+  <text x="592.5" y="124" class="boxText mono">load → R</text>
+  <text x="592.5" y="152" class="boxText mono">store/atomic → W</text>
+
+  <!-- Statistics side panel -->
+  <rect x="715" y="34" width="210" height="140" rx="10" class="stats"/>
+  <text x="820" y="66" class="boxTitle">Thống kê</text>
+  <text x="820" y="100" class="boxText">hit/miss, nạp lại</text>
+  <text x="820" y="132" class="boxText">và số lần lỗi quyền</text>
+
+  <!-- TLB block -->
+  <rect x="85" y="170" width="310" height="90" rx="9" class="box tlb"/>
+  <text x="240" y="204" class="boxTitle">TLB</text>
+  <text x="240" y="238" class="boxText">2 set, 4 way, LRU</text>
+
+  <path d="M240,126 V170" class="flow"/>
+
+  <!-- TLB hit decision -->
+  <path d="M240,306 L350,350 L240,394 L130,350 Z" class="decision"/>
+  <text x="240" y="356" class="boxTitle">TLB hit?</text>
+  <path d="M240,260 V306" class="flow"/>
+
+  <!-- Page table path -->
+  <rect x="85" y="455" width="310" height="78" rx="9" class="box page"/>
+  <text x="240" y="490" class="boxTitle">Bảng trang</text>
+  <text x="240" y="520" class="boxText mono">Map&lt;VPN, entry&gt;</text>
+
+  <path d="M240,394 V455" class="flow"/>
+  <text x="280" y="424" class="label">KHÔNG</text>
+
+  <path d="M240,533 V556" class="flow"/>
+  <path d="M240,556 L350,600 L240,644 L130,600 Z" class="decision"/>
+  <text x="240" y="607" class="boxTitle">có ánh xạ?</text>
+
+  <!-- Refill and identity fallback -->
+  <rect x="390" y="572" width="240" height="56" rx="9" class="box reload"/>
+  <text x="510" y="608" class="boxTitle">Nạp lại TLB</text>
+
+  <rect x="390" y="672" width="240" height="72" rx="9" class="box identity"/>
+  <text x="510" y="708" class="boxTitle">Ánh xạ đồng nhất</text>
+  <text x="510" y="736" class="boxText mono">PA = VA</text>
+
+  <path d="M350,600 H390" class="flow"/>
+  <text x="370" y="587" class="label">CÓ</text>
+  <path d="M240,644 V708 H390" class="flow"/>
+  <text x="310" y="696" class="label">KHÔNG</text>
+
+  <!-- Physical base selection -->
+  <rect x="690" y="455" width="210" height="78" rx="9" class="box tlb"/>
+  <text x="795" y="486" class="boxTitle mono" font-weight="bold">physicalBase</text>
+  <text x="795" y="520" class="boxTitle mono">PPN</text>
+
+  <path d="M350,350 H680 V470 H690" class="flow"/>
+  <text x="406" y="337" class="label">CÓ</text>
+  <path d="M630,600 H660 V494 H690" class="flow"/>
+  <path d="M630,708 H640 V518 H690" class="flow"/>
+
+  <!-- Permission check -->
+  <rect x="690" y="594" width="210" height="78" rx="9" class="box perm"/>
+  <text x="795" y="628" class="boxTitle">Kiểm tra quyền</text>
+  <text x="795" y="656" class="boxTitle mono">R/W/X</text>
+  <path d="M795,533 V594" class="flow"/>
+
+  <path d="M592,154 V304 H915 V620 H900" class="dash"/>
+  <path d="M925,104 H945 V646 H900" class="dash"/>
+
+  <!-- Fault path -->
+  <rect x="430" y="790" width="180" height="58" rx="9" class="box fault"/>
+  <text x="520" y="815" class="boxTitle">Lỗi quyền</text>
+  <text x="520" y="838" class="boxText">ghi thống kê</text>
+  <path d="M690,633 H670 V819 H610" class="thinFlow"/>
+  <text x="658" y="710" class="label" transform="rotate(-90 658 710)">vi phạm</text>
+
+  <!-- PA output -->
+  <rect x="690" y="733" width="210" height="64" rx="9" class="box out"/>
+  <text x="795" y="762" class="boxTitle mono">PA</text>
+  <text x="795" y="789" class="boxText">(địa chỉ vật lý)</text>
+  <path d="M795,672 V733" class="flow"/>
+  <text x="829" y="713" class="label">hợp lệ</text>
+
+  <rect x="630" y="858" width="140" height="30" rx="8" class="box tlb"/>
+  <text x="700" y="879" class="boxText">L1I (lệnh)</text>
+  <rect x="810" y="858" width="140" height="30" rx="8" class="box tlb"/>
+  <text x="880" y="879" class="boxText">L1D (dữ liệu)</text>
+  <path d="M795,797 L700,858" class="flow"/>
+  <path d="M795,797 L880,858" class="flow"/>
+</svg>

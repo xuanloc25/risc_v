@@ -16,29 +16,29 @@
 - Nguồn được viết tắt: `src/js/<file>` = mã nguồn; `test/<file>` = kiểm thử/demo; `[ref:...]` = tài liệu trong `docs/ref/`; `[analysis]` = `docs/kltn/00_project_analysis.md`.
 - **Ký hiệu cảnh báo** ⚠️ = điểm cần SV xác nhận/bổ sung số liệu trước khi viết (lấy từ mục 7–8 của `00_project_analysis.md`). Không viết là "đã hoàn chỉnh" nếu chưa có bằng chứng.
 
-### 0.1. Bảng phân bổ số trang (mục tiêu 80–110 trang nội dung chính, tổng ≤ 140)
+### 0.1. Bảng phân bổ số trang (giới hạn tối thiểu 50 và tối đa 100 trang)
 
 | Phần | Ước lượng | Ghi chú |
 |---|---|---|
 | Trang bìa, nhận xét, lời cảm ơn, mục lục, danh mục hình/bảng/viết tắt | (không tính nội dung) | Theo mẫu Phụ lục 3 |
-| Tóm tắt khóa luận | 1.5–2 | Tiếng Việt (+ abstract tiếng Anh tùy chọn) |
-| Chương 1. Tổng quan đề tài | 11–13 | Khảo sát + so sánh khóa trước |
-| Chương 2. Cơ sở lý thuyết | 23–26 | RISC-V, MMU, cache, TileLink, DMA, I/O |
-| Chương 3. Phân tích và thiết kế hệ thống | 16–19 | Kiến trúc tổng quan, UI, luồng dữ liệu |
-| Chương 4. Hiện thực hệ thống / thiết kế chi tiết | 29–33 | Phần trọng tâm kỹ thuật |
-| Chương 5. Kiểm thử và đánh giá | 15–18 | Verification + so sánh |
-| Chương 6. Kết luận và hướng phát triển | 4–6 | |
-| **Cộng nội dung chính (Ch.1–6 + tóm tắt)** | **~95–110** | Đạt yêu cầu ≥ 80, ≤ 140 |
+| Tóm tắt khóa luận | 1–2 | Tiếng Việt (+ abstract tiếng Anh tùy chọn) |
+| Chương 1. Tổng quan đề tài | 6–8 | Khảo sát + so sánh khóa trước |
+| Chương 2. Cơ sở lý thuyết | 12–15 | RISC-V, MMU, cache, TileLink, DMA, I/O |
+| Chương 3. Phân tích và thiết kế hệ thống | 10–12 | Kiến trúc tổng quan, UI, luồng dữ liệu |
+| Chương 4. Hiện thực hệ thống / thiết kế chi tiết | 15–18 | Phần trọng tâm kỹ thuật |
+| Chương 5. Kiểm thử và đánh giá | 8–10 | Verification + so sánh |
+| Chương 6. Kết luận và hướng phát triển | 3–5 | |
+| **Cộng nội dung chính (Ch.1–6 + tóm tắt)** | **~55–70** | Đạt yêu cầu từ 50 đến 100 trang |
 | Tài liệu tham khảo (IEEE) | 2–3 | |
 | Phụ lục | 6–12 | Bảng lệnh, register map, mã demo, log |
 
-> So sánh quy mô: KLTN khóa trước (Nguyễn Gia Bảo Ngọc, 2025) có ~91 trang nội dung chính (Chương 1 trang 2 → hết Chương 6 trang 92). Đề tài này có phạm vi rộng hơn (thêm RV32M, RV32F/FPU, nhiều ngoại vi, nhiều lớp kiểm thử) nên nhắm ~95–110 trang là hợp lý.
+> So sánh quy mô: KLTN khóa trước (Nguyễn Gia Bảo Ngọc, 2025) có ~91 trang nội dung chính (Chương 1 trang 2 → hết Chương 6 trang 92). Đề tài này có phạm vi rộng hơn (thêm RV32M, RV32F/FPU, nhiều ngoại vi, nhiều lớp kiểm thử) nhưng cần tối ưu hóa dung lượng để nhắm ~60–80 trang nhằm bảo đảm tính súc tích và giới hạn 50–100 trang.
 
 ---
 
 ## PHẦN ĐẦU (front matter – theo mẫu Phụ lục 3)
 
-Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang nội dung):
+Liệt kê để không thiếu khi đóng quyển (không tính vào giới hạn 50–100 trang nội dung):
 
 - Trang bìa chính + bìa phụ.
 - Nhận xét của giảng viên hướng dẫn / hội đồng.
@@ -49,7 +49,7 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 
 ---
 
-## TÓM TẮT KHÓA LUẬN — *~1.5–2 trang*
+## TÓM TẮT KHÓA LUẬN — *~1–2 trang*
 
 - **Nội dung:** Bối cảnh (nhu cầu công cụ mô phỏng SoC trực quan cho giảng dạy KTMT); vấn đề các công cụ hiện có; mục tiêu (mô phỏng SoC RISC-V RV32IMF + TileLink trên Web); phương pháp (mô phỏng mức hành vi theo chu kỳ, kiểm chứng bằng GNU/Spike/riscv-tests); kết quả chính (assembler + CPU + MMU/cache + TileLink-UH/UL + DMA + 4 ngoại vi + trực quan hóa); đóng góp.
 - **Nguồn:** `[analysis]` mục 2, 6; `[ref:đề cương]` phần tổng quan & mục tiêu; `README.md`.
@@ -58,9 +58,9 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 
 ---
 
-## CHƯƠNG 1. TỔNG QUAN ĐỀ TÀI — *~11–13 trang*
+## CHƯƠNG 1. TỔNG QUAN ĐỀ TÀI — *~6–8 trang*
 
-### 1.1. Lý do thực hiện đề tài — *~5–6 trang*
+### 1.1. Lý do thực hiện đề tài — *~3–4 trang*
 
 #### 1.1.1. Bối cảnh và động lực
 - **Nội dung:** Vai trò của hệ thống trên chip (SoC) và RISC-V trong đào tạo KTMT; nhu cầu công cụ trực quan hóa hoạt động CPU–bus–bộ nhớ–ngoại vi; lý do chọn nền tảng Web (dễ tiếp cận, không cài đặt).
@@ -86,7 +86,7 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** không.
 - **Trang:** ~1.
 
-### 1.2. Mục tiêu và phạm vi đề tài — *~3 trang*
+### 1.2. Mục tiêu và phạm vi đề tài — *~1.5–2 trang*
 
 #### 1.2.1. Mục tiêu
 - **Nội dung:** Mục tiêu tổng quát (công cụ giáo dục mô phỏng hành vi SoC) và 4 mục tiêu kỹ thuật theo đề cương: (1) CPU RV32 RISC-V, (2) Bus đa master + quản lý quyền truy cập, (3) tối ưu luồng dữ liệu bằng DMA, (4) tích hợp assembler + ngoại vi tương tác thời gian thực.
@@ -100,7 +100,7 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** **Bảng 1.2** – Phạm vi chức năng: Đã hỗ trợ / Hỗ trợ một phần / Ngoài phạm vi.
 - **Trang:** ~1.5.
 
-### 1.3. Đối tượng, phương pháp và cấu trúc báo cáo — *~3 trang*
+### 1.3. Đối tượng, phương pháp và cấu trúc báo cáo — *~1.5–2 trang*
 
 #### 1.3.1. Đối tượng và phương pháp thực hiện
 - **Nội dung:** Phương pháp nghiên cứu tài liệu (RV32IMF, SoC, MMU, TileLink TL-UL/TL-UH); phương pháp phát triển (mô phỏng SoC trên Web); phương pháp kiểm thử (đối chiếu Spike/Ripes + test suites, triển khai công khai).
@@ -127,15 +127,15 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 
 ---
 
-## CHƯƠNG 2. CƠ SỞ LÝ THUYẾT — *~23–26 trang*
+## CHƯƠNG 2. CƠ SỞ LÝ THUYẾT — *~12–15 trang*
 
-### 2.1. Hệ thống trên chip (SoC) — *~3 trang*
+### 2.1. Hệ thống trên chip (SoC) — *~1.5 trang*
 - **Nội dung:** Khái niệm SoC; các thành phần điển hình (CPU, bộ nhớ, bus/interconnect, DMA, ngoại vi); các mức mô hình hóa mô phỏng (functional/behavioral vs cycle-accurate vs RTL) và lý do chọn mức behavioral theo chu kỳ.
 - **Nguồn:** `[ref:đề cương]`; `[ref:SoC.png]`; lý thuyết SoC tổng quát (cần citation sách/tài liệu).
 - **Hình/bảng:** *Hình 2.1* – Sơ đồ khối SoC điển hình.
 - **Trang:** ~3.
 
-### 2.2. Kiến trúc tập lệnh RISC-V — *~8–9 trang*
+### 2.2. Kiến trúc tập lệnh RISC-V — *~4–5 trang*
 
 #### 2.2.1. Tổng quan RISC-V và triết lý mô-đun hóa ISA
 - **Nội dung:** RISC vs CISC; cấu trúc mô-đun của RISC-V (base + extensions); ý nghĩa "RV32IMF".
@@ -167,37 +167,37 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** không.
 - **Trang:** ~0.5–1. *(Có thể lược bỏ nếu chốt không đưa RV32A vào báo cáo.)*
 
-### 2.3. Quản lý bộ nhớ và đơn vị MMU — *~3 trang*
+### 2.3. Quản lý bộ nhớ và đơn vị MMU — *~1.5 trang*
 - **Nội dung:** Địa chỉ ảo/vật lý, phân trang (page/VPN/PPN/offset), bảng trang (PTE), TLB và nguyên lý cục bộ; quyền truy cập (R/W/X); khái niệm cacheable/non-cacheable.
 - **Nguồn:** lý thuyết HĐH/kiến trúc máy tính; ánh xạ tới `src/js/mmu.js`; đối chiếu thuật ngữ với `[ref:Thư viện số]` (khóa trước dùng SATP/PTE).
 - **Hình/bảng:** *Hình 2.3* – Cơ chế dịch địa chỉ VA→PA qua TLB và bảng trang.
 - **Trang:** ~3.
 
-### 2.4. Bộ nhớ đệm (Cache) — *~2.5 trang*
+### 2.4. Bộ nhớ đệm (Cache) — *~1.5 trang*
 - **Nội dung:** Nguyên lý cache; tổ chức set-associative (set/way/block); hit/miss; chính sách ghi (write-through/write-back); thay thế LRU; phân cấp L1/L2; bỏ qua cache với vùng MMIO.
 - **Nguồn:** lý thuyết kiến trúc máy tính; ánh xạ tới `src/js/SimpleCache.js`.
 - **Hình/bảng:** *Hình 2.4* – Tổ chức cache set-associative (set/way/block, tag/index/offset).
 - **Trang:** ~2.5.
 
-### 2.5. Giao thức kết nối TileLink — *~4 trang*
+### 2.5. Giao thức kết nối TileLink — *~2 trang*
 - **Nội dung:** Vai trò interconnect trong SoC; ba cấp độ TileLink: **TL-UL (Uncached Lightweight)**, **TL-UH (Uncached Heavyweight)**, **TL-C (Cached)**; mô hình master/slave; các kênh A/B/C/D/E và ý nghĩa; opcode kênh A (Get, PutFullData, PutPartialData, ArithmeticData, LogicalData, Intent) và kênh D (AccessAck, AccessAckData, HintAck, Grant…); mask, burst. ⚠️ Nêu rõ hệ thống chỉ hiện thực kênh A/D (TL-UL/TL-UH), không có B/C/E.
 - **Nguồn:** `[ref:tilelink_spec_1.8.1.pdf]`; ánh xạ tới `src/js/tilelink.js`.
 - **Hình/bảng:** *Hình 2.5* – Mô hình kênh A/D giữa master–slave. **Bảng 2.4** – So sánh ba cấp độ TileLink (TL-UL/UH/C) và opcode cho phép. **Bảng 2.5** – Danh sách opcode kênh A & kênh D (tên, mã số, ý nghĩa).
 - **Trang:** ~4.
 
-### 2.6. Truy cập bộ nhớ trực tiếp (DMA) — *~1.5 trang*
+### 2.6. Truy cập bộ nhớ trực tiếp (DMA) — *~1 trang*
 - **Nội dung:** Nguyên lý DMA, vì sao giảm tải CPU; descriptor; các chế độ địa chỉ (cố định/tăng dần); mô hình hoàn tất (polling vs interrupt).
 - **Nguồn:** lý thuyết; ánh xạ tới `src/js/dma.js`.
 - **Hình/bảng:** *Hình 2.6* – So sánh luồng dữ liệu CPU-copy vs DMA-copy.
 - **Trang:** ~1.5.
 
-### 2.7. Thiết bị ngoại vi và I/O ánh xạ bộ nhớ (MMIO) — *~1.5 trang*
+### 2.7. Thiết bị ngoại vi và I/O ánh xạ bộ nhớ (MMIO) — *~1 trang*
 - **Nội dung:** Khái niệm MMIO; UART (TX/RX/baud); ma trận LED (VRAM); bàn phím/chuột; polling vs interrupt-driven I/O.
 - **Nguồn:** lý thuyết; ánh xạ `src/js/uart.js`, `led_matrix.js`, `keyboard.js`, `mouse.js`.
 - **Hình/bảng:** không (chi tiết để Chương 4).
 - **Trang:** ~1.5.
 
-### 2.8. Công nghệ nền tảng Web — *~1.5 trang*
+### 2.8. Công nghệ nền tảng Web — *~1 trang*
 - **Nội dung:** HTML/CSS/JavaScript ES Module; Canvas 2D (ma trận LED); thư viện CodeMirror cho editor; mô hình chạy đơn luồng + requestAnimationFrame.
 - **Nguồn:** `src/index.html` (CDN CodeMirror), `src/js/javascript.js`.
 - **Hình/bảng:** không.
@@ -205,15 +205,15 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 
 ---
 
-## CHƯƠNG 3. PHÂN TÍCH VÀ THIẾT KẾ HỆ THỐNG — *~16–19 trang*
+## CHƯƠNG 3. PHÂN TÍCH VÀ THIẾT KẾ HỆ THỐNG — *~10–12 trang*
 
-### 3.1. Phân tích yêu cầu — *~2.5 trang*
+### 3.1. Phân tích yêu cầu — *~1.5 trang*
 - **Nội dung:** Yêu cầu chức năng (soạn thảo/biên dịch/nạp/chạy-bước, quan sát thanh ghi/bộ nhớ/cache/MMU/bus/ngoại vi/log); yêu cầu phi chức năng (chạy trình duyệt, không cài đặt, trực quan, hiệu năng đủ tương tác). Use case tổng quát của người học.
 - **Nguồn:** `README.md`; `[ref:đề cương]`; `src/index.html` (các view).
 - **Hình/bảng:** *Hình 3.1* – Sơ đồ use case tổng quát. **Bảng 3.1** – Danh sách yêu cầu chức năng.
 - **Trang:** ~2.5.
 
-### 3.2. Kiến trúc tổng quan hệ thống mô phỏng SoC — *~5 trang*
+### 3.2. Kiến trúc tổng quan hệ thống mô phỏng SoC — *~3 trang*
 
 #### 3.2.1. Sơ đồ kiến trúc tổng quan
 - **Nội dung:** Toàn cảnh: CPU → MMU → L1I/L1D → L2 → TileLink-UH → {Main Memory, DMA regs, Bridge} → TileLink-UL → {UART, LED, Keyboard, Mouse}; DMA là master trên cả UH/UL.
@@ -233,7 +233,7 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** **Bảng 3.3 – Bản đồ địa chỉ bộ nhớ (memory map)** *(bảng bắt buộc #4)* (base, kích thước, thiết bị, bus, cacheable).
 - **Trang:** ~1.5.
 
-### 3.3. Mô hình mô phỏng theo chu kỳ và trừu tượng kết nối — *~3.5 trang*
+### 3.3. Mô hình mô phỏng theo chu kỳ và trừu tượng kết nối — *~2 trang*
 
 #### 3.3.1. Mô hình tick theo chu kỳ
 - **Nội dung:** Một `tick()` = một chu kỳ; thứ tự tick các module (CPU→DMA→L1→L2→UH→UL→Memory→UART) để mỗi hop tốn đúng 1 chu kỳ; bộ đếm chu kỳ; reset.
@@ -247,7 +247,7 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** *Hình 3.4* – Mô hình cổng kết nối giữa hai module.
 - **Trang:** ~1.5.
 
-### 3.4. Thiết kế giao diện web — *~3.5 trang*
+### 3.4. Thiết kế giao diện web — *~2 trang*
 
 #### 3.4.1. Bố cục và điều hướng
 - **Nội dung:** Sidebar 7 view: Editor, SoC, MMU, Cache, Memory, I/O, Help; thanh công cụ Assemble/Reset/Run/Pause/Stop/Step + thanh tốc độ + chỉ số IPS.
@@ -261,19 +261,19 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** *Hình 3.6* – Các khung quan sát (thanh ghi/bộ nhớ). **Bảng 3.4** – Danh sách 7 view và nội dung.
 - **Trang:** ~1.5.
 
-### 3.5. Luồng thực thi chương trình hợp ngữ — *~2.5 trang*
+### 3.5. Luồng thực thi chương trình hợp ngữ — *~1.5 trang*
 - **Nội dung:** Từ mã nguồn ASM → assemble (2 pass) → nạp mã máy vào bộ nhớ → vòng chạy/step → cập nhật UI; xử lý syscall và xuất I/O; điều kiện dừng.
 - **Nguồn:** `src/js/javascript.js` (handleAssemble/runLoop/handleStep); `src/js/assembler.js`; `src/js/cpu.js`.
 - **Hình/bảng:** **Hình 3.7 – Luồng thực thi chương trình assembly** *(hình bắt buộc #2)* (sơ đồ hoạt động end-to-end).
-- **Trang:** ~2.5.
+- **Trang:** ~4.
 
 ---
 
-## CHƯƠNG 4. HIỆN THỰC HỆ THỐNG / THIẾT KẾ CHI TIẾT — *~29–33 trang*
+## CHƯƠNG 4. HIỆN THỰC HỆ THỐNG / THIẾT KẾ CHI TIẾT — *~15–18 trang*
 
 > Chương trọng tâm. Mỗi module: mô tả thiết kế dữ liệu/giải thuật + sơ đồ + ánh xạ tới mã nguồn. Hạn chế dán code dài (đưa xuống Phụ lục).
 
-### 4.1. Trình biên dịch hợp ngữ (Assembler) — *~5 trang*
+### 4.1. Trình biên dịch hợp ngữ (Assembler) — *~2.5 trang*
 
 #### 4.1.1. Kiến trúc hai lượt (two-pass)
 - **Nội dung:** Pass 1 (tách dòng/nhãn, tính địa chỉ/kích thước, xử lý directive); Pass 2 (mã hóa lệnh & dữ liệu, ghi little-endian); địa chỉ nền `.text`=0x00400000, `.data`=0x10010000; xử lý lỗi theo dòng.
@@ -299,7 +299,7 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** *Hình 4.2* – Minh họa gợi ý cú pháp trong editor.
 - **Trang:** ~0.5.
 
-### 4.2. Bộ xử lý CPU RV32IMF — *~6 trang*
+### 4.2. Bộ xử lý CPU RV32IMF — *~3 trang*
 
 #### 4.2.1. Tổ chức thanh ghi và trạng thái
 - **Nội dung:** Int32Array(32) cho x0–x31, Float32Array(32) cho f0–f31, PC; bộ đếm lệnh, giới hạn maxSteps; trạng thái chờ fetch/response.
@@ -325,7 +325,7 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** **Bảng 4.4** – Danh sách syscall hỗ trợ (mã, tham số, hành vi).
 - **Trang:** ~1.
 
-### 4.3. Hệ thống bộ nhớ — *~5 trang*
+### 4.3. Hệ thống bộ nhớ — *~2.5 trang*
 
 #### 4.3.1. Bộ nhớ chính (Main Memory)
 - **Nội dung:** Lưu trữ thưa byte-addressed; mô hình latency (mặc định 20 chu kỳ trong SoC); đáp ứng theo beat 4 byte cho burst/refill; directRead/directWrite.
@@ -345,7 +345,7 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** *Hình 4.6* – Phân cấp cache trong SoC. **Bảng 4.6** – Cấu hình L1I/L1D/L2 (set/way/block/latency/size).
 - **Trang:** ~2.
 
-### 4.4. Hệ thống bus TileLink — *~6 trang*
+### 4.4. Hệ thống bus TileLink — *~3 trang*
 
 #### 4.4.1. Lõi TileLink: opcode, mask, snapshot kênh A/D
 - **Nội dung:** Định nghĩa TL_A_Opcode/TL_D_Opcode và giá trị số; tham số atomic/logical; computeTileLinkMask; helper read/write/atomic; snapshot kênh A/D phục vụ trực quan.
@@ -371,13 +371,13 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** *Hình 4.9* – Luồng giao dịch qua bridge UH↔UL.
 - **Trang:** ~1.5.
 
-### 4.5. Bộ điều khiển DMA — *~4 trang*
+### 4.5. Bộ điều khiển DMA — *~2 trang*
 - **Nội dung:** Cấu trúc DMADescriptor (sourceAddr, destAddr, configWord với numElements/bswap/srcMode/dstMode); thanh ghi CTRL (0xFFED0000) & DESC (0xFFED0004) cùng các bit enable/start/busy/done/error/fifo; FIFO descriptor sâu 8; các chế độ địa chỉ (cố định/tăng); byte-swap; mô hình truyền từng phần tử (read→latch→write); DMA là master trên UH (RAM) và UL (ngoại vi). ⚠️ Hoàn tất bằng polling, chưa có IRQ tới CPU.
 - **Nguồn:** `src/js/dma.js`; `src/js/soc.js`; `[analysis]` 4.2 & 7.4.
 - **Hình/bảng:** **Hình 4.10 – Quy trình DMA** *(hình bắt buộc #5)* (descriptor → FIFO → read source → write dest → done). **Bảng 4.8** – Bản đồ thanh ghi DMA (CTRL/DESC, bit field, ý nghĩa).
 - **Trang:** ~4.
 
-### 4.6. Hệ thống ngoại vi và MMIO — *~5 trang*
+### 4.6. Hệ thống ngoại vi và MMIO — *~2.5 trang*
 
 #### 4.6.1. Tổng quan kiến trúc ngoại vi
 - **Nội dung:** Bốn ngoại vi gắn TileLink-UL; cơ chế endpoint MMIO; cách `javascript.js` nối sự kiện UI (bàn phím/chuột/console) vào ngoại vi.
@@ -405,7 +405,7 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 
 > ⚠️ **CAN:** Đề cương có nêu CAN như mục tiêu ngoại vi, nhưng **không có module/source CAN** trong mã. Không viết là đã hiện thực. Nếu cần, chỉ nhắc trong "hướng phát triển" (Chương 6).
 
-### 4.7. Trực quan hóa và gỡ lỗi — *~3 trang*
+### 4.7. Trực quan hóa và gỡ lỗi — *~1.5 trang*
 
 #### 4.7.1. Sơ đồ SoC động
 - **Nội dung:** Node/edge của sơ đồ; render SVG (viewBox, định tuyến orthogonal); hiệu ứng pulse khi có giao dịch (đọc/ghi), tooltip trạng thái (PC, hit-rate…).
@@ -419,7 +419,7 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 - **Hình/bảng:** *Hình 4.14* – Terminal log có bộ lọc theo module. **Bảng 4.12** – Các nhóm log và tiêu chí phân loại.
 - **Trang:** ~1.5.
 
-### 4.8. Vòng điều khiển thực thi trên UI — *~1.5 trang*
+### 4.8. Vòng điều khiển thực thi trên UI — *~1 trang*
 - **Nội dung:** handleAssemble/handleRun/Pause/Stop/Step/Reset; runLoop theo requestAnimationFrame, số chu kỳ/khung theo thanh tốc độ; breakpoint; đo IPS; cập nhật UI có tô sáng thay đổi.
 - **Nguồn:** `src/js/javascript.js`.
 - **Hình/bảng:** *Hình 4.15* – Sơ đồ vòng lặp chạy mô phỏng trên trình duyệt.
@@ -427,51 +427,51 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 
 ---
 
-## CHƯƠNG 5. KIỂM THỬ VÀ ĐÁNH GIÁ — *~15–18 trang*
+## CHƯƠNG 5. KIỂM THỬ VÀ ĐÁNH GIÁ — *~8–10 trang*
 
-### 5.1. Phương pháp và môi trường kiểm thử — *~2.5 trang*
+### 5.1. Phương pháp và môi trường kiểm thử — *~1 trang*
 - **Nội dung:** Chiến lược nhiều lớp: (1) unit test cục bộ bằng Node.js; (2) đối chiếu encoding với GNU binutils; (3) đối chiếu thực thi với Spike trên riscv-tests; (4) kiểm thử tích hợp bằng chương trình demo; môi trường (Node.js, GNU RISC-V toolchain, Spike, riscv-tests, ISA RV32IMF_zicclsm).
 - **Nguồn:** `test/README_rv32imf_verification.md`; `verification_plan.docx`; `README.md`.
 - **Hình/bảng:** **Hình 5.1 – Quy trình kiểm thử** *(hình bắt buộc #8)* (4 lớp test → tiêu chí pass).
 - **Trang:** ~2.5.
 
-### 5.2. Kiểm thử đơn vị các module — *~3 trang*
+### 5.2. Kiểm thử đơn vị các module — *~1.5 trang*
 - **Nội dung:** Mô tả & kết quả các script: assembler_verify, asm_programs_verify, mmu_basic_verify, tilelink_verify, dma_verify, syscall_output_verify, mmu_syscall_verify, log_filter_verify; nội dung kiểm tra và trạng thái pass.
 - **Nguồn:** `test/*_verify.mjs`; `[analysis]` mục 4.6 (các script đã chạy pass).
 - **Hình/bảng:** **Bảng 5.1 – Danh sách test case** *(bảng bắt buộc #6)* (tên script, mục tiêu, đầu vào, kỳ vọng, kết quả).
 - **Trang:** ~3.
 
-### 5.3. Đối chiếu encoding với GNU binutils — *~2 trang*
+### 5.3. Đối chiếu encoding với GNU binutils — *~1 trang*
 - **Nội dung:** Quy trình disassemble ELF riscv-tests (rv32ui/um/uf) → assemble lại bằng assembler dự án → so khớp word 32-bit; phân loại checked/skipped (CSR/privileged là skipped). ⚠️ Cần log chính thức: số instruction checked/skipped, có/không mismatch.
 - **Nguồn:** `test/verify_rv32imf_against_gnu.mjs`; `test/README_rv32imf_verification.md`.
 - **Hình/bảng:** **Bảng 5.2** – Kết quả đối chiếu encoding theo nhóm (rv32ui/um/uf): #checked, #skipped, #mismatch.
 - **Trang:** ~2.
 
-### 5.4. Đối chiếu thực thi với Spike trên riscv-tests — *~2 trang*
+### 5.4. Đối chiếu thực thi với Spike trên riscv-tests — *~1 trang*
 - **Nội dung:** Chạy ELF rv32ui-p-*/um/uf trên Spike (RV32IMF_zicclsm), xác nhận pass theo cơ chế riscv-tests; lý do bật zicclsm (ma_data). ⚠️ Cần log chính thức + phiên bản toolchain/Spike + commit riscv-tests.
 - **Nguồn:** `test/verify_riscv_tests_spike.mjs`; `test/README_rv32imf_verification.md`.
 - **Hình/bảng:** **Bảng 5.3 – Kết quả đối chiếu với simulator tham chiếu (Spike)** *(bảng bắt buộc #7)* (nhóm test, #chạy, #pass, #fail).
 - **Trang:** ~2.
 
-### 5.5. Kiểm thử tích hợp qua chương trình demo — *~3.5 trang*
+### 5.5. Kiểm thử tích hợp qua chương trình demo — *~2 trang*
 - **Nội dung:** Chạy các demo end-to-end và mô tả kết quả quan sát: bus_demo, demo_uart, dma_demo, dma_led_demo, led_demo, mmu_syscall_test, mouse_demo, test_cache, test_fpu, test_keyboard, soc_full_demo. Mỗi demo: mục tiêu, ngoại vi/khối liên quan, kết quả mong đợi + ảnh chụp.
 - **Nguồn:** `test/*.asm`; `test/run_demo.mjs`, `test/mmu_demo.mjs`; `screenshot.png`.
 - **Hình/bảng:** *Hình 5.2–5.5* – Ảnh chụp kết quả demo tiêu biểu (UART console, LED matrix, DMA→LED, FPU). **Bảng 5.4** – Danh sách demo và kết quả. ⚠️ Cần SV chọn demo chính + cung cấp ảnh/video.
 - **Trang:** ~3.5.
 
-### 5.6. Đánh giá hiệu năng — *~2 trang*
+### 5.6. Đánh giá hiệu năng — *~1 trang*
 - **Nội dung:** Số liệu từ thống kê có sẵn trong simulator: tỉ lệ hit/miss cache (L1/L2), số chu kỳ, IPS; so sánh CPU-copy vs DMA-copy; ảnh hưởng latency bus/bộ nhớ. ⚠️ Hiện chưa có bộ benchmark riêng — cần quyết định bổ sung số liệu định lượng (đo trước/sau cache, DMA).
 - **Nguồn:** thống kê trong `src/js/SimpleCache.js`, `mmu.js`, `soc.js`; ⚠️ `[analysis]` 4.6 & 7.6.
 - **Hình/bảng:** **Bảng 5.5** – Số liệu hiệu năng (hit-rate, cycles, IPS, DMA vs CPU). *Hình 5.6* – Biểu đồ so sánh CPU-copy vs DMA-copy (nếu có số liệu).
 - **Trang:** ~2.
 
-### 5.7. So sánh với công cụ tham chiếu và đề tài khóa trước — *~1.5 trang*
+### 5.7. So sánh với công cụ tham chiếu và đề tài khóa trước — *~1 trang*
 - **Nội dung:** Thảo luận bảng so sánh tổng hợp (đặt Bảng 1.1 ở Chương 1, nhắc lại/diễn giải ở đây): điểm vượt trội so với MARS/Interpreter/WebRISC-V/Spike và mở rộng so với KLTN khóa trước (RV32M, RV32F/FPU, ngoại vi keyboard/mouse, trực quan hóa, kiểm chứng).
 - **Nguồn:** `[ref:đề cương]` [1]–[5]; `[ref:Thư viện số]`; `[analysis]`.
 - **Hình/bảng:** tham chiếu **Bảng 1.1**.
 - **Trang:** ~1.5.
 
-### 5.8. Thảo luận hạn chế phát hiện qua kiểm thử — *~1 trang*
+### 5.8. Thảo luận hạn chế phát hiện qua kiểm thử — *~0.5 trang*
 - **Nội dung:** Tổng hợp giới hạn: subset RV32IMF (CSR/FCSR/FENCE), TileLink A/D-only, arbitration đơn, chưa IRQ, hiệu năng đơn luồng. ⚠️ Trình bày trung thực theo `[analysis]` mục 7.
 - **Nguồn:** `[analysis]` mục 7.
 - **Hình/bảng:** không.
@@ -479,19 +479,19 @@ Liệt kê để không thiếu khi đóng quyển (không tính vào 80 trang n
 
 ---
 
-## CHƯƠNG 6. KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN — *~4–6 trang*
+## CHƯƠNG 6. KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN — *~3–5 trang*
 
-### 6.1. Kết luận — *~2 trang*
+### 6.1. Kết luận — *~1.5 trang*
 - **Nội dung:** Tóm tắt kết quả đạt được theo 4 mục tiêu kỹ thuật; khẳng định đã xây dựng được trình mô phỏng SoC RISC-V RV32IMF + TileLink chạy Web với assembler, CPU, MMU/cache, bus UH/UL, DMA, 4 ngoại vi, trực quan hóa và kiểm chứng.
 - **Nguồn:** Chương 4–5; `[ref:đề cương]` (mục tiêu).
 - **Trang:** ~2.
 
-### 6.2. Hạn chế — *~1 trang*
+### 6.2. Hạn chế — *~0.5 trang*
 - **Nội dung:** Liệt kê hạn chế còn lại (subset ISA, mức transaction TileLink, chưa IRQ/interrupt controller, chưa benchmark định lượng đầy đủ, hiệu năng đơn luồng).
 - **Nguồn:** `[analysis]` mục 7.
 - **Trang:** ~1.
 
-### 6.3. Hướng phát triển — *~1.5 trang*
+### 6.3. Hướng phát triển — *~1 trang*
 - **Nội dung:** Bổ sung CSR/privileged, FCSR/làm tròn động, thực thi FENCE; mở rộng TileLink B/C/E + coherence; arbitration đa master thực sự; interrupt controller + IRQ (UART/DMA/keyboard); thêm ngoại vi (CAN…); benchmark định lượng; bài lab giảng dạy.
 - **Nguồn:** `[analysis]` mục 7–8; `[ref:đề cương]` (CAN).
 - **Trang:** ~1.5.

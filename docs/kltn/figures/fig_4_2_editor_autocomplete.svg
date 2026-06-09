@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="6.0in" height="4.1in" viewBox="0 0 960 656" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Minh họa gợi ý cú pháp trong trình soạn thảo</title>
+  <desc id="desc">Khung soạn thảo CodeMirror với cột đặt điểm dừng, cột số dòng, mã hợp ngữ được tô màu và danh sách gợi ý cú pháp xuất hiện tại con trỏ sau addi t0,. Mỗi mục gợi ý có biểu tượng loại, nhãn, huy hiệu loại, mô tả và dòng cú pháp hoặc ví dụ.</desc>
+
+  <style>
+    .bg{fill:#ffffff}
+    .title{font-size:18px;fill:#2d3436;font-weight:700;text-anchor:middle}
+    .frame{fill:#f8fafc;stroke:#2d3436;stroke-width:1.5}
+    .topbar{fill:#eef2f7}
+    .gutterBreak{fill:#edf1f5}
+    .gutterLine{fill:#f5f7fa}
+    .codeArea{fill:#fbfdff}
+    .lineHighlight{fill:#eaf3ff}
+    .divider{stroke:#d4d8de;stroke-width:1}
+    .muted{fill:#7f8c8d}
+    .small{font-size:11px;fill:#636e72}
+    .label{font-size:12px;fill:#2d3436;font-weight:600}
+    .mono{font-family:Consolas, "Courier New", monospace;font-size:15px}
+    .ln{font-family:Consolas, "Courier New", monospace;font-size:13px;fill:#7f8c8d;text-anchor:end}
+    .kw{fill:#8e44ad;font-weight:700}
+    .mn{fill:#0b7285;font-weight:700}
+    .reg{fill:#1971c2;font-weight:700}
+    .num{fill:#d9480f}
+    .str{fill:#2f9e44}
+    .tag{fill:#2b8a3e;font-weight:700}
+    .comment{fill:#8a949e;font-style:italic}
+    .cursor{stroke:#2d3436;stroke-width:2}
+    .hintShadow{fill:#000000;opacity:0.10}
+    .hintBox{fill:#ffffff;stroke:#2d3436;stroke-width:1.4}
+    .hintActive{fill:#e8f2ff}
+    .hintSep{stroke:#e5e9ef;stroke-width:1}
+    .hintLabel{font-size:15px;fill:#1f2d3d;font-weight:700}
+    .hintDetail{font-size:12px;fill:#52616f}
+    .hintSyntax{font-family:Consolas, "Courier New", monospace;font-size:11.5px;fill:#6c757d}
+    .badge{fill:#eef2fb;stroke:#9aa3ad;stroke-width:1}
+    .badgeText{font-size:10px;fill:#2d3436;font-weight:700;text-anchor:middle}
+    .iconReg{fill:#dbeafe;stroke:#1971c2;stroke-width:1.2}
+    .iconText{font-size:10px;fill:#1971c2;font-weight:800;text-anchor:middle}
+    .bpDot{fill:#ffffff;stroke:#adb5bd;stroke-width:1.2}
+    .bpActive{fill:#e03131;stroke:#a61e1e;stroke-width:1.2}
+  </style>
+
+  <rect class="bg" x="0" y="0" width="960" height="656"/>
+  <text x="480" y="32" class="title">Minh họa gợi ý cú pháp trong trình soạn thảo</text>
+
+  <!-- Editor shell -->
+  <rect x="56" y="62" width="848" height="520" rx="8" class="frame"/>
+  <rect x="56" y="62" width="848" height="38" rx="8" class="topbar"/>
+  <path d="M56,94 L904,94" class="divider"/>
+  <circle cx="78" cy="81" r="5" fill="#ff6b6b"/>
+  <circle cx="96" cy="81" r="5" fill="#ffd43b"/>
+  <circle cx="114" cy="81" r="5" fill="#51cf66"/>
+  <text x="138" y="86" class="small">CodeMirror · mode: riscv</text>
+  <text x="838" y="86" class="small" text-anchor="end">Ctrl-Space</text>
+
+  <!-- Gutters and code area -->
+  <rect x="56" y="100" width="34" height="482" class="gutterBreak"/>
+  <rect x="90" y="100" width="48" height="482" class="gutterLine"/>
+  <rect x="138" y="100" width="766" height="482" class="codeArea"/>
+  <path d="M90,100 L90,582" class="divider"/>
+  <path d="M138,100 L138,582" class="divider"/>
+
+  <!-- Active line -->
+  <rect x="138" y="220" width="766" height="36" class="lineHighlight"/>
+
+  <!-- Breakpoint gutter -->
+  <circle cx="73" cy="129" r="5" class="bpDot"/>
+  <circle cx="73" cy="164" r="5" class="bpDot"/>
+  <circle cx="73" cy="199" r="5" class="bpDot"/>
+  <circle cx="73" cy="234" r="5" class="bpDot"/>
+  <circle cx="73" cy="269" r="5" class="bpActive"/>
+  <circle cx="73" cy="304" r="5" class="bpDot"/>
+  <circle cx="73" cy="339" r="5" class="bpDot"/>
+  <circle cx="73" cy="374" r="5" class="bpDot"/>
+
+  <!-- Line numbers -->
+  <text x="124" y="134" class="ln">1</text>
+  <text x="124" y="169" class="ln">2</text>
+  <text x="124" y="204" class="ln">3</text>
+  <text x="124" y="239" class="ln">4</text>
+  <text x="124" y="274" class="ln">5</text>
+  <text x="124" y="309" class="ln">6</text>
+  <text x="124" y="344" class="ln">7</text>
+  <text x="124" y="379" class="ln">8</text>
+
+  <!-- Syntax-highlighted assembly -->
+  <text x="160" y="134" class="mono kw">.text</text>
+  <text x="218" y="134" class="mono num">0x00400000</text>
+
+  <text x="160" y="169" class="mono kw">.globl</text>
+  <text x="226" y="169" class="mono tag">_start</text>
+
+  <text x="160" y="204" class="mono tag">_start:</text>
+
+  <text x="196" y="239" class="mono mn">addi</text>
+  <text x="244" y="239" class="mono reg">t0</text>
+  <text x="267" y="239" class="mono" fill="#2d3436">,</text>
+  <line x1="286" y1="219" x2="286" y2="246" class="cursor"/>
+
+  <text x="196" y="274" class="mono mn">addi</text>
+  <text x="244" y="274" class="mono reg">a7</text>
+  <text x="266" y="274" class="mono" fill="#2d3436">,</text>
+  <text x="286" y="274" class="mono reg">zero</text>
+  <text x="326" y="274" class="mono" fill="#2d3436">,</text>
+  <text x="346" y="274" class="mono num">93</text>
+  <text x="374" y="274" class="mono comment"># exit syscall</text>
+
+  <text x="196" y="309" class="mono mn">ecall</text>
+
+  <text x="160" y="344" class="mono tag">msg:</text>
+  <text x="216" y="344" class="mono kw">.asciiz</text>
+  <text x="292" y="344" class="mono str">"done\n"</text>
+
+  <text x="160" y="379" class="mono comment"># Gợi ý không bật trong chú thích hoặc chuỗi</text>
+
+  <!-- Hint dropdown -->
+  <rect x="314" y="214" width="448" height="306" rx="8" class="hintShadow"/>
+  <rect x="306" y="206" width="448" height="306" rx="8" class="hintBox"/>
+
+  <!-- Active item -->
+  <rect x="307" y="207" width="446" height="74" rx="7" class="hintActive"/>
+  <circle cx="330" cy="232" r="13" class="iconReg"/>
+  <text x="330" y="236" class="iconText">R</text>
+  <text x="354" y="229" class="hintLabel">t1</text>
+  <rect x="386" y="214" width="36" height="18" rx="9" class="badge"/>
+  <text x="404" y="227" class="badgeText">reg</text>
+  <text x="354" y="250" class="hintDetail">temporary register</text>
+  <text x="354" y="269" class="hintSyntax">x6 · ví dụ: addi t0, t1, imm</text>
+  <path d="M306,281 L754,281" class="hintSep"/>
+
+  <!-- Item 2 -->
+  <circle cx="330" cy="306" r="13" class="iconReg"/>
+  <text x="330" y="310" class="iconText">R</text>
+  <text x="354" y="303" class="hintLabel">t2</text>
+  <rect x="386" y="288" width="36" height="18" rx="9" class="badge"/>
+  <text x="404" y="301" class="badgeText">reg</text>
+  <text x="354" y="324" class="hintDetail">temporary register</text>
+  <text x="354" y="343" class="hintSyntax">x7 · ví dụ: addi t0, t2, imm</text>
+  <path d="M306,355 L754,355" class="hintSep"/>
+
+  <!-- Item 3 -->
+  <circle cx="330" cy="380" r="13" class="iconReg"/>
+  <text x="330" y="384" class="iconText">R</text>
+  <text x="354" y="377" class="hintLabel">s0</text>
+  <rect x="386" y="362" width="36" height="18" rx="9" class="badge"/>
+  <text x="404" y="375" class="badgeText">reg</text>
+  <text x="354" y="398" class="hintDetail">saved register / frame pointer</text>
+  <text x="354" y="417" class="hintSyntax">x8 · ví dụ: addi t0, s0, imm</text>
+  <path d="M306,429 L754,429" class="hintSep"/>
+
+  <!-- Item 4 -->
+  <circle cx="330" cy="454" r="13" class="iconReg"/>
+  <text x="330" y="458" class="iconText">R</text>
+  <text x="354" y="451" class="hintLabel">a0</text>
+  <rect x="386" y="436" width="36" height="18" rx="9" class="badge"/>
+  <text x="404" y="449" class="badgeText">reg</text>
+  <text x="354" y="472" class="hintDetail">argument / return value</text>
+  <text x="354" y="491" class="hintSyntax">x10 · ví dụ: addi t0, a0, imm</text>
+
+  <!-- Mini legend inside editor footer -->
+  <rect x="160" y="535" width="616" height="28" rx="6" fill="#ffffff" stroke="#d4d8de" stroke-width="1"/>
+  <circle cx="184" cy="549" r="6" class="bpActive"/>
+  <text x="198" y="553" class="small">điểm dừng</text>
+  <text x="292" y="553" class="mono kw">.directive</text>
+  <text x="404" y="553" class="mono mn">mnemonic</text>
+  <text x="520" y="553" class="mono reg">register</text>
+  <text x="620" y="553" class="mono num">number</text>
+  <text x="706" y="553" class="mono comment">comment</text>
+</svg>

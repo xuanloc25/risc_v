@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="6.0in" height="4.2in" viewBox="0 0 960 672" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Ánh xạ VRAM sang điểm ảnh LED</title>
+  <desc id="desc">Sơ đồ ánh xạ một ô VRAM tuyến tính tại 0xFF000000 sang điểm ảnh trong lưới LED 32x32, với cách tính pixelIndex, tọa độ x y và tách thành phần màu RGB.</desc>
+
+  <defs>
+    <marker id="arrowEnd" markerWidth="12" markerHeight="12" refX="10" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5.5 L0,11 Z" fill="#f97316" stroke="#ffffff" stroke-width="1.2"/>
+    </marker>
+
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#0f172a" flood-opacity="0.14"/>
+    </filter>
+
+    <filter id="ledGlow" x="-350%" y="-350%" width="800%" height="800%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0 0 0 0 0.13
+                0 0 0 0 0.83
+                0 0 0 0 0.93
+                0 0 0 0.95 0" result="glowColor"/>
+      <feMerge>
+        <feMergeNode in="glowColor"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <pattern id="ledGrid" width="9" height="9" patternUnits="userSpaceOnUse">
+      <rect width="9" height="9" fill="#263238"/>
+      <rect x="1.25" y="1.25" width="6.5" height="6.5" rx="1.45" fill="#45545b"/>
+    </pattern>
+  </defs>
+
+  <style>
+    .bg{fill:#ffffff}
+    .panel{fill:#f8fafc;stroke:#2d3436;stroke-width:1.8;rx:10}
+    .panelTitle{font-size:26px;fill:#1f2937;font-weight:850;text-anchor:middle}
+    .panelSub{font-size:18px;fill:#52616f;font-weight:740;text-anchor:middle}
+    .cell{fill:#ffffff;stroke:#94a3b8;stroke-width:1.5;rx:7}
+    .cellHot{fill:#e8fbff;stroke:#0891b2;stroke-width:2.4;rx:7}
+    .addr{font-family:Consolas, "Courier New", monospace;font-size:17.2px;fill:#1f2937;font-weight:780;text-anchor:middle}
+    .cellText{font-family:Consolas, "Courier New", monospace;font-size:18.4px;fill:#111827;font-weight:820;text-anchor:middle}
+    .smallMono{font-family:Consolas, "Courier New", monospace;font-size:16px;fill:#475569;font-weight:740;text-anchor:middle}
+    .note{fill:#ffffff;stroke:#cbd5e1;stroke-width:1.4;rx:8;filter:url(#softShadow)}
+    .formula{font-family:Consolas, "Courier New", monospace;font-size:18.4px;fill:#0f172a;font-weight:820;text-anchor:middle}
+    .formulaSmall{font-family:Consolas, "Courier New", monospace;font-size:17.2px;fill:#0f172a;font-weight:800;text-anchor:middle}
+    .label{font-size:17px;fill:#334155;font-weight:780;text-anchor:middle}
+    .arrowHalo{fill:none;stroke:#ffffff;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+    .arrow{fill:none;stroke:#f97316;stroke-width:3.6;stroke-linecap:round;stroke-linejoin:round;marker-end:url(#arrowEnd)}
+    .guide{fill:none;stroke:#22d3ee;stroke-width:1.25;stroke-dasharray:5 5;opacity:0.75}
+    .canvasFrame{fill:#1f2a30;stroke:#2d3436;stroke-width:2.2;rx:12}
+    .gridBorder{fill:url(#ledGrid);stroke:#e2e8f0;stroke-width:1.5}
+    .axisText{font-family:Consolas, "Courier New", monospace;font-size:15px;fill:#334155;font-weight:820;text-anchor:middle}
+    .axisBadge{fill:#ffffff;stroke:#cbd5e1;stroke-width:1.2;rx:5}
+    .axisBadgeText{font-family:Consolas, "Courier New", monospace;font-size:16.5px;fill:#0f172a;font-weight:850;text-anchor:middle}
+    .coordBadge{fill:#ffffff;stroke:#06b6d4;stroke-width:1.5;rx:6}
+    .coordText{font-family:Consolas, "Courier New", monospace;font-size:16px;fill:#0f172a;font-weight:850;text-anchor:middle}
+    .hotLed{fill:#22d3ee;stroke:#ffffff;stroke-width:1.25;rx:1.6;filter:url(#ledGlow)}
+    .hotRing{fill:none;stroke:#06b6d4;stroke-width:2.4;rx:3}
+    .byteBox{stroke:#475569;stroke-width:1.25;rx:5}
+    .byteText{font-family:Consolas, "Courier New", monospace;font-size:16px;font-weight:850;text-anchor:middle;fill:#111827}
+    .rgbTitle{font-size:17px;fill:#334155;font-weight:850;text-anchor:start}
+    .rgbText{font-family:Consolas, "Courier New", monospace;font-size:14.4px;font-weight:800;fill:#111827}
+  </style>
+
+  <rect class="bg" x="0" y="0" width="960" height="672"/>
+
+  <!-- Left: linear VRAM -->
+  <rect class="panel" x="36" y="42" width="346" height="584"/>
+  <text x="209" y="78" class="panelTitle">VRAM tuyến tính</text>
+  <text x="209" y="104" class="panelSub">Base address: 0xFF000000</text>
+
+  <text x="107" y="137" class="label">Địa chỉ</text>
+  <text x="281" y="137" class="label">word 4 byte</text>
+
+  <rect class="cell" x="61" y="150" width="294" height="56"/>
+  <text x="137" y="173" class="addr">0xFF000000</text>
+  <text x="282" y="173" class="cellText">0x00RRGGBB</text>
+  <text x="282" y="194" class="smallMono">pixel 0</text>
+
+  <rect class="cell" x="61" y="216" width="294" height="56"/>
+  <text x="137" y="239" class="addr">0xFF000004</text>
+  <text x="282" y="239" class="cellText">0x00RRGGBB</text>
+  <text x="282" y="260" class="smallMono">pixel 1</text>
+
+  <text x="208" y="303" class="cellText">...</text>
+
+  <rect class="cellHot" x="61" y="326" width="294" height="64"/>
+  <text x="139" y="351" class="addr">base + 4k</text>
+  <text x="282" y="351" class="cellText">0x00RRGGBB</text>
+  <text x="282" y="374" class="smallMono">ô k trong VRAM</text>
+
+  <rect class="cell" x="61" y="404" width="294" height="56"/>
+  <text x="139" y="427" class="addr">base + 4(k+1)</text>
+  <text x="282" y="427" class="cellText">0x00RRGGBB</text>
+  <text x="282" y="448" class="smallMono">pixel k+1</text>
+
+  <text x="208" y="493" class="cellText">...</text>
+
+  <rect class="cell" x="61" y="516" width="294" height="56"/>
+  <text x="137" y="539" class="addr">0xFF000FFC</text>
+  <text x="282" y="539" class="cellText">0x00RRGGBB</text>
+  <text x="282" y="560" class="smallMono">pixel 1023</text>
+
+  <!-- Right: canvas grid -->
+  <rect class="panel" x="548" y="42" width="376" height="584"/>
+  <text x="736" y="78" class="panelTitle">LED 32×32</text>
+  <text x="736" y="104" class="panelSub">1024 điểm ảnh, thứ tự theo hàng</text>
+
+  <rect class="canvasFrame" x="585" y="128" width="306" height="306"/>
+  <rect class="gridBorder" x="609" y="152" width="288" height="288"/>
+
+  <!-- Subtle coordinate guides for the highlighted pixel: x=21, y=11 -->
+  <line class="guide" x1="807" y1="152" x2="807" y2="440"/>
+  <line class="guide" x1="609" y1="255" x2="897" y2="255"/>
+
+  <rect class="hotLed" x="798" y="247" width="9" height="9"/>
+  <rect class="hotRing" x="794" y="243" width="17" height="17"/>
+  <rect x="816" y="226" width="70" height="28" class="coordBadge"/>
+  <text x="851" y="246" class="coordText">(x, y)</text>
+
+  <text x="609" y="464" class="axisText">0</text>
+  <text x="897" y="464" class="axisText">31</text>
+  <rect x="574" y="144" width="22" height="23" class="axisBadge"/>
+  <text x="585" y="162" class="axisBadgeText">0</text>
+  <rect x="565" y="428" width="36" height="24" class="axisBadge"/>
+  <text x="583" y="446" class="axisBadgeText">31</text>
+  <rect x="792" y="130" width="30" height="24" class="axisBadge"/>
+  <text x="807" y="148" class="axisBadgeText">x</text>
+  <rect x="586" y="244" width="30" height="24" class="axisBadge"/>
+  <text x="601" y="262" class="axisBadgeText">y</text>
+
+  <rect class="note" x="575" y="472" width="330" height="64"/>
+  <text x="740" y="498" class="formulaSmall">x = pixelIndex mod 32</text>
+  <text x="740" y="522" class="formulaSmall">y = ⌊pixelIndex / 32⌋</text>
+
+  <!-- Mapping arrow and label, kept above both panels -->
+  <path class="arrowHalo" d="M355,358 C454,358 503,260 798,252"/>
+  <path class="arrow" d="M355,358 C454,358 503,260 798,252"/>
+  <rect class="note" x="390" y="273" width="148" height="88"/>
+  <text x="464" y="297" class="formulaSmall">pixelIndex =</text>
+  <text x="464" y="321" class="formulaSmall">(addr −</text>
+  <text x="464" y="345" class="formulaSmall">0xFF000000) / 4</text>
+
+  <!-- RGB decoding callout -->
+  <rect class="note" x="562" y="540" width="354" height="80"/>
+  <rect x="582" y="568" width="40" height="40" rx="5" fill="#22d3ee" stroke="#0891b2" stroke-width="1.6" filter="url(#ledGlow)"/>
+  <text x="636" y="562" class="rgbTitle">Tách thành phần màu</text>
+
+  <rect class="byteBox" x="636" y="586" width="36" height="24" fill="#f1f5f9"/>
+  <rect class="byteBox" x="672" y="586" width="36" height="24" fill="#fee2e2"/>
+  <rect class="byteBox" x="708" y="586" width="36" height="24" fill="#dcfce7"/>
+  <rect class="byteBox" x="744" y="586" width="36" height="24" fill="#dbeafe"/>
+  <text x="654" y="604" class="byteText">00</text>
+  <text x="690" y="604" class="byteText">RR</text>
+  <text x="726" y="604" class="byteText">GG</text>
+  <text x="762" y="604" class="byteText">BB</text>
+
+  <text x="790" y="578" class="rgbText">R = bit23..16</text>
+  <text x="790" y="598" class="rgbText">G = bit15..8</text>
+  <text x="790" y="616" class="rgbText">B = bit7..0</text>
+</svg>

@@ -1,8 +1,11 @@
 # Hình minh họa Chương 3 (nguồn vẽ)
 
 Tệp này chứa **bản dựng** của 7 hình trong Chương 3, sinh ra từ phần mô tả `[Hình 3.x: …]` trong
-[chapter_03.md](../chapters/chapter_03.md). Năm hình sơ đồ (3.1, 3.2, 3.3, 3.4, 3.7) được dựng bằng
-**Mermaid** (mã nguồn, sửa và xuất ảnh được); hai hình giao diện (3.5, 3.6) có **wireframe SVG dựng sẵn**
+[chapter_03.md](../chapters/chapter_03.md). Các hình 3.1, 3.2, 3.3, 3.4, 3.7 đã có **SVG dựng sẵn**
+(`fig_3_1_use_case_overview.svg`, `fig_3_2_soc_simulator_architecture.svg`, `fig_3_3_tick_sequence.svg`,
+`fig_3_4_port_model.svg`, `fig_3_7_execution_flow.svg`)
+để chèn trực tiếp vào báo cáo; các khối Mermaid bên dưới vẫn được giữ như nguồn phác thảo dễ sửa.
+Hai hình giao diện (3.5, 3.6) có **wireframe SVG dựng sẵn**
 (`fig_3_5_ui_layout.svg`, `fig_3_6_observation_frames.svg`) kèm danh sách nhãn đã đối chiếu với `screenshot.png`,
 và có thể thay bằng ảnh chụp màn hình thật khi in báo cáo.
 
@@ -18,27 +21,27 @@ và có thể thay bằng ảnh chụp màn hình thật khi in báo cáo.
 
 ## Hình 3.1 — Sơ đồ use case tổng quát
 
-*Tác nhân chính là Người học; use case "Nạp và chạy" bao hàm «include» "Biên dịch"; use case "Quan sát trạng thái" được mở rộng «extend» bởi các quan sát cụ thể.*
+*Người học tương tác với các nhóm chức năng chính của hệ thống; các use case được trình bày bằng ô chữ nhật, các nhóm quan sát được tách riêng để tránh chồng lấn.*
 
 ```mermaid
 flowchart LR
-  actor(("Người học")):::actor
+  actor["Người học"]:::actor
   subgraph SYS["Trình mô phỏng SoC RISC-V"]
     direction TB
-    UC1(["Soạn thảo chương trình hợp ngữ"])
-    UC2(["Biên dịch chương trình"])
-    UC3(["Nạp và chạy chương trình"])
-    UC4(["Chạy từng bước & đặt điểm dừng"])
-    UC5(["Quan sát trạng thái hệ thống"])
-    UC6(["Tương tác thiết bị ngoại vi"])
-    UC7(["Cấu hình tham số MMU/Cache"])
-    UC8(["Tra cứu hướng dẫn (Help)"])
-    UC5a(["Xem thanh ghi"])
-    UC5b(["Xem bộ nhớ"])
-    UC5c(["Xem bộ nhớ đệm"])
-    UC5d(["Xem MMU"])
-    UC5e(["Xem sơ đồ SoC & giao dịch bus"])
-    UC5f(["Xem nhật ký hệ thống"])
+    UC1["Soạn thảo chương trình hợp ngữ"]
+    UC2["Biên dịch chương trình"]
+    UC3["Nạp và chạy chương trình"]
+    UC4["Chạy từng bước"]
+    UC5["Quan sát trạng thái hệ thống"]
+    UC6["Tương tác thiết bị ngoại vi"]
+    UC7["Cấu hình tham số MMU/Cache"]
+    UC8["Tra cứu hướng dẫn (Help)"]
+    UC5a["Xem thanh ghi"]
+    UC5b["Xem bộ nhớ"]
+    UC5c["Xem bộ nhớ đệm"]
+    UC5d["Xem MMU"]
+    UC5e["Xem sơ đồ SoC & giao dịch bus"]
+    UC5f["Xem nhật ký hệ thống"]
   end
   actor --- UC1
   actor --- UC2
@@ -48,13 +51,13 @@ flowchart LR
   actor --- UC6
   actor --- UC7
   actor --- UC8
-  UC3 -. "«include»" .-> UC2
-  UC5a -. "«extend»" .-> UC5
-  UC5b -. "«extend»" .-> UC5
-  UC5c -. "«extend»" .-> UC5
-  UC5d -. "«extend»" .-> UC5
-  UC5e -. "«extend»" .-> UC5
-  UC5f -. "«extend»" .-> UC5
+  UC3 -.-> UC2
+  UC5 -.-> UC5a
+  UC5 -.-> UC5b
+  UC5 -.-> UC5c
+  UC5 -.-> UC5d
+  UC5 -.-> UC5e
+  UC5 -.-> UC5f
   classDef actor fill:#ffffff,stroke:#333,stroke-width:2px;
 ```
 
@@ -142,6 +145,10 @@ sequenceDiagram
 ## Hình 3.4 — Mô hình cổng kết nối (Port)
 
 *Bên trái: cổng liên kết điểm–điểm chuyển tiếp yêu cầu xuống và phản hồi lên. Bên phải: cách đăng ký master (upper) và slave (lower, kèm match địa chỉ) vào một bus, cùng cổng memory phục vụ gỡ lỗi.*
+
+**Bản SVG dựng sẵn (mở bằng trình duyệt để xem/xuất PNG hoặc chèn trực tiếp vào Word):**
+
+![Hình 3.4 — Mô hình cổng kết nối giữa các mô-đun](fig_3_4_port_model.svg)
 
 ```mermaid
 flowchart LR
@@ -237,6 +244,10 @@ flowchart TB
 
 *Sơ đồ hoạt động: nhập mã → assemble (init + 2 lượt) → kiểm tra lỗi → nạp & đặt PC → chọn Run/Step → vòng chạy với điều kiện dừng → cập nhật giao diện; có cung phản hồi về chu trình chỉnh sửa.*
 
+**Bản SVG dựng sẵn (mở bằng trình duyệt để xem/ xuất PNG hoặc chèn trực tiếp vào Word):**
+
+![Hình 3.7 — Luồng thực thi chương trình hợp ngữ (đầu–cuối)](fig_3_7_execution_flow.svg)
+
 ```mermaid
 flowchart TD
   Start(["Start"]) --> A["Nhập/chọn mã hợp ngữ"]
@@ -269,12 +280,12 @@ flowchart TD
 
 | Hình | Dạng | Tình trạng |
 |---|---|---|
-| 3.1 Use case | Mermaid | Đã dựng — render/xuất ảnh là dùng được |
-| 3.2 Kiến trúc tổng quan ⭐ | Mermaid | Đã dựng — đối chiếu khớp `SoC.png` (mở rộng Cache thành L1I/L1D/L2 theo source) |
-| 3.3 Trình tự tick | Mermaid (2 phần) | Đã dựng |
-| 3.4 Mô hình Port | Mermaid | Đã dựng |
+| 3.1 Use case | SVG + Mermaid | Có SVG dựng sẵn: `fig_3_1_use_case_overview.svg` |
+| 3.2 Kiến trúc tổng quan ⭐ | SVG + Mermaid | Có SVG dựng sẵn: `fig_3_2_soc_simulator_architecture.svg` |
+| 3.3 Trình tự tick | SVG + Mermaid | Có SVG dựng sẵn: `fig_3_3_tick_sequence.svg` |
+| 3.4 Mô hình Port | SVG + Mermaid | Có SVG dựng sẵn: `fig_3_4_port_model.svg` |
 | 3.5 Giao diện tổng quan ⭐ | SVG dựng sẵn + ảnh chụp | Có wireframe `fig_3_5_ui_layout.svg`; nhãn đã đối chiếu `screenshot.png`; bản in cuối có thể thay bằng ảnh chụp khung **Editor** |
 | 3.6 Khung quan sát | SVG dựng sẵn + ảnh chụp | Có wireframe `fig_3_6_observation_frames.svg`; nhãn đã đối chiếu `index.html`; bản in cuối có thể thay bằng ảnh chụp khung **Memory** |
-| 3.7 Luồng thực thi ⭐ | Mermaid | Đã dựng |
+| 3.7 Luồng thực thi ⭐ | SVG + Mermaid | Có SVG dựng sẵn: `fig_3_7_execution_flow.svg` |
 
 *Lưu ý:* nếu xuất ảnh để in trong báo cáo, nên đặt tên tệp theo số hình (`hinh_3_2.png`, …) và đặt trong thư mục này để dễ tham chiếu từ bản Word/LaTeX cuối cùng.

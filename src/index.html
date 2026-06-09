@@ -633,6 +633,8 @@
                         <div class="help-nav-list">
                             <button type="button" class="help-nav-item active" data-help-target="help-overview">Tổng
                                 quan</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-scope">Phạm vi hỗ
+                                trợ</button>
                             <button type="button" class="help-nav-item" data-help-target="help-workflow">Quy trình
                                 chạy</button>
                             <button type="button" class="help-nav-item" data-help-target="help-syntax">Cú pháp &
@@ -700,9 +702,15 @@
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>Processor</td>
-                                        <td>Không gian dành cho datapath/processor visualization.</td>
-                                        <td>Dùng Registers và Instruction Memory để debug tạm thời.</td>
+                                        <td>SoC</td>
+                                        <td>Xem sơ đồ CPU, MMU, cache, TileLink, DMA và các ngoại vi.</td>
+                                        <td>Hover từng block để xem mô tả, dùng log để đối chiếu giao dịch đang chạy.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>MMU</td>
+                                        <td>Quan sát cấu hình page size, TLB, page table và lịch sử translate.</td>
+                                        <td>Dùng syscall MMU hoặc tab MMU settings để kiểm thử map/unmap.</td>
                                     </tr>
                                     <tr>
                                         <td>Cache</td>
@@ -717,8 +725,68 @@
                                     </tr>
                                     <tr>
                                         <td>I/O</td>
-                                        <td>Tương tác LED Matrix, UART Console, Keyboard.</td>
-                                        <td>I/O dùng memory-mapped registers, không phải syscall RARS truyền thống.</td>
+                                        <td>Tương tác LED Matrix, UART Console, Keyboard, Mouse và DMA.</td>
+                                        <td>I/O dùng memory-mapped registers; syscall chỉ dành cho console/MMU helper.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Systems Log</td>
+                                        <td>Theo dõi log CPU, MMU, cache, TileLink, DMA, memory và I/O.</td>
+                                        <td>Có thể search, lọc level/module, clear hoặc export log để debug.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <section class="help-section" id="help-scope" data-help-section>
+                            <h2>Phạm vi hỗ trợ & giới hạn</h2>
+                            <div class="help-callout">
+                                Simulator tập trung vào mô phỏng hành vi phục vụ học tập. Vì vậy Help dùng cụm
+                                <strong>RV32IMF subset</strong>: nhiều lệnh I/M/F đã chạy được, nhưng chưa phải mô hình
+                                ISA/privileged/IEEE-754 conformance đầy đủ.
+                            </div>
+                            <table class="help-table">
+                                <thead>
+                                    <tr>
+                                        <th>Hạng mục</th>
+                                        <th>Đã có</th>
+                                        <th>Lưu ý khi viết code</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Assembler</td>
+                                        <td>Two-pass assembler, label, <code>.eqv</code>, <code>%hi/%lo</code>,
+                                            directives dữ liệu, pseudo-instruction và encoding RV32I/M/F.</td>
+                                        <td>Lỗi cú pháp xuất hiện trong Console / Binary Output; pseudo có thể expand
+                                            thành 1 hoặc 2 instruction nên breakpoint nên đặt sau khi Assemble.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>CPU</td>
+                                        <td>Integer registers, floating-point registers, RV32I/M/F subset, ECALL/EBREAK,
+                                            load/store bất đồng bộ qua MMU/cache/bus.</td>
+                                        <td>Chưa hỗ trợ CSR/privileged mode/interrupt thật. <code>fence</code> được
+                                            assembler mã hóa nhưng không nên dùng trong chương trình chạy trên CPU hiện
+                                            tại.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Floating point</td>
+                                        <td>RV32F single precision cơ bản: arithmetic, FMA, sign injection, compare,
+                                            convert, classify, move bit pattern.</td>
+                                        <td>Không mô phỏng đầy đủ FCSR/fflags/frm; rounding mode chỉ có ý nghĩa trong
+                                            một số lệnh convert.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Atomic</td>
+                                        <td><code>amoadd.w</code> để minh họa read-modify-write qua bus.</td>
+                                        <td>Đây là mở rộng RV32A minh họa, nằm ngoài tên RV32IMF của project.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>SoC fabric</td>
+                                        <td>MMU/TLB, L1I/L1D/L2 cache, TileLink-UH/UL, bridge, DMA, UART, LED,
+                                            Keyboard, Mouse.</td>
+                                        <td>Mô phỏng ở mức chức năng/chu kỳ trong trình duyệt, không đại diện timing,
+                                            điện năng hoặc TileLink-C coherence đầy đủ.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -742,6 +810,8 @@
                                 <li><strong>Quan sát:</strong> Registers tô vàng khi giá trị đổi; Memory cho biết mã
                                     máy/data; I/O hiển thị UART/LED/keyboard; Systems Log Console ghi log bus, CPU, DMA,
                                     cache.</li>
+                                <li><strong>Lọc log:</strong> mở rộng Systems Log Console để tìm theo text, chọn level
+                                    warn/error hoặc lọc module như CPU/MMU/TileLink/DMA/I/O.</li>
                             </ol>
                             <table class="help-table compact">
                                 <thead>
@@ -765,6 +835,15 @@
                                             breakpoint.</td>
                                     </tr>
                                     <tr>
+                                        <td>Pause</td>
+                                        <td>Tạm dừng Run nhưng giữ nguyên PC/register/memory để tiếp tục Step hoặc Run.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Stop</td>
+                                        <td>Dừng vòng chạy hiện tại và đồng bộ lại các khung quan sát.</td>
+                                    </tr>
+                                    <tr>
                                         <td>Step</td>
                                         <td>Thực thi đúng một bước simulator, hữu ích khi kiểm tra PC/register.</td>
                                     </tr>
@@ -775,6 +854,16 @@
                                     <tr>
                                         <td>IPS</td>
                                         <td>Ước lượng số instruction/chu kỳ đang chạy mỗi giây.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Breakpoint</td>
+                                        <td>Click gutter bên trái dòng lệnh trong CodeMirror; breakpoint chỉ có hiệu lực
+                                            với dòng sinh ra instruction thật.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Systems Log</td>
+                                        <td>Expand/collapse bằng nút mũi tên; dùng Search, Level, module chips, Export
+                                            và Clear khi debug bus/peripheral.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -796,8 +885,16 @@
                                             <code>lw t0, 8(sp)</code>.
                                         </li>
                                         <li>Branch/jump tới label dùng PC-relative offset do assembler tự tính.</li>
+                                        <li>Hằng số có thể định nghĩa bằng <code>.eqv UART, 0x10000000</code> và dùng
+                                            lại trong immediate/address.</li>
+                                        <li>Relocation helper <code>%hi(label)</code>/<code>%lo(label)</code> dùng với
+                                            <code>lui/auipc/addi</code> khi cần tự tách địa chỉ.
+                                        </li>
                                         <li>Không đặt instruction trong <code>.data</code>; chuyển về <code>.text</code>
                                             trước khi viết lệnh.</li>
+                                        <li>Nếu file bắt đầu bằng <code>.data</code>, nên chuyển sang
+                                            <code>.text 0x00400000</code> trước nhãn <code>_start</code>.
+                                        </li>
                                     </ul>
                                 </div>
                                 <div>
@@ -830,6 +927,13 @@
                                                     <code>fa0</code>.
                                                 </td>
                                             </tr>
+                                            <tr>
+                                                <td><code>rm</code></td>
+                                                <td>Rounding mode tùy chọn: <code>rne</code>, <code>rtz</code>,
+                                                    <code>rdn</code>, <code>rup</code>, <code>rmm</code>,
+                                                    <code>dyn</code>.
+                                                </td>
+                                            </tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -837,7 +941,7 @@
                             <pre class="help-code"><code>.data
 msg: .asciiz "Hello\n"
 
-.text
+.text 0x00400000
 .globl _start
 _start:
     la   a0, msg
@@ -876,6 +980,12 @@ _start:
                                         <td>Stack pointer.</td>
                                     </tr>
                                     <tr>
+                                        <td><code>x3</code>, <code>x4</code></td>
+                                        <td><code>gp</code>, <code>tp</code></td>
+                                        <td>Global/thread pointer theo ABI; simulator cho phép dùng như register thường.
+                                        </td>
+                                    </tr>
+                                    <tr>
                                         <td><code>x5-x7</code>, <code>x28-x31</code></td>
                                         <td><code>t0-t6</code></td>
                                         <td>Temporary registers, tiện cho biến tạm trong bài lab.</td>
@@ -898,7 +1008,8 @@ _start:
                                     <tr>
                                         <td><code>f0-f31</code></td>
                                         <td><code>ft/fa/fs</code></td>
-                                        <td>Floating-point registers cho RV32F single precision.</td>
+                                        <td>Floating-point registers cho RV32F single precision; xem tab Floating Point
+                                            để quan sát giá trị float và bit hex.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -906,6 +1017,11 @@ _start:
 
                         <section class="help-section" id="help-instructions" data-help-section>
                             <h2>Instruction set được hỗ trợ</h2>
+                            <div class="help-callout">
+                                Bảng dưới đây mô tả các lệnh mà assembler và CPU simulator đang dùng trong phạm vi
+                                project. Các lệnh CSR/privileged, interrupt và privileged memory management chuẩn chưa
+                                nằm trong đường chạy hiện tại.
+                            </div>
                             <h3>RV32I base integer</h3>
                             <table class="help-table instruction-table">
                                 <thead>
@@ -993,9 +1109,16 @@ _start:
                                     </tr>
                                     <tr>
                                         <td>System</td>
-                                        <td><code>ecall ebreak fence</code></td>
-                                        <td><code>ecall</code>, <code>ebreak</code>, <code>fence pred, succ</code></td>
-                                        <td>System call, breakpoint exception, memory ordering hint.</td>
+                                        <td><code>ecall ebreak</code></td>
+                                        <td><code>ecall</code>, <code>ebreak</code></td>
+                                        <td>Gọi syscall hoặc dừng bằng breakpoint exception.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Assembler-only</td>
+                                        <td><code>fence</code></td>
+                                        <td><code>fence pred, succ</code></td>
+                                        <td>Assembler có thể mã hóa operand <code>iorw</code>, nhưng CPU simulator chưa
+                                            mô phỏng hiệu ứng runtime của lệnh này.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1032,6 +1155,9 @@ _start:
                             </table>
 
                             <h3>RV32F single precision</h3>
+                            <p>Với lệnh có rounding mode, operand <code>rm</code> là tùy chọn; nếu bỏ trống assembler
+                                dùng <code>dyn</code>. CPU hiện xử lý rounding rõ nhất ở nhóm <code>fcvt</code>, còn
+                                FCSR/fflags chưa được mô phỏng đầy đủ.</p>
                             <table class="help-table compact">
                                 <tbody>
                                     <tr>
@@ -1088,6 +1214,8 @@ _start:
                             </table>
 
                             <h3>Atomic đang có</h3>
+                            <p><code>amoadd.w</code> là mở rộng RV32A minh họa cho atomic read-modify-write; nó hữu ích
+                                khi demo bus/atomic nhưng không phải thành phần chuẩn của RV32IMF subset.</p>
                             <table class="help-table compact">
                                 <tbody>
                                     <tr>
@@ -1171,6 +1299,11 @@ _start:
 
                         <section class="help-section" id="help-directives" data-help-section>
                             <h2>Assembler directives</h2>
+                            <div class="help-callout">
+                                Các directive dữ liệu tự ghi theo little-endian. <code>.word</code> và
+                                <code>.float</code> tự căn 4 byte, <code>.half</code> tự căn 2 byte; chuỗi hỗ trợ escape
+                                cơ bản như <code>\n</code>, <code>\t</code>, <code>\"</code>, <code>\\</code>.
+                            </div>
                             <table class="help-table">
                                 <thead>
                                     <tr>
@@ -1183,7 +1316,8 @@ _start:
                                     <tr>
                                         <td><code>.text</code></td>
                                         <td><code>.text [address]</code></td>
-                                        <td>Chuyển sang vùng lệnh, mặc định bắt đầu ở <code>0x00400000</code>.</td>
+                                        <td>Chuyển sang vùng lệnh. Khi quay lại sau <code>.data</code>, nên viết rõ
+                                            <code>.text 0x00400000</code> để instruction bắt đầu ở text base.</td>
                                     </tr>
                                     <tr>
                                         <td><code>.data</code></td>
@@ -1193,7 +1327,8 @@ _start:
                                     <tr>
                                         <td><code>.section</code></td>
                                         <td><code>.section .text</code>, <code>.section .rodata</code></td>
-                                        <td>Hỗ trợ một số section phổ biến: text, data, rodata, bss, startup/hot/cold.
+                                        <td>Hỗ trợ một số section phổ biến: text, data, rodata, bss, startup/hot/cold;
+                                            section lạ sẽ được cảnh báo và bỏ qua.
                                         </td>
                                     </tr>
                                     <tr>
@@ -1240,7 +1375,9 @@ _start:
                                     <tr>
                                         <td><code>.eqv</code></td>
                                         <td><code>.eqv UART, 0x10000000</code></td>
-                                        <td>Định nghĩa hằng số thay thế trong assembler.</td>
+                                        <td>Định nghĩa hằng số thay thế trong assembler; cũng chấp nhận dạng
+                                            <code>.eqv UART 0x10000000</code>.
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td><code>.org</code></td>
@@ -1294,6 +1431,24 @@ _start:
                                         <td>Dừng chương trình.</td>
                                     </tr>
                                     <tr>
+                                        <td><code>100</code></td>
+                                        <td>MMU Map Page</td>
+                                        <td><code>a0=VA</code>, <code>a1=PA</code>, <code>a2=flags</code></td>
+                                        <td>Map một page. Flags: bit0 R, bit1 W, bit2 X, bit3 cacheable.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>101</code></td>
+                                        <td>MMU Unmap Page</td>
+                                        <td><code>a0=VA</code></td>
+                                        <td>Gỡ mapping của virtual page tương ứng.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>102</code></td>
+                                        <td>MMU Clear Mappings</td>
+                                        <td>Không cần</td>
+                                        <td>Xóa page table/TLB mappings do simulator quản lý.</td>
+                                    </tr>
+                                    <tr>
                                         <td><code>0</code></td>
                                         <td>Halt/no-op</td>
                                         <td>Không cần</td>
@@ -1317,7 +1472,8 @@ _start:
                                     <tr>
                                         <td><code>0x00400000</code></td>
                                         <td>Text segment</td>
-                                        <td>Mặc định cho instruction sau <code>.text</code>.</td>
+                                        <td>Mặc định cho instruction sau <code>.text</code>; <code>_start</code> được
+                                            ưu tiên làm PC ban đầu nếu có.</td>
                                     </tr>
                                     <tr>
                                         <td><code>0x10010000</code></td>
@@ -1327,12 +1483,13 @@ _start:
                                     <tr>
                                         <td><code>0x10000000-0x10000013</code></td>
                                         <td>UART</td>
-                                        <td>TX/RX/status/control/baud divisor.</td>
+                                        <td>TX/RX/status/control/baud divisor; MMIO không cache.</td>
                                     </tr>
                                     <tr>
                                         <td><code>0xFF000000-0xFF000FFF</code></td>
                                         <td>LED Matrix</td>
-                                        <td>32x32 pixels, mỗi pixel 1 word <code>0x00RRGGBB</code>.</td>
+                                        <td>32x32 pixels, row-major, mỗi pixel 1 word <code>0x00RRGGBB</code>; MMIO
+                                            không cache.</td>
                                     </tr>
                                     <tr>
                                         <td><code>0xFF100000-0xFF100013</code></td>
@@ -1347,7 +1504,12 @@ _start:
                                     <tr>
                                         <td><code>0xFFED0000-0xFFED0007</code></td>
                                         <td>DMA registers</td>
-                                        <td>CTRL và DESC FIFO.</td>
+                                        <td>CTRL và DESC FIFO, kết nối qua TileLink-UH.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Các địa chỉ khác</td>
+                                        <td>Main Memory / RAM</td>
+                                        <td>Đi qua MMU, cache L1I/L1D/L2 và TileLink-UH nếu không thuộc vùng MMIO.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1370,7 +1532,8 @@ _start:
                                             </tr>
                                             <tr>
                                                 <td><code>+0x08</code></td>
-                                                <td>Status: bit0 TX ready, bit1 RX available, bit2/3 interrupt enable.
+                                                <td>Status: bit0 TX ready, bit1 RX available, bit2/3 interrupt enable,
+                                                    bit4 TX busy/queue not empty.
                                                 </td>
                                             </tr>
                                             <tr>
@@ -1387,13 +1550,16 @@ _start:
                                 <div>
                                     <h3>LED Matrix <code>0xFF000000</code></h3>
                                     <p>Mỗi pixel là một word. Offset pixel = <code>((row * 32) + col) * 4</code>. Màu
-                                        dùng dạng <code>0x00RRGGBB</code>.</p>
+                                        dùng dạng <code>0x00RRGGBB</code>. Đọc vùng LED trả <code>0</code>; ghi word sẽ
+                                        cập nhật canvas.</p>
                                     <h3>Keyboard <code>0xFFFF0000</code></h3>
                                     <p>Đọc control <code>+0x00</code>, nếu bit0 = 1 thì đọc data <code>+0x04</code> để
-                                        lấy ASCII và pop khỏi buffer.</p>
+                                        lấy ASCII và pop khỏi buffer. Nhập ký tự trong ô Keyboard của I/O view để bơm
+                                        dữ liệu vào buffer.</p>
                                     <h3>Mouse <code>0xFF100000</code></h3>
-                                    <p>Đọc X/Y/button/status ở <code>+0x00/+0x04/+0x08/+0x0C</code>. Ghi
-                                        <code>0x3</code> vào status để clear move/click bits.
+                                    <p>Đọc X/Y/button/status/control ở <code>+0x00/+0x04/+0x08/+0x0C/+0x10</code>.
+                                        Button bitmap: bit0 left, bit1 right, bit2 middle. Ghi mask vào status để clear
+                                        bit tương ứng, ví dụ <code>0x3</code> clear move/click.
                                     </p>
                                 </div>
                             </div>
@@ -1402,17 +1568,22 @@ _start:
                                 <tbody>
                                     <tr>
                                         <td><code>CTRL +0x00</code></td>
-                                        <td>bit0 EN, bit1 START, bit27 FIFO empty, bit28 FIFO full, bit29 error, bit30
-                                            done, bit31 busy.</td>
+                                        <td>Read bits: bit0 EN, bit1 START latched, bit2 DONE, bits8..15 data FIFO
+                                            count, bits16..19 descriptor FIFO depth log2, bit24 data FIFO empty, bit25
+                                            data FIFO full, bit27 descriptor FIFO empty, bit28 descriptor FIFO full,
+                                            bit29 error, bit30 DONE mirror, bit31 busy. Write bit0 enable, bit1 start,
+                                            bit27 acknowledge/clear done+error.</td>
                                     </tr>
                                     <tr>
                                         <td><code>DESC +0x04</code></td>
-                                        <td>Write-only FIFO: ghi 3 word theo thứ tự source, destination, config.</td>
+                                        <td>Write-only FIFO: ghi 3 word liên tiếp theo thứ tự source, destination,
+                                            config; đọc trả 0.</td>
                                     </tr>
                                     <tr>
                                         <td><code>config</code></td>
-                                        <td>bits 0..23 = length/elements, bit27 byte swap, bits 28..29 source mode, bits
-                                            30..31 destination mode.</td>
+                                        <td>bits0..23 = elements, bit27 byte swap, bits28..29 source mode, bits30..31
+                                            destination mode. Mode 0 = byte fixed, 1 = word fixed, 2 = byte increment,
+                                            3 = word increment.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1436,6 +1607,40 @@ _start:
                                 <li>Dùng Systems Log Console để thấy request/response CPU, MMU, cache, TileLink, DMA
                                     theo trình tự thời gian.</li>
                             </ul>
+                            <table class="help-table compact">
+                                <thead>
+                                    <tr>
+                                        <th>Thành phần</th>
+                                        <th>Cấu hình/ý nghĩa</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>L1I / L1D</td>
+                                        <td>16 sets x 4 ways, block 128 byte; L1I dùng cho instruction fetch, L1D dùng
+                                            cho load/store dữ liệu.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>L2</td>
+                                        <td>64 sets x 4 ways, block 128 byte; shared phía dưới L1I/L1D.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>MMU settings</td>
+                                        <td>Page size 1/2/4/8 KB, TLB 4/8/16/32 entries, 2-way/4-way/fully associative;
+                                            Apply sẽ reset simulator để cấu hình mới có hiệu lực.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Cacheability</td>
+                                        <td>Main memory cacheable; UART/LED/Keyboard/Mouse/DMA registers là non-cacheable
+                                            để MMIO phản ánh trạng thái thiết bị ngay.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>TileLink</td>
+                                        <td>TileLink-UH cho đường memory/cache/DMA registers, TileLink-UL cho MMIO chậm;
+                                            bridge nối hai fabric khi request đi sang vùng còn lại.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </section>
 
                         <section class="help-section" id="help-debugging" data-help-section>
@@ -1457,6 +1662,14 @@ _start:
                                         </td>
                                     </tr>
                                     <tr>
+                                        <td>Unknown opcode khi chạy</td>
+                                        <td>Assembler mã hóa được nhưng CPU chưa thực thi instruction đó, thường gặp với
+                                            <code>fence</code>.
+                                        </td>
+                                        <td>Tránh đặt <code>fence</code> trong chương trình runtime hiện tại; dùng log
+                                            CPU để xem PC dừng ở instruction nào.</td>
+                                    </tr>
+                                    <tr>
                                         <td>Immediate out of range</td>
                                         <td><code>addi/lw/sw</code> chỉ có immediate 12-bit; branch/jump có range riêng.
                                         </td>
@@ -1475,7 +1688,8 @@ _start:
                                     <tr>
                                         <td>UART không in ký tự</td>
                                         <td>TX chưa ready hoặc địa chỉ sai.</td>
-                                        <td>Poll bit0 ở <code>UART_STATUS</code> trước khi ghi TX.</td>
+                                        <td>Poll bit0 ở <code>UART_STATUS</code> trước khi ghi TX; nếu cần chờ truyền
+                                            xong, poll bit4 TX busy về 0.</td>
                                     </tr>
                                     <tr>
                                         <td>LED không sáng</td>
@@ -1486,6 +1700,34 @@ _start:
                                         <td>Run quá lâu</td>
                                         <td>Vòng lặp vô hạn không có exit/breakpoint.</td>
                                         <td>Đặt breakpoint hoặc thêm <code>li a7,93; ecall</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Unsupported syscall ID</td>
+                                        <td><code>a7</code> không thuộc bảng syscall của simulator hoặc bị ghi đè trước
+                                            <code>ecall</code>.
+                                        </td>
+                                        <td>Step tới ngay trước <code>ecall</code> và kiểm tra <code>a7</code>,
+                                            <code>a0-a2</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>DMA không chạy</td>
+                                        <td>Chưa enable, descriptor chưa đủ 3 word, config sai mode/length, hoặc đang
+                                            poll sai DONE/BUSY bit.</td>
+                                        <td>Đọc <code>CTRL</code>: bit31 busy, bit2/bit30 done, bit29 error; lọc log
+                                            module DMA và TileLink.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>MMU permission fault</td>
+                                        <td>Page chưa map hoặc thiếu quyền R/W/X/cacheable phù hợp.</td>
+                                        <td>Mở MMU History/Page Table hoặc dùng syscall 100 để map lại với flags đúng.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Float khác kỳ vọng</td>
+                                        <td>Simulator chưa mô phỏng đầy đủ FCSR/fflags/frm và không đảm bảo bit-exact mọi
+                                            corner case IEEE 754.</td>
+                                        <td>Kiểm tra tab Floating Point, bit pattern bằng <code>fmv.x.w</code>, và dùng
+                                            rounding mode rõ ràng cho <code>fcvt</code>.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1523,6 +1765,17 @@ _start:
                                     </div>
                                     <button type="button" class="help-sample-button"
                                         data-sample-template="helpSampleSyscall">
+                                        <i class="material-icons">content_paste</i>
+                                        Nạp vào editor
+                                    </button>
+                                </article>
+                                <article class="help-example">
+                                    <div>
+                                        <h3>DMA: copy chuỗi ra UART</h3>
+                                        <p>Đẩy descriptor 3 word, start DMA, poll DONE rồi chờ UART hết busy.</p>
+                                    </div>
+                                    <button type="button" class="help-sample-button"
+                                        data-sample-template="helpSampleDmaUart">
                                         <i class="material-icons">content_paste</i>
                                         Nạp vào editor
                                     </button>
@@ -1589,7 +1842,7 @@ _start:
                                 msg:
                                 .asciiz "Hello from syscall!\n"
 
-                                .text
+                                .text 0x00400000
                                 .globl _start
                                 _start:
                                 la a0, msg
@@ -1598,6 +1851,43 @@ _start:
 
                                 li a0, 0 # exit code
                                 li a7, 93 # Exit
+                                ecall</template>
+
+                            <template id="helpSampleDmaUart">.data
+                                msg:
+                                .ascii "DMA\n"
+
+                                .text 0x00400000
+                                .globl _start
+                                _start:
+                                la t0, msg              # source buffer
+                                li t1, 0x10000000       # UART base / TX
+                                li t2, 0xFFED0004       # DMA DESC
+                                li t3, 0xFFED0000       # DMA CTRL
+
+                                li t4, 1
+                                sw t4, 16(t1)           # UART baud divisor = 1
+
+                                sw t0, 0(t2)            # descriptor source
+                                sw t1, 0(t2)            # descriptor destination: UART TX
+                                li t5, 0x20000004       # srcMode=2, dstMode=0, 4 bytes
+                                sw t5, 0(t2)            # descriptor config
+
+                                li t4, 3                # EN | START
+                                sw t4, 0(t3)
+
+                                wait_dma:
+                                lw t6, 0(t3)
+                                andi t6, t6, 4          # CTRL bit2 DONE
+                                beq t6, x0, wait_dma
+
+                                wait_uart:
+                                lw t6, 8(t1)
+                                andi t6, t6, 0x10       # UART_STATUS bit4 TX busy
+                                bne t6, x0, wait_uart
+
+                                li a0, 0
+                                li a7, 93
                                 ecall</template>
                         </section>
 

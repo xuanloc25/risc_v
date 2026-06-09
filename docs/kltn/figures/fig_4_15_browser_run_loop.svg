@@ -1,0 +1,202 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="6.0in" height="8.0in" viewBox="0 0 960 1280" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Sơ đồ vòng lặp chạy mô phỏng trên trình duyệt</title>
+  <desc id="desc">Sơ đồ mô tả handleRun, scheduleRunLoop bằng requestAnimationFrame, runLoop theo từng khung hình, vòng lặp cyclesPerFrame, điều kiện điểm dừng, CPU dừng, giới hạn chu kỳ, cập nhật IPS và cập nhật giao diện.</desc>
+
+  <defs>
+    <marker id="arrow" markerWidth="11" markerHeight="11" refX="8.8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#2d3436"/>
+    </marker>
+    <marker id="arrowSoft" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#5c6770"/>
+    </marker>
+  </defs>
+
+  <style>
+    .bg{fill:#ffffff}
+    .box{stroke:#2d3436;stroke-width:1.8;stroke-linejoin:round}
+    .term{fill:#dbeafe}
+    .proc{fill:#eef2ff}
+    .sched{fill:#e6f4ea}
+    .loopFrame{fill:#f8fafc;stroke:#8795a1;stroke-width:1.6;stroke-dasharray:7 5}
+    .innerLoop{fill:#fffdf0;stroke:#c7a835;stroke-width:1.6;stroke-dasharray:6 4}
+    .dec{fill:#fff8db;stroke:#2d3436;stroke-width:1.8;stroke-linejoin:round}
+    .finish{fill:#fdecea}
+    .metric{fill:#e0f7fa}
+    .ui{fill:#f3e8ff}
+    .side{fill:#f8fafc;stroke:#8795a1;stroke-width:1.5}
+    .sideBox{fill:#ffffff;stroke:#2d3436;stroke-width:1.5}
+    .flow{fill:none;stroke:#2d3436;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;marker-end:url(#arrow)}
+    .flowNoArrow{fill:none;stroke:#2d3436;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    .loopBack{fill:none;stroke:#2d3436;stroke-width:2.0;stroke-linecap:round;stroke-linejoin:round;marker-end:url(#arrow)}
+    .soft{fill:none;stroke:#5c6770;stroke-width:1.7;stroke-dasharray:6 4;stroke-linecap:round;stroke-linejoin:round;marker-end:url(#arrowSoft)}
+    .titleText{font-size:17px;fill:#2d3436;font-weight:850;text-anchor:middle}
+    .label{font-size:15.5px;fill:#2d3436;font-weight:750;text-anchor:middle}
+    .label2{font-size:14px;fill:#2d3436;font-weight:650;text-anchor:middle}
+    .small{font-size:12.7px;fill:#4d5963;font-weight:700;text-anchor:middle}
+    .edgeLabel{font-size:13.2px;fill:#2d3436;font-weight:850;text-anchor:middle}
+    .sideLabel{font-size:13.2px;fill:#2d3436;font-weight:750;text-anchor:middle}
+    .mono{font-family:Consolas, "Courier New", monospace}
+    .white{fill:#ffffff;stroke:none;opacity:0.94}
+  </style>
+
+  <rect class="bg" x="0" y="0" width="960" height="1280"/>
+
+  <!-- Edges behind nodes -->
+  <path d="M480,82 V104" class="flow"/>
+  <path d="M480,164 V184" class="flow"/>
+  <path d="M480,244 V305" class="flow"/>
+
+  <path d="M410,432 V457" class="flow"/>
+  <path d="M410,516 V538 H360 V581" class="flow"/>
+  <path d="M360,671 V690" class="flow"/>
+  <path d="M360,781 V814" class="flow"/>
+  <path d="M360,868 V924" class="flow"/>
+  <path d="M360,982 V995" class="flow"/>
+  <path d="M360,1080 V1122" class="flow"/>
+  <path d="M415,1182 V1204" class="flow"/>
+
+  <!-- Stop branches -->
+  <path d="M575,368 H604" class="flow"/>
+  <path d="M675,408 V429" class="flow"/>
+  <path d="M492,626 H604" class="flow"/>
+  <path d="M746,621 H756 V847 H726" class="flow"/>
+  <path d="M492,736 H604" class="flow"/>
+  <path d="M675,786 V825" class="flow"/>
+
+  <!-- Metric branch -->
+  <path d="M492,1040 H558" class="flow"/>
+  <path d="M642,1078 V1108 H560 V1122" class="flow"/>
+
+  <!-- Internal iteration loop -->
+  <path d="M235,842 H168 V625 H229" class="loopBack"/>
+
+  <!-- Next animation frame loop -->
+  <path d="M210,1229 H92 V368 H245" class="loopBack"/>
+
+  <!-- Side-control arrows -->
+  <path d="M858,446 V468" class="soft"/>
+  <path d="M783,504 H752" class="soft"/>
+  <path d="M775,1084 H686 V1152 H641" class="soft"/>
+
+  <!-- Top entry flow -->
+  <rect x="330" y="30" width="300" height="52" rx="25" class="box term"/>
+  <text x="480" y="62" class="titleText mono">handleRun</text>
+
+  <rect x="210" y="104" width="540" height="60" rx="8" class="box proc"/>
+  <text x="480" y="129" class="label">Thu thập địa chỉ điểm dừng</text>
+  <text x="480" y="150" class="label2">từ các dòng đã đặt</text>
+
+  <rect x="210" y="184" width="540" height="60" rx="8" class="box sched"/>
+  <text x="480" y="209" class="label mono">scheduleRunLoop</text>
+  <text x="480" y="230" class="label2 mono">(requestAnimationFrame)</text>
+
+  <!-- runLoop frame -->
+  <rect x="70" y="270" width="680" height="965" rx="12" class="loopFrame"/>
+  <text x="260" y="296" class="titleText mono">runLoop (mỗi khung hình)</text>
+
+  <!-- Top decision in runLoop -->
+  <path d="M410,306 L575,368 L410,432 L245,368 Z" class="dec"/>
+  <text x="410" y="356" class="label">CPU dừng hoặc</text>
+  <text x="410" y="377" class="label mono">vượt maxCycles?</text>
+  <rect x="572" y="348" width="28" height="18" class="white"/>
+  <text x="586" y="361" class="edgeLabel">CÓ</text>
+  <rect x="395" y="437" width="42" height="19" class="white"/>
+  <text x="416" y="451" class="edgeLabel">KHÔNG</text>
+
+  <rect x="604" y="322" width="142" height="86" rx="8" class="box finish"/>
+  <text x="675" y="350" class="label2 mono">finishRun</text>
+  <text x="675" y="371" class="small">rút cạn DMA</text>
+  <text x="675" y="391" class="small">cập nhật UI cuối</text>
+
+  <rect x="622" y="429" width="104" height="44" rx="22" class="box term"/>
+  <text x="674" y="457" class="titleText">End</text>
+
+  <rect x="200" y="457" width="420" height="59" rx="8" class="box proc"/>
+  <text x="410" y="481" class="label mono">cyclesPerFrame ← thanh tốc độ</text>
+  <text x="410" y="502" class="label2 mono">(1-99; 100→1000)</text>
+
+  <!-- Internal loop -->
+  <rect x="115" y="552" width="510" height="348" rx="10" class="innerLoop"/>
+  <text x="490" y="576" class="titleText">Lặp <tspan class="mono">cyclesPerFrame</tspan> lần</text>
+
+  <path d="M360,581 L492,626 L360,671 L228,626 Z" class="dec"/>
+  <text x="360" y="621" class="label mono">PC ∈ tập</text>
+  <text x="360" y="642" class="label">điểm dừng?</text>
+  <rect x="494" y="609" width="28" height="18" class="white"/>
+  <text x="508" y="622" class="edgeLabel">CÓ</text>
+  <rect x="345" y="672" width="42" height="19" class="white"/>
+  <text x="366" y="686" class="edgeLabel">KHÔNG</text>
+
+  <rect x="604" y="588" width="142" height="67" rx="8" class="box finish"/>
+  <text x="675" y="616" class="label2 mono">finishRun</text>
+  <text x="675" y="637" class="small">báo điểm dừng</text>
+
+  <path d="M360,690 L492,736 L360,781 L228,736 Z" class="dec"/>
+  <text x="360" y="731" class="label">CPU đã dừng?</text>
+  <rect x="494" y="719" width="28" height="18" class="white"/>
+  <text x="508" y="732" class="edgeLabel">CÓ</text>
+  <rect x="345" y="783" width="42" height="19" class="white"/>
+  <text x="366" y="797" class="edgeLabel">KHÔNG</text>
+
+  <rect x="604" y="716" width="142" height="70" rx="8" class="box finish"/>
+  <text x="675" y="742" class="label2 mono">finishRun</text>
+  <text x="675" y="763" class="small">rút cạn DMA</text>
+
+  <rect x="235" y="814" width="250" height="54" rx="8" class="box sched"/>
+  <text x="360" y="837" class="label mono">simulator.tick();</text>
+  <text x="360" y="856" class="label mono">cycle++</text>
+  <text x="215" y="755" class="small">còn lượt</text>
+  <text x="445" y="914" class="small">hết cyclesPerFrame</text>
+
+  <rect x="622" y="825" width="104" height="44" rx="22" class="box term"/>
+  <text x="674" y="853" class="titleText">End</text>
+
+  <!-- After internal loop -->
+  <rect x="190" y="924" width="410" height="58" rx="8" class="box proc"/>
+  <text x="395" y="960" class="label">Tích lũy số chu kỳ</text>
+
+  <path d="M360,995 L492,1040 L360,1080 L228,1040 Z" class="dec"/>
+  <text x="360" y="1035" class="label">đã ≥ 500 ms?</text>
+  <rect x="493" y="1023" width="28" height="18" class="white"/>
+  <text x="507" y="1036" class="edgeLabel">CÓ</text>
+  <rect x="343" y="1083" width="42" height="19" class="white"/>
+  <text x="364" y="1097" class="edgeLabel">KHÔNG</text>
+
+  <rect x="558" y="1002" width="166" height="76" rx="8" class="box metric"/>
+  <text x="641" y="1031" class="label2">Tính &amp; hiển thị</text>
+  <text x="641" y="1052" class="label2 mono">IPS (Hz)</text>
+
+  <rect x="190" y="1122" width="450" height="60" rx="8" class="box ui"/>
+  <text x="415" y="1147" class="label mono">updateUIGlobally</text>
+  <text x="415" y="1168" class="label2">tô sáng ô thay đổi</text>
+
+  <rect x="210" y="1204" width="420" height="50" rx="8" class="box sched"/>
+  <text x="420" y="1235" class="label mono">scheduleRunLoop</text>
+  <text x="122" y="1022" class="small" transform="rotate(-90,122,1022)">khung hình kế tiếp</text>
+
+  <!-- Side controls -->
+  <rect x="768" y="342" width="180" height="230" rx="10" class="side"/>
+  <text x="858" y="369" class="titleText">Nút điều khiển</text>
+
+  <rect x="783" y="388" width="150" height="58" rx="8" class="sideBox"/>
+  <text x="858" y="411" class="sideLabel mono">handlePause</text>
+  <text x="858" y="432" class="sideLabel mono">handleStop</text>
+
+  <rect x="783" y="468" width="150" height="72" rx="8" class="sideBox"/>
+  <text x="858" y="492" class="sideLabel">tác động vào</text>
+  <text x="858" y="513" class="sideLabel">cờ trạng thái</text>
+  <text x="858" y="531" class="small mono">isRunning/isPaused</text>
+
+  <rect x="768" y="934" width="180" height="224" rx="10" class="side"/>
+  <text x="858" y="961" class="titleText mono">handleStep</text>
+
+  <rect x="783" y="984" width="150" height="58" rx="8" class="sideBox"/>
+  <text x="858" y="1008" class="sideLabel mono">stepInstruction()</text>
+  <text x="858" y="1028" class="sideLabel">một lần</text>
+
+  <path d="M858,1042 V1061" class="soft"/>
+
+  <rect x="783" y="1061" width="150" height="68" rx="8" class="sideBox"/>
+  <text x="858" y="1087" class="sideLabel mono">updateUIGlobally</text>
+  <text x="858" y="1109" class="sideLabel">sau bước lệnh</text>
+</svg>

@@ -45,9 +45,9 @@ Bên cạnh các chức năng, hệ thống cần đáp ứng một số thuộc
 
 ### 3.1.3. Mô hình use case tổng quát
 
-Hệ thống có một tác nhân chính là **người học** (learner) — người sử dụng công cụ để viết, chạy và quan sát chương trình. Vì là một ứng dụng chạy hoàn toàn phía trình duyệt, hệ thống không có tác nhân ngoài (hệ thống bên thứ ba, dịch vụ mạng) trong luồng sử dụng chính. Các trường hợp sử dụng (use case) được nhóm theo vòng đời thao tác đã nêu ở mục 3.1.1.
+Hệ thống có người dùng chính là **người học** (learner) — người sử dụng công cụ để viết, chạy và quan sát chương trình. Vì là một ứng dụng chạy hoàn toàn phía trình duyệt, hệ thống không có đối tượng ngoài (hệ thống bên thứ ba, dịch vụ mạng) trong luồng sử dụng chính. Các trường hợp sử dụng (use case) được nhóm theo vòng đời thao tác đã nêu ở mục 3.1.1.
 
-[Hình 3.1: Sơ đồ use case tổng quát. Một tác nhân "Người học" (hình người) đặt ở bên trái, nối tới một khung hệ thống "Trình mô phỏng SoC RISC-V" chứa các use case dạng hình elip: (1) "Soạn thảo chương trình hợp ngữ"; (2) "Biên dịch chương trình"; (3) "Nạp và chạy chương trình"; (4) "Chạy từng bước và đặt điểm dừng"; (5) "Quan sát trạng thái hệ thống"; (6) "Tương tác với thiết bị ngoại vi"; (7) "Cấu hình tham số MMU/cache"; (8) "Tra cứu hướng dẫn (Help)". Use case (3) có quan hệ «include» tới (2) (muốn chạy thì phải biên dịch trước); use case (5) là use case khái quát, được mở rộng «extend» bởi các quan sát cụ thể: "Xem thanh ghi", "Xem bộ nhớ", "Xem bộ nhớ đệm", "Xem MMU", "Xem sơ đồ SoC và giao dịch bus", "Xem nhật ký hệ thống". Tất cả use case đều nối trực tiếp tới tác nhân Người học bằng đường liền nét.] (xem source: `README.md`, `src/index.html`)
+[Hình 3.1: Sơ đồ use case tổng quát. Một ô "Người học" đặt ở bên trái, nối tới một khung hệ thống "Trình mô phỏng SoC RISC-V" chứa các use case dạng ô chữ nhật: (1) "Soạn thảo chương trình hợp ngữ"; (2) "Biên dịch chương trình"; (3) "Nạp và chạy chương trình"; (4) "Chạy từng bước"; (5) "Quan sát trạng thái hệ thống"; (6) "Tương tác với thiết bị ngoại vi"; (7) "Cấu hình tham số MMU/cache"; (8) "Tra cứu hướng dẫn (Help)". Nhóm "Quan sát trạng thái hệ thống" được nối tới các ô quan sát cụ thể: "Xem thanh ghi", "Xem bộ nhớ", "Xem bộ nhớ đệm", "Xem MMU", "Xem sơ đồ SoC và giao dịch bus", "Xem nhật ký hệ thống". Các đường nối trong hình dùng đoạn thẳng hoặc đoạn gấp khúc để tránh chồng lấn và giữ bố cục dễ đọc.] (xem source: `README.md`, `src/index.html`)
 
 Mô hình use case cho thấy hệ thống được thiết kế xoay quanh một chu trình lặp: người học soạn thảo, biên dịch, chạy, quan sát kết quả, rồi quay lại chỉnh sửa. Toàn bộ thiết kế kiến trúc và giao diện ở các mục tiếp theo phục vụ cho chu trình này.
 
@@ -84,7 +84,7 @@ Chú giải màu: nhóm "compute/master" (CPU, DMA), nhóm "memory & cache" (MMU
 
 Có hai đặc điểm thiết kế cần nêu rõ để tránh hiểu nhầm về phạm vi.
 
-Thứ nhất, về vai trò của bus TileLink-UH. Trong nhãn hiển thị của giao diện, bus này được gọi là "coherent bus (high-speed)"; tuy nhiên, đúng như đã phân tích ở mục 2.6.3, hệ thống chỉ hiện thực mô hình giao dịch trên hai kênh A và D, không hiện thực các kênh B/C/E cùng cơ chế bảo đảm nhất quán bộ nhớ đệm. Vì vậy, trong báo cáo này, TileLink-UH được hiểu là **bus hiệu năng cao** dành cho truy cập bộ nhớ khối lượng lớn (cho phép truyền chuỗi và thao tác nguyên tử), còn TileLink-UL là **bus nhẹ** dành cho các thiết bị ngoại vi đơn giản; cả hai đều ở mức giao dịch, không phải bus có nhất quán bộ nhớ đệm theo nghĩa đầy đủ của TileLink-C [7].
+Thứ nhất, về vai trò của bus TileLink-UH. Trong nhãn hiển thị của giao diện, bus này được gọi là "coherent bus (high-speed)"; tuy nhiên, đúng như đã phân tích ở mục 2.6.3, hệ thống chỉ hiện thực mô hình giao dịch trên hai kênh A và D, không hiện thực các kênh B/C/E cùng cơ chế bảo đảm nhất quán bộ nhớ đệm. Vì vậy, trong báo cáo này, TileLink-UH được hiểu là **bus hiệu năng cao** dành cho truy cập bộ nhớ khối lượng lớn (cho phép truyền chuỗi và thao tác nguyên tử), còn TileLink-UL là **bus nhẹ** dành cho các thiết bị ngoại vi đơn giản; cả hai đều ở mức giao dịch, không phải bus có nhất quán bộ nhớ đệm theo nghĩa đầy đủ của TileLink-C [2].
 
 Thứ hai, về tính "đa master". Hệ thống có hai thành phần cùng đóng vai trò master phát yêu cầu trên bus là lõi xử lý (thông qua đường L2 → TileLink-UH) và bộ điều khiển DMA. Đây là cơ sở để minh họa việc nhiều thành phần cùng truy cập tài nguyên chung. Tuy nhiên, cơ chế điều phối hiện được mô hình hóa ở mức hàng đợi yêu cầu với một giao dịch được xử lý tại một thời điểm, chưa phải là một cơ chế phân xử (arbitration) đa master đầy đủ (xem mục 2.6.3; source: `src/js/tilelink_base.js`). Hệ thống cũng chưa có đường tín hiệu ngắt (IRQ) tới lõi xử lý; trạng thái hoàn tất của DMA và trạng thái thiết bị ngoại vi được nhận biết qua đọc thăm dò (xem mục 1.3.2).
 
@@ -229,8 +229,6 @@ Như vậy, luồng thực thi đầu–cuối gắn kết toàn bộ các thàn
 
 ## Tài liệu tham khảo (trích dẫn trong Chương 3)
 
-> *Ghi chú: Chương 3 chủ yếu dẫn nguồn tới mã nguồn của hệ thống qua các chú thích "(xem source: …)". Các tài liệu tham khảo dạng [n] dưới đây đã được thiết lập ở Chương 1–2 và được dùng lại khi cần; chúng sẽ được hợp nhất vào mục Tài liệu tham khảo chung của báo cáo.*
+> *Ghi chú: Danh sách dưới đây liệt kê các tài liệu được trích dẫn trong Chương 3, trình bày theo chuẩn IEEE và đánh số theo thứ tự xuất hiện trong toàn báo cáo; danh sách này được hợp nhất vào mục Tài liệu tham khảo chung ở cuối báo cáo.*
 
-[6] A. Waterman và K. Asanović (chủ biên), "The RISC-V Instruction Set Manual, Volume I: Unprivileged ISA," RISC-V International. [Trực tuyến]. Có tại: https://riscv.org/technical/specifications/ *(cần ghi rõ phiên bản và năm khi hoàn thiện)*
-
-[7] SiFive Inc., "TileLink Specification, Version 1.8.1," 2020. *(tài liệu tham chiếu nội bộ: `docs/ref/tilelink_spec_1.8.1.pdf`)*
+[2] SiFive, Inc., "SiFive TileLink Specification, Version 1.8.1," 2020. [Trực tuyến]. Có tại: https://www.sifive.com/documentation/tilelink/

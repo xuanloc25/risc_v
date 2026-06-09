@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="aEnd" markerWidth="10" markerHeight="10" refX="9" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#2d3436"/>
+    </marker>
+    <marker id="aStart" markerWidth="10" markerHeight="10" refX="0" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M9,0 L0,4.5 L9,9 Z" fill="#2d3436"/>
+    </marker>
+  </defs>
+
+  <!-- ============ Masters ============ -->
+  <!-- CPU -->
+  <rect x="70" y="45" width="340" height="175" rx="6" fill="#fde8e8" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="240" y="80" font-size="20" fill="#2d3436" font-weight="bold" text-anchor="middle">Bộ xử lý trung tâm (CPU)</text>
+  
+  <rect x="85" y="115" width="95" height="85" rx="4" fill="#ffffff" stroke="#2d3436" stroke-width="1"/>
+  <text x="132.5" y="152" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">ALU</text>
+  <text x="132.5" y="176" font-size="14" fill="#636e72" text-anchor="middle">(số nguyên)</text>
+  
+  <rect x="192.5" y="115" width="95" height="85" rx="4" fill="#ffffff" stroke="#2d3436" stroke-width="1"/>
+  <text x="240" y="152" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">FPU</text>
+  <text x="240" y="176" font-size="14" fill="#636e72" text-anchor="middle">(số thực)</text>
+  
+  <rect x="300" y="115" width="95" height="85" rx="4" fill="#ffffff" stroke="#2d3436" stroke-width="1"/>
+  <text x="347.5" y="148" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Tệp</text>
+  <text x="347.5" y="172" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">thanh ghi</text>
+
+  <!-- DMA -->
+  <rect x="560" y="75" width="270" height="115" rx="6" fill="#fde8e8" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="695" y="142" font-size="20" fill="#2d3436" font-weight="bold" text-anchor="middle">Bộ điều khiển DMA</text>
+
+  <!-- ============ Memory hierarchy (near CPU) ============ -->
+  <rect x="140" y="250" width="200" height="70" rx="6" fill="#e8e9fb" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="240" y="292" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Bộ nhớ đệm (Cache)</text>
+
+  <!-- ============ Interconnect / Bus ============ -->
+  <rect x="70" y="360" width="760" height="70" rx="6" fill="#efe9f5" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="450" y="402" font-size="20" fill="#2d3436" font-weight="bold" text-anchor="middle">Hệ thống kết nối — Bus (không gian địa chỉ chung)</text>
+
+  <!-- ============ Slaves: Main memory + peripherals ============ -->
+  <rect x="110" y="480" width="240" height="120" rx="6" fill="#e8e9fb" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="230" y="550" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Bộ nhớ chính (RAM)</text>
+
+  <!-- peripheral group -->
+  <rect x="420" y="465" width="410" height="185" rx="8" fill="none" stroke="#9aa3ad" stroke-width="1.3" stroke-dasharray="5 4"/>
+  
+  <rect x="435" y="480" width="120" height="85" rx="4" fill="#fdfbe0" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="495" y="520" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Giao tiếp</text>
+  <text x="495" y="542" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">nối tiếp</text>
+  
+  <rect x="565" y="480" width="120" height="85" rx="4" fill="#fdfbe0" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="625" y="531" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Hiển thị</text>
+  
+  <rect x="695" y="480" width="120" height="85" rx="4" fill="#fdfbe0" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="755" y="520" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Thiết bị</text>
+  <text x="755" y="542" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">nhập</text>
+  
+  <text x="625" y="600" font-size="20" fill="#2d3436" font-weight="bold" text-anchor="middle">Thiết bị ngoại vi</text>
+  <text x="625" y="630" font-size="14" fill="#636e72" text-anchor="middle">Điều khiển qua thanh ghi ánh xạ bộ nhớ (MMIO)</text>
+
+  <!-- ============ Connections (two-way) ============ -->
+  <line x1="240" y1="220" x2="240" y2="250" stroke="#2d3436" stroke-width="2" fill="none" marker-start="url(#aStart)" marker-end="url(#aEnd)"/>
+  <line x1="240" y1="320" x2="240" y2="360" stroke="#2d3436" stroke-width="2" fill="none" marker-start="url(#aStart)" marker-end="url(#aEnd)"/>
+  <line x1="695" y1="190" x2="695" y2="360" stroke="#2d3436" stroke-width="2" fill="none" marker-start="url(#aStart)" marker-end="url(#aEnd)"/>
+  <line x1="230" y1="430" x2="230" y2="480" stroke="#2d3436" stroke-width="2" fill="none" marker-start="url(#aStart)" marker-end="url(#aEnd)"/>
+  <line x1="495" y1="430" x2="495" y2="480" stroke="#2d3436" stroke-width="2" fill="none" marker-start="url(#aStart)" marker-end="url(#aEnd)"/>
+  <line x1="625" y1="430" x2="625" y2="480" stroke="#2d3436" stroke-width="2" fill="none" marker-start="url(#aStart)" marker-end="url(#aEnd)"/>
+  <line x1="755" y1="430" x2="755" y2="480" stroke="#2d3436" stroke-width="2" fill="none" marker-start="url(#aStart)" marker-end="url(#aEnd)"/>
+
+  <!-- legend -->
+  <line x1="80" y1="675" x2="110" y2="675" stroke="#2d3436" stroke-width="2" fill="none" marker-start="url(#aStart)" marker-end="url(#aEnd)"/>
+  <text x="118" y="679" font-size="14" fill="#636e72" font-style="italic">Mũi tên hai chiều: yêu cầu đọc/ghi và phản hồi trao đổi qua bus</text>
+</svg>

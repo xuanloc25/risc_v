@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Cơ chế dịch địa chỉ ảo sang địa chỉ vật lý</title>
+  <desc id="desc">Địa chỉ ảo được tách thành VPN và offset. VPN được tra trong TLB; nếu trượt thì tra bảng trang để lấy PPN và quyền truy cập. PPN ghép với offset tạo thành địa chỉ vật lý.</desc>
+  <defs>
+    <marker id="aEnd" markerWidth="10" markerHeight="10" refX="9" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#2d3436"/>
+    </marker>
+    <marker id="aEndMuted" markerWidth="10" markerHeight="10" refX="9" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#636e72"/>
+    </marker>
+  </defs>
+
+  <!-- Virtual address -->
+  <text x="460" y="40" font-size="22" fill="#2d3436" font-weight="bold" text-anchor="middle">Địa chỉ ảo (VA)</text>
+  <g transform="translate(100 56)">
+    <rect x="0" y="0" width="450" height="54" rx="6" fill="#e8e9fb" stroke="#2d3436" stroke-width="1.5"/>
+    <text x="225" y="23" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">VPN</text>
+    <text x="225" y="42" font-size="14" fill="#636e72" text-anchor="middle">số hiệu trang ảo</text>
+    
+    <rect x="450" y="0" width="270" height="54" rx="6" fill="#fdfbe0" stroke="#2d3436" stroke-width="1.5"/>
+    <text x="585" y="23" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Độ dịch (offset)</text>
+    <text x="585" y="42" font-size="14" fill="#636e72" text-anchor="middle">giữ nguyên khi dịch địa chỉ</text>
+    
+    <text x="0" y="-10" font-size="13" fill="#636e72" text-anchor="middle">bit cao</text>
+    <text x="720" y="-10" font-size="13" fill="#636e72" text-anchor="middle">bit thấp</text>
+  </g>
+
+  <!-- TLB lookup -->
+  <rect x="120" y="156" width="230" height="92" rx="6" fill="#efe9f5" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="235" y="185" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">TLB</text>
+  <text x="235" y="208" font-size="14" fill="#636e72" text-anchor="middle">cache ánh xạ VPN -> PPN</text>
+  <text x="235" y="228" font-size="14" fill="#636e72" text-anchor="middle">lưu kèm quyền R/W/X/U/V</text>
+
+  <!-- Access type -->
+  <rect x="600" y="154" width="200" height="76" rx="6" fill="#fde8e8" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="700" y="185" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Yêu cầu truy cập</text>
+  <text x="700" y="208" font-size="14" fill="#636e72" text-anchor="middle">đọc / ghi / thực thi</text>
+
+  <!-- TLB hit diamond -->
+  <path d="M235 278 L315 324 L235 370 L155 324 Z" fill="#ffffff" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="235" y="320" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">TLB hit?</text>
+  <text x="235" y="342" font-size="14" fill="#636e72" text-anchor="middle">có ánh xạ hợp lệ</text>
+
+  <!-- Page table walk group -->
+  <rect x="376" y="286" width="250" height="132" rx="8" fill="none" stroke="#9aa3ad" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <text x="501" y="311" font-size="14" fill="#636e72" font-weight="bold" text-anchor="middle">Khi TLB miss</text>
+  <rect x="398" y="328" width="206" height="72" rx="6" fill="#fdfbe0" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="501" y="358" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Tra bảng trang</text>
+  <text x="501" y="380" font-size="14" fill="#636e72" text-anchor="middle">đọc PTE từ bộ nhớ</text>
+
+  <!-- PPN + permissions -->
+  <rect x="660" y="304" width="180" height="104" rx="6" fill="#efe9f5" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="750" y="332" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">PTE / TLB entry</text>
+  
+  <rect x="675" y="350" width="75" height="38" rx="4" fill="#ffffff" stroke="#2d3436" stroke-width="1.1"/>
+  <text x="712.5" y="375" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">PPN</text>
+  
+  <rect x="760" y="350" width="65" height="38" rx="4" fill="#ffffff" stroke="#2d3436" stroke-width="1.1"/>
+  <text x="792.5" y="375" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">quyền</text>
+
+  <!-- Permission check -->
+  <path d="M750 438 L846 490 L750 542 L654 490 Z" fill="#fde8e8" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="750" y="485" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Kiểm tra quyền</text>
+  <text x="750" y="508" font-size="14" fill="#636e72" text-anchor="middle">V, R/W/X, U</text>
+
+  <!-- Physical address -->
+  <text x="342" y="472" font-size="22" fill="#2d3436" font-weight="bold" text-anchor="middle">Địa chỉ vật lý (PA)</text>
+  <g transform="translate(92 488)">
+    <rect x="0" y="0" width="300" height="48" rx="6" fill="#e8e9fb" stroke="#2d3436" stroke-width="1.5"/>
+    <text x="150" y="23" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">PPN</text>
+    <text x="150" y="39" font-size="14" fill="#636e72" text-anchor="middle">số hiệu trang vật lý</text>
+    
+    <rect x="300" y="0" width="180" height="48" rx="6" fill="#fdfbe0" stroke="#2d3436" stroke-width="1.5"/>
+    <text x="390" y="23" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">offset</text>
+    <text x="390" y="39" font-size="14" fill="#636e72" text-anchor="middle">từ VA</text>
+  </g>
+
+  <!-- Fault -->
+  <rect x="680" y="560" width="140" height="46" rx="6" fill="#fde8e8" stroke="#2d3436" stroke-width="1.5"/>
+  <text x="750" y="581" font-size="17" fill="#2d3436" font-weight="bold" text-anchor="middle">Ngoại lệ</text>
+  <text x="750" y="598" font-size="14" fill="#636e72" text-anchor="middle">page fault</text>
+
+  <!-- Main arrows -->
+  <path d="M325 110 L235 110 L235 156" stroke="#2d3436" stroke-width="2" fill="none" marker-end="url(#aEnd)"/>
+  <text x="274" y="126" font-size="14" fill="#636e72" text-anchor="middle">VPN</text>
+
+  <path d="M235 248 L235 278" stroke="#2d3436" stroke-width="2" fill="none" marker-end="url(#aEnd)"/>
+  
+  <path d="M315 324 L342 324 L342 266 L750 266 L750 304" stroke="#2d3436" stroke-width="2" fill="none" marker-end="url(#aEnd)"/>
+  <text x="354" y="290" font-size="14" fill="#636e72">hit</text>
+
+  <path d="M235 370 L235 386 L398 386" stroke="#2d3436" stroke-width="2" fill="none" marker-end="url(#aEnd)"/>
+  <text x="266" y="380" font-size="14" fill="#636e72">miss</text>
+
+  <path d="M604 364 L660 364" stroke="#2d3436" stroke-width="2" fill="none" marker-end="url(#aEnd)"/>
+  <path d="M750 408 L750 438" stroke="#2d3436" stroke-width="2" fill="none" marker-end="url(#aEnd)"/>
+  
+  <!-- Updated path from "Yêu cầu truy cập" (right middle, x=800, y=192) to "Kiểm tra quyền" (right corner, x=846, y=490) -->
+  <path d="M800 192 L870 192 L870 490 L846 490" stroke="#2d3436" stroke-width="2" fill="none" marker-end="url(#aEnd)"/>
+
+  <!-- Permission outcomes -->
+  <path d="M654 490 L604 490 L604 512 L572 512" stroke="#2d3436" stroke-width="2" fill="none" marker-end="url(#aEnd)"/>
+  <text x="610" y="476" font-size="14" fill="#636e72">hợp lệ</text>
+
+  <path d="M750 542 L750 560" stroke="#2d3436" stroke-width="2" fill="none" marker-end="url(#aEnd)"/>
+  <text x="792" y="552" font-size="14" fill="#636e72">không hợp lệ</text>
+</svg>

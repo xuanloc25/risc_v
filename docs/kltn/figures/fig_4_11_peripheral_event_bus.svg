@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Kiến trúc hệ thống ngoại vi và đường sự kiện từ giao diện</title>
+  <desc id="desc">Hình 4.11 thể hiện TileLink-UL, các khối ngoại vi (UART, LED, Mouse, Keyboard) được kết nối qua MMIO endpoint, cùng luồng sự kiện trình duyệt nối vào các ngoại vi tương ứng.</desc>
+
+  <defs>
+    <!-- Arrowhead markers -->
+    <marker id="arrowBridge" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#475569"/>
+    </marker>
+    <marker id="arrowKeyboard" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,3.5 L0,7 Z" fill="#d97706"/>
+    </marker>
+    <marker id="arrowMouse" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,3.5 L0,7 Z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowUART" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,3.5 L0,7 Z" fill="#16a34a"/>
+    </marker>
+  </defs>
+
+  <style>
+    .bg { fill:#ffffff; }
+    .box { stroke:#2d3436; stroke-width:2.0; stroke-linejoin:round; }
+    
+    /* Bus systems */
+    .uhBusBox { fill:#f4ecf7; stroke:#5b2c6f; stroke-width:2.0; stroke-linejoin:round; rx:6px; }
+    .ulBusBox { fill:#ebdef0; stroke:#6c3483; stroke-width:2.5; stroke-linejoin:round; rx:6px; }
+    
+    /* MMIO Endpoints */
+    .endpointBox { fill:#f8fafc; stroke:#64748b; stroke-width:1.5; stroke-linejoin:round; rx:4px; }
+    
+    /* Peripherals */
+    .uartBox { fill:#e2f0d9; stroke:#385723; stroke-width:2.0; stroke-linejoin:round; }
+    .ledBox { fill:#fce4d6; stroke:#c65911; stroke-width:2.0; stroke-linejoin:round; }
+    .mouseBox { fill:#ddebf7; stroke:#1f4e78; stroke-width:2.0; stroke-linejoin:round; }
+    .keyboardBox { fill:#fff2cc; stroke:#7f6000; stroke-width:2.0; stroke-linejoin:round; }
+    
+    /* Web interface */
+    .webWrapper { fill:#fafbfc; stroke:#94a3b8; stroke-width:1.5; stroke-dasharray:6 4; rx:8px; }
+    .webEventBox { fill:#ffffff; stroke:#cbd5e1; stroke-width:1.5; stroke-linejoin:round; }
+    .terminalBox { fill:#1e293b; stroke:#475569; stroke-width:2.0; stroke-linejoin:round; }
+    
+    /* Paths */
+    .pathNormal { fill:none; stroke:#475569; stroke-width:2.5; marker-end:url(#arrowBridge); }
+    .pathLineOnly { fill:none; stroke:#475569; stroke-width:2.5; }
+    
+    /* Text styles (optimized for printing) */
+    .titleText { font-family:"Segoe UI", Arial, sans-serif; font-size:20px; fill:#2d3436; font-weight:800; text-anchor:middle; }
+    .bodyText { font-family:"Segoe UI", Arial, sans-serif; font-size:16px; fill:#2d3436; font-weight:750; text-anchor:middle; }
+    .monoText { font-family:Consolas, "Courier New", monospace; font-size:12px; fill:#2d3436; font-weight:700; text-anchor:middle; }
+    .labelText { font-family:"Segoe UI", Arial, sans-serif; font-size:13.5px; fill:#2d3436; font-weight:800; text-anchor:middle; }
+    .italicText { font-family:"Segoe UI", Arial, sans-serif; font-size:13px; fill:#64748b; font-weight:700; font-style:italic; text-anchor:middle; }
+    
+    /* Label with white outline to prevent text overlapping line */
+    .labelBus {
+      paint-order: stroke;
+      stroke: #ffffff;
+      stroke-width: 4px;
+      stroke-linejoin: round;
+      fill: #334155;
+    }
+  </style>
+
+  <!-- Nền trắng toàn cục -->
+  <rect class="bg" width="960" height="520"/>
+
+  <!-- ==================== TILELINK-UH BUS (TOP) ==================== -->
+  <rect class="uhBusBox" x="180" y="30" width="280" height="35"/>
+  <text x="320" y="53" class="bodyText" font-weight="bold" fill="#5b2c6f">TileLink-UH Bus</text>
+
+  <!-- ==================== CẦU NỐI BRIDGE & MŨI TÊN ==================== -->
+  <path d="M 320,95 V 68" fill="none" stroke="#475569" stroke-width="2.5" marker-end="url(#arrowBridge)"/>
+  <path d="M 320,100 V 127" fill="none" stroke="#475569" stroke-width="2.5" marker-end="url(#arrowBridge)"/>
+  <text x="360" y="103" class="labelText labelBus" text-anchor="start" fill="#475569" font-weight="bold">Bridge</text>
+
+  <!-- ==================== TILELINK-UL BUS (MID) ==================== -->
+  <rect class="ulBusBox" x="40" y="130" width="560" height="30"/>
+  <text x="320" y="151" class="bodyText" font-weight="bold" fill="#6c3483">TileLink-UL Bus</text>
+
+  <!-- ==================== ĐƯỜNG KẾT NỐI & MMIO ENDPOINTS ==================== -->
+  <!-- UART (x = 110) -->
+  <path d="M 110,160 V 190" class="pathLineOnly"/>
+  <rect class="endpointBox" x="50" y="190" width="120" height="45"/>
+  <text x="110" y="217" class="labelText" font-size="12px">MMIO Endpoint</text>
+  <path d="M 110,235 V 320" fill="none" stroke="#475569" stroke-width="2.5" marker-end="url(#arrowBridge)"/>
+  <text x="110" y="272" class="labelText labelBus" font-size="11px">TX/RX/STATUS</text>
+  <text x="110" y="289" class="labelText labelBus" font-size="11px">CTRL/BAUD</text>
+
+  <!-- LED Matrix (x = 250) -->
+  <path d="M 250,160 V 190" class="pathLineOnly"/>
+  <rect class="endpointBox" x="190" y="190" width="120" height="45"/>
+  <text x="250" y="217" class="labelText" font-size="12px">MMIO Endpoint</text>
+  <path d="M 250,235 V 320" fill="none" stroke="#475569" stroke-width="2.5" marker-end="url(#arrowBridge)"/>
+  <text x="250" y="280" class="labelText labelBus" font-size="11px">0x00RRGGBB</text>
+
+  <!-- Mouse (x = 390) -->
+  <path d="M 390,160 V 190" class="pathLineOnly"/>
+  <rect class="endpointBox" x="330" y="190" width="120" height="45"/>
+  <text x="390" y="217" class="labelText" font-size="12px">MMIO Endpoint</text>
+  <path d="M 390,235 V 320" fill="none" stroke="#475569" stroke-width="2.5" marker-end="url(#arrowBridge)"/>
+  <text x="390" y="272" class="labelText labelBus" font-size="11px">X/Y/BTN</text>
+  <text x="390" y="289" class="labelText labelBus" font-size="11px">STATUS/CTRL</text>
+
+  <!-- Keyboard (x = 530) -->
+  <path d="M 530,160 V 190" class="pathLineOnly"/>
+  <rect class="endpointBox" x="470" y="190" width="120" height="45"/>
+  <text x="530" y="217" class="labelText" font-size="12px">MMIO Endpoint</text>
+  <path d="M 530,235 V 320" fill="none" stroke="#475569" stroke-width="2.5" marker-end="url(#arrowBridge)"/>
+  <text x="530" y="280" class="labelText labelBus" font-size="11px">CTRL/DATA</text>
+
+
+  <!-- ==================== KHỐI NGOẠI VI (BOTTOM) ==================== -->
+  <!-- UART -->
+  <rect class="box uartBox" x="45" y="320" width="130" height="75" rx="6"/>
+  <text x="110" y="348" class="bodyText" font-weight="bold" fill="#1e3a1e">UART</text>
+  <text x="110" y="372" class="monoText" font-size="11.5px" fill="#2d3748">(0x10000000)</text>
+
+  <!-- LED Matrix -->
+  <rect class="box ledBox" x="185" y="320" width="130" height="75" rx="6"/>
+  <text x="250" y="348" class="bodyText" font-weight="bold" fill="#3a1e1a">LED Matrix</text>
+  <text x="250" y="372" class="monoText" font-size="11.5px" fill="#2d3748">(0xFF000000)</text>
+
+  <!-- Mouse -->
+  <rect class="box mouseBox" x="325" y="320" width="130" height="75" rx="6"/>
+  <text x="390" y="348" class="bodyText" font-weight="bold" fill="#122a3a">Mouse</text>
+  <text x="390" y="372" class="monoText" font-size="11.5px" fill="#2d3748">(0xFF100000)</text>
+
+  <!-- Keyboard -->
+  <rect class="box keyboardBox" x="465" y="320" width="130" height="75" rx="6"/>
+  <text x="530" y="348" class="bodyText" font-weight="bold" fill="#3a3012">Keyboard</text>
+  <text x="530" y="372" class="monoText" font-size="11.5px" fill="#2d3748">(0xFFFF0000)</text>
+
+
+  <!-- ==================== GIAO DIỆN WEB (BÊN PHẢI) ==================== -->
+  <rect class="webWrapper" x="650" y="30" width="270" height="435"/>
+  <text x="785" y="65" class="titleText" font-weight="bold" fill="#334155">Giao diện Web</text>
+
+  <!-- Keyboard Event Box -->
+  <rect class="webEventBox" x="670" y="110" width="230" height="70" stroke="#d97706" style="fill:#fffbeb; stroke-width:1.5; rx:6px;"/>
+  <text x="785" y="136" class="bodyText" font-weight="bold" fill="#b45309">Sự kiện keydown</text>
+  <text x="785" y="158" class="monoText" font-size="11px" fill="#b45309">keyboard.pressKey()</text>
+
+  <!-- Mouse Event Box -->
+  <rect class="webEventBox" x="670" y="205" width="230" height="70" stroke="#2563eb" style="fill:#eff6ff; stroke-width:1.5; rx:6px;"/>
+  <text x="785" y="231" class="bodyText" font-weight="bold" fill="#1d4ed8">pointer trên canvas</text>
+  <text x="785" y="253" class="monoText" font-size="11px" fill="#1d4ed8">mouse.reportEvent()</text>
+
+  <!-- Console UART Box -->
+  <rect class="terminalBox" x="670" y="315" width="230" height="130"/>
+  <!-- Window Title Bar -->
+  <rect x="670" y="315" width="230" height="20" fill="#0f172a" rx="4" ry="4"/>
+  <circle cx="685" cy="325" r="4" fill="#ef4444"/>
+  <circle cx="697" cy="325" r="4" fill="#f59e0b"/>
+  <circle cx="709" cy="325" r="4" fill="#10b981"/>
+  <text x="785" y="390" style="fill:#ffffff; font-family:'Segoe UI', Arial, sans-serif; font-size:16px; font-weight:bold; text-anchor:middle;">Console UART</text>
+
+
+  <!-- ==================== ĐƯỜNG ĐI CỦA SỰ KIỆN (EVENT PATHS) ==================== -->
+  <!-- 1. Keyboard Event (keydown) -> Keyboard Box (x=595, y=357.5) -->
+  <path d="M 670,145 H 610 V 357.5 H 595" fill="none" stroke="#d97706" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#arrowKeyboard)"/>
+
+  <!-- 2. Mouse Event (pointer) -> Mouse Box (x=390, y=395) -->
+  <path d="M 670,240 H 625 V 420 H 390 V 398" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#arrowMouse)"/>
+
+  <!-- 3. UART -> Console UART (x=785, y=445) -->
+  <path d="M 110,395 V 480 H 785 V 445" fill="none" stroke="#16a34a" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#arrowUART)"/>
+  <text x="450" y="472" class="labelText labelBus" fill="#15803d" text-anchor="middle" font-size="11px" font-weight="bold">uart.onTransmit → khung Console</text>
+
+</svg>

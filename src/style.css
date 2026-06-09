@@ -872,6 +872,7 @@ li.CodeMirror-hint-active,
 .help-section {
     padding: 18px;
     margin-bottom: 15px;
+    overflow-x: auto;
 }
 
 .help-section.hidden {
@@ -976,6 +977,11 @@ li.CodeMirror-hint-active,
 
 .help-table td {
     color: #2d3436;
+    overflow-wrap: break-word;
+}
+
+.help-table td:first-child {
+    white-space: nowrap;
 }
 
 .help-table.compact td,
