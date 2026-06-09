@@ -298,6 +298,8 @@ export class DMAController {
         this.burstRemainingWrites = 0;
         this.pendingRegReq = null;
 
+        this.isDraining = false; //Quản lý trạng thái ép xả cạn FIFO
+
         // Note: use `waitingRequest` object to hold a queued request so the send occurs next tick
 
         console.log('[DMA] Controller initialized');
@@ -375,7 +377,6 @@ export class DMAController {
         // If a request was queued in `waitingRequest` last tick, send it now (one-cycle delay)
         if (this.waitingRequest && this.waitingRequest.req && !this.waitingRequest.__sent) {
             try {
-                console.log(`[DMA] Sending queued request via=${describeLink(this.waitingRequest.link)} addr=0x${(this.waitingRequest.req.address>>>0).toString(16)}`);
                 this.waitingRequest.link.sendRequest(this.waitingRequest.from, this.waitingRequest.req);
                 this.waitingRequest.__sent = true;
                 this.activeRequestLink = this.waitingRequest.link;
@@ -471,6 +472,8 @@ export class DMAController {
         this.registers.done = false;
         this.registers.error = false;
 
+        this.isDraining = false;
+
         console.log(`[DMA] Transfer started: ${this.currentDescriptor.toString()}`);
         console.log(`[DMA] Config: elements=${this.numElements}, bswap=${this.bswap}, srcMode=${this.srcMode}, dstMode=${this.dstMode}, srcWidth=${this.srcWidth}, dstWidth=${this.dstWidth}`);
         console.log(
@@ -502,12 +505,22 @@ export class DMAController {
                 const freeSpaceBytes = this.registers.dataFifoDepth - this.registers.dataFifo.length;
                 const maxReadsForFifo = Math.floor(freeSpaceBytes / srcElemSize);
 
-                // Ưu tiên kích hoạt READ BURST nếu nguồn còn dữ liệu và FIFO còn đủ chỗ chứa ít nhất 1 phần tử nguồn
-                if (remainingSrcBeats > 0 && maxReadsForFifo > 0) {
+                // --- LOGIC ĐIỀU KHIỂN LUỒNG HYSTERESIS (CHỐNG PING-PONG) ---
+                if (this.registers.dataFifoFull) {
+                    // Khi FIFO đầy khít, bật chế độ ÉP XẢ (Draining Mode) để khóa mạch READ lại
+                    this.isDraining = true;
+                    console.log(`[DMA][FLOW CONTROL] FIFO FULL (${this.registers.dataFifo.length}/${this.registers.dataFifoDepth}). Kích hoạt Draining Mode: Chặn READ, ép WRITE liên tục!`);
+                } else if (this.registers.dataFifoEmpty) {
+                    // Chỉ khi nào xả cạn sạch hoàn toàn (Empty), mới giải phóng cờ để cho phép READ tiếp
+                    this.isDraining = false;
+                }
+
+                // ĐIỀU KIỆN READ: Phải còn dữ liệu nguồn, FIFO còn chỗ VÀ KHÔNG nằm trong chế độ ép xả (!this.isDraining)
+                if (remainingSrcBeats > 0 && maxReadsForFifo > 0 && !this.isDraining) {
                     this.burstRemainingReads = Math.min(maxBurstBeats, maxReadsForFifo, remainingSrcBeats);
                     console.log(`[DMA] >>> Starting READ BURST: ${this.burstRemainingReads} beats consecutive`);
-                } 
-                // Ngược lại, chuyển sang kích hoạt WRITE BURST để xả dữ liệu từ FIFO ra ngoại vi
+                }
+                // Ngược lại, chuyển sang kích hoạt WRITE BURST để xả dữ liệu từ FIFO ra ngoại vi 
                 else {
                     const availableDstElements = Math.floor(this.registers.dataFifo.length / dstElemSize);
                     const remainingDstElements = this.numElements - this.transferProgress;
@@ -541,6 +554,8 @@ export class DMAController {
                         `[DMA] BURST_READ queued via=${describeLink(requestLink)} ` +
                         `beat=${this.burstRemainingReads} addr=0x${addr.toString(16)} width=${srcElemSize}B`
                     );
+                    // Also log an explicit queued-send line so it appears before TileLink UH logs
+                    console.log(`[DMA] Sending queued request via=${describeLink(requestLink)} addr=0x${addr.toString(16)} (queued)`);
                     return;
                 }
 
@@ -603,6 +618,8 @@ export class DMAController {
                         `element=${this.transferProgress + 1}/${this.numElements} ` +
                         `addr=0x${addr.toString(16)} data=0x${dataToWrite.toString(16)}`
                     );
+                    // Also log an explicit queued-send line so it appears before TileLink UL logs
+                    console.log(`[DMA] Sending queued request via=${describeLink(requestLink)} addr=0x${addr.toString(16)} (queued)`);
                     return;
                 }
 

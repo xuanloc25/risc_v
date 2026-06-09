@@ -1,6 +1,6 @@
 .data
 msg:
-    .ascii "Hello DMA!\n"
+    .ascii "123456789a123456789a123456789a123456789a123456789a123456789a12345"
 .text
 .globl _start
 _start:
@@ -10,7 +10,8 @@ _start:
     li    t1, 0x10000000    # t1 = UART base address
     li    t2, 0xFFED0004    # t2 = DMA DESC register (write-only)
     li    t3, 0xFFED0000    # t3 = DMA CTRL register
-    li    t5, 0x1820000A    # t5 = Khởi tạo trước cấu hình DMA (Né tránh dùng chung t0)
+    # Configure DMA: dst fixed (UART), src increment, src=32-bit, dst=8-bit, 65 elements
+    li    t5, 0x18000041    # t5 = DMA config (65 bytes, src=word, dst=byte)
 
     # Make UART very fast: set baud divisor = 1
     li    t4, 1
