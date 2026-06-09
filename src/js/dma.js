@@ -291,8 +291,9 @@ export class DMAController {
 
         this.callback = null;
 
-        this.waitingRequest = null;
-        this.pendingResponse = null;
+        // Queues to allow multiple outstanding requests/responses for bursting
+        this.waitingRequests = [];
+        this.pendingResponses = [];
         this.activeRequestLink = null;
         this.burstRemainingReads = 0;
         this.burstRemainingWrites = 0;
@@ -300,7 +301,7 @@ export class DMAController {
 
         this.isDraining = false; //Quản lý trạng thái ép xả cạn FIFO
 
-        // Note: use `waitingRequest` object to hold a queued request so the send occurs next tick
+        // Note: use `waitingRequests` array to hold queued requests so the send occurs next tick
 
         console.log('[DMA] Controller initialized');
     }
@@ -374,14 +375,18 @@ export class DMAController {
 
     tick() {
 
-        // If a request was queued in `waitingRequest` last tick, send it now (one-cycle delay)
-        if (this.waitingRequest && this.waitingRequest.req && !this.waitingRequest.__sent) {
-            try {
-                this.waitingRequest.link.sendRequest(this.waitingRequest.from, this.waitingRequest.req);
-                this.waitingRequest.__sent = true;
-                this.activeRequestLink = this.waitingRequest.link;
-            } catch (e) {
-                console.error('[DMA] Error sending queued request', e);
+        // Send any queued requests (allow multiple outstanding to pipeline bursts)
+        if (this.waitingRequests && this.waitingRequests.length > 0) {
+            for (const w of this.waitingRequests) {
+                if (w && w.req && !w.__sent) {
+                    try {
+                        w.link.sendRequest(w.from, w.req);
+                        w.__sent = true;
+                        this.activeRequestLink = w.link;
+                    } catch (e) {
+                        console.error('[DMA] Error sending queued request', e);
+                    }
+                }
             }
         }
 
@@ -462,8 +467,8 @@ export class DMAController {
         this.readProgress = 0;
         // if FIFO can hold the whole transfer, enable strict prefetch mode
         this.prefetchMode = (this.registers.dataFifoDepth >= this.numElements);
-        this.waitingRequest = null;
-        this.pendingResponse = null;
+        this.waitingRequests = [];
+        this.pendingResponses = [];
         this.activeRequestLink = null;
         this.burstRemainingReads = 0;
         this.burstRemainingWrites = 0;
@@ -544,28 +549,26 @@ export class DMAController {
 
             // --- 2. THỰC THI CHUỖI READ BURST (ĐỌC LIÊN TIẾP TỪ RAM) ---
             if (this.burstRemainingReads > 0) {
-                if (!this.waitingRequest && !this.pendingResponse) {
-                    const addr = this.calculateAddress(this.currentSrcAddr, this.readProgress / srcElemSize, this.srcMode, srcElemSize);
-                    const readReq = this.buildReadRequest(addr, this.srcWidth);
-                    const requestLink = this._resolveLink(addr);
-                    
-                    this.waitingRequest = { req: readReq, link: requestLink, from: 'dma', __sent: false };
-                    console.log(
-                        `[DMA] BURST_READ queued via=${describeLink(requestLink)} ` +
-                        `beat=${this.burstRemainingReads} addr=0x${addr.toString(16)} width=${srcElemSize}B`
-                    );
-                    // Also log an explicit queued-send line so it appears before TileLink UH logs
-                    console.log(`[DMA] Sending queued request via=${describeLink(requestLink)} addr=0x${addr.toString(16)} (queued)`);
-                    return;
+                // If no outstanding read request enqueued for this burst, create a single multi-beat GET
+                if (this.waitingRequests.length === 0) {
+                    const readsToEnqueue = this.burstRemainingReads;
+                    const startAddr = this.calculateAddress(this.currentSrcAddr, this.readProgress / srcElemSize, this.srcMode, srcElemSize);
+                    const totalBytes = readsToEnqueue * srcElemSize;
+                    const sizeLog2 = Math.log2(totalBytes) >>> 0;
+                    const readReq = { type: TL_A_Opcode.Get, address: startAddr, size: sizeLog2 };
+                    const requestLink = this._resolveLink(startAddr);
+                    // expectedBeats helps us know when the burst completes
+                    this.waitingRequests.push({ req: readReq, link: requestLink, from: 'dma', __sent: false, expectedBeats: readsToEnqueue });
+                    console.log(`[DMA] Enqueued multi-beat READ addr=0x${startAddr.toString(16)} bytes=${totalBytes} size=${sizeLog2}`);
+                    return; // let tick() send the queued request(s)
                 }
 
-                if (this.pendingResponse) {
-                    let data = this.pendingResponse.data >>> 0;
-                    if (this.bswap) {
-                        data = this.swapBytes(data, srcElemSize);
-                    }
+                // Process pending beat responses from memory
+                if (this.pendingResponses.length > 0) {
+                    const resp = this.pendingResponses.shift();
+                    let data = resp.data >>> 0;
+                    if (this.bswap) data = this.swapBytes(data, srcElemSize);
 
-                    // TỰ ĐỘNG UNPACK: Đẩy từng byte bóc được vào Data FIFO
                     if (this.srcWidth === 2) { // 32-bit Word
                         this.registers.writeDataFifo(data & 0xFF);
                         this.registers.writeDataFifo((data >>> 8) & 0xFF);
@@ -578,59 +581,67 @@ export class DMAController {
                         this.registers.writeDataFifo(data & 0xFF);
                     }
 
-                    this.pendingResponse = null;
-                    this.waitingRequest = null;
                     this.activeRequestLink = null;
                     this.readProgress += srcElemSize;
-                    this.burstRemainingReads--; // Giảm số lượng beat cần đọc của chuỗi burst hiện tại
+                    this.burstRemainingReads--; // one beat satisfied
+
+                    // If this response marks the end of the multi-beat (lastBeat) or we've satisfied all expected beats, remove queued request
+                    const queued = this.waitingRequests[0];
+                    if (resp.lastBeat || (queued && typeof queued.expectedBeats === 'number' && this.burstRemainingReads <= 0)) {
+                        this.waitingRequests.shift();
+                    }
+
                     return;
                 }
+
                 return;
             }
 
             // --- 3. THỰC THI CHUỖI WRITE BURST (GHI LIÊN TIẾP RA ĐÍCH) ---
             if (this.burstRemainingWrites > 0) {
-                if (!this.waitingRequest && !this.pendingResponse) {
-                    let dataToWrite = 0;
+                // enqueue a sequence of write beats for this burst if none queued yet
+                if (this.waitingRequests.length === 0) {
+                    const writesToEnqueue = this.burstRemainingWrites;
+                    for (let i = 0; i < writesToEnqueue; i++) {
+                        let dataToWrite = 0;
+                        // pack bytes from FIFO for each destination element
+                        if (this.dstWidth === 2) {
+                            const b0 = this.registers.readDataFifo();
+                            const b1 = this.registers.readDataFifo();
+                            const b2 = this.registers.readDataFifo();
+                            const b3 = this.registers.readDataFifo();
+                            dataToWrite = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+                        } else if (this.dstWidth === 1) {
+                            const b0 = this.registers.readDataFifo();
+                            const b1 = this.registers.readDataFifo();
+                            dataToWrite = b0 | (b1 << 8);
+                        } else {
+                            dataToWrite = this.registers.readDataFifo();
+                        }
 
-                    // TỰ ĐỘNG PACK: Gom góp các byte đơn lẻ từ FIFO lên thành định dạng đích
-                    if (this.dstWidth === 2) { // 32-bit Word
-                        const b0 = this.registers.readDataFifo();
-                        const b1 = this.registers.readDataFifo();
-                        const b2 = this.registers.readDataFifo();
-                        const b3 = this.registers.readDataFifo();
-                        dataToWrite = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
-                    } else if (this.dstWidth === 1) { // 16-bit Halfword
-                        const b0 = this.registers.readDataFifo();
-                        const b1 = this.registers.readDataFifo();
-                        dataToWrite = b0 | (b1 << 8);
-                    } else { // 8-bit Byte
-                        dataToWrite = this.registers.readDataFifo();
+                        const addr = this.calculateAddress(this.currentDstAddr, this.transferProgress + i, this.dstMode, dstElemSize);
+                        const writeReq = this.buildWriteRequest(addr, dataToWrite, this.dstWidth);
+                        const requestLink = this._resolveLink(addr);
+                        this.waitingRequests.push({ req: writeReq, link: requestLink, from: 'dma', __sent: false });
+                        console.log(
+                            `[DMA] BURST_WRITE queued via=${describeLink(requestLink)} ` +
+                            `element=${this.transferProgress + i + 1}/${this.numElements} ` +
+                            `addr=0x${addr.toString(16)} data=0x${dataToWrite.toString(16)}`
+                        );
+                        console.log(`[DMA] Sending queued request via=${describeLink(requestLink)} addr=0x${addr.toString(16)} (queued)`);
                     }
-
-                    const addr = this.calculateAddress(this.currentDstAddr, this.transferProgress, this.dstMode, dstElemSize);
-                    const writeReq = this.buildWriteRequest(addr, dataToWrite, this.dstWidth);
-                    const requestLink = this._resolveLink(addr);
-                    
-                    this.waitingRequest = { req: writeReq, link: requestLink, from: 'dma', __sent: false };
-                    console.log(
-                        `[DMA] BURST_WRITE queued via=${describeLink(requestLink)} ` +
-                        `element=${this.transferProgress + 1}/${this.numElements} ` +
-                        `addr=0x${addr.toString(16)} data=0x${dataToWrite.toString(16)}`
-                    );
-                    // Also log an explicit queued-send line so it appears before TileLink UL logs
-                    console.log(`[DMA] Sending queued request via=${describeLink(requestLink)} addr=0x${addr.toString(16)} (queued)`);
                     return;
                 }
 
-                if (this.pendingResponse) {
-                    this.pendingResponse = null;
-                    this.waitingRequest = null;
+                // process any incoming write ack
+                if (this.pendingResponses.length > 0) {
+                    this.pendingResponses.shift();
+                    if (this.waitingRequests.length > 0) this.waitingRequests.shift();
                     this.activeRequestLink = null;
                     this.transferProgress++;
                     this.burstRemainingWrites--; // Giảm số lượng beat cần ghi của chuỗi burst hiện tại
                     console.log(`[DMA] Progress: ${this.transferProgress}/${this.numElements}`);
-                    
+
                     if (this.transferProgress >= this.numElements) {
                         this.completeTransfer();
                     }
@@ -699,14 +710,15 @@ export class DMAController {
         }
     }
 
-        // Note: requests are queued by setting `this.waitingRequest = { req, link, from, __sent:false }`.
+        // Note: requests are queued by pushing `{ req, link, from, __sent:false }` into `this.waitingRequests`.
 
     receiveResponse(resp) {
         console.log(
             `[DMA] RECEIVE_RESPONSE via=${describeLink(this.activeRequestLink ?? this.defaultLink)} ` +
             `from=${resp.from} type=${describeDOpcode(resp.type)} addr=${hex(resp.address)}${resp.data != null ? ` data=0x${(resp.data >>> 0).toString(16)}` : ''}`
         );
-        this.pendingResponse = resp;
+        // enqueue response for processing by performTransferStep
+        this.pendingResponses.push(resp);
     }
 
     swapBytes(data, size) {
@@ -731,8 +743,8 @@ export class DMAController {
         this.registers.done = true;
 
         this.transferStage = null;
-        this.waitingRequest = null;
-        this.pendingResponse = null;
+        this.waitingRequests = [];
+        this.pendingResponses = [];
         this.activeRequestLink = null;
 
         console.log(`[DMA] Transfer completed successfully: ${this.transferProgress} elements transferred`);
