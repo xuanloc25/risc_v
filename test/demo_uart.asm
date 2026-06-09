@@ -1,39 +1,48 @@
+.data
+msg:
+    .ascii "123456789a123456789a123456789a123456789a123456789a123456789a12345"
+dst_buf:
+    .space 128
+.text
 .globl _start
 _start:
-    # UART base 0x10000000
-    lui   x1, 0x10000
+    # --- 1. KHỞI TẠO TẤT CẢ THANH GHI Ở ĐẦU CHƯƠNG TRÌNH ---
+    # Việc gom hằng số lên đầu giúp CPU giải mã (Decode) ổn định, không bị bẫy timing cache
+    la    t0, msg           # t0 = source address (address of the message)
+    la    t1, dst_buf       # t1 = destination address (RAM buffer)
+    li    t2, 0xFFED0004    # t2 = DMA DESC register (write-only)
+    li    t3, 0xFFED0000    # t3 = DMA CTRL register
+    # Configure DMA: src increment, dst increment, src=32-bit, dst=32-bit, 65 elements
+    li    t5, 0x5A200005    # t5 = DMA config (65 bytes, src=word, dst=word)
 
-    # Increase UART speed: set baud divisor to 1 (very fast)
-    addi  x2, x0, 1
-    sw    x2, 16(x1)       # UART_BAUD (offset 0x10)
+    # No UART setup needed when writing to RAM
 
-    # Send 'A'
-    addi  x2, x0, 65       # 'A'
-    sw    x2, 0(x1)        # TX
+    # --- 2. ĐẨY DESCRIPTOR VÀO DMA FIFO ---
+    # Word0 = source address
+    sw    t0, 0(t2)
+    
+    # Word1 = destination address (UART TX register/base)
+    sw    t1, 0(t2)
+    
+    # Word2 = config (Bây giờ lấy trực tiếp từ t5 an toàn tuyệt đối)
+    sw    t5, 0(t2)         # Kích hoạt hoàn tất 3/3 từ khóa Descriptor!
 
-wait_tx_ready_A:
-    lw    x3, 8(x1)        # UART_STATUS
-    andi  x3, x3, 16       # bit4 = TX busy
-    bne   x3, x0, wait_tx_ready_A
+    # --- 3. ĐIỀU KHIỂN HOẠT ĐỘNG DMA ---
+    # Enable DMA (CTRL = 1)
+    li    t4, 1
+    sw    t4, 0(t3)
 
-    # Send 'B'
-    addi  x2, x0, 66       # 'B'
-    sw    x2, 0(x1)        # TX
+    # Start DMA (CTRL = 3 -> enable + start)
+    li    t4, 3
+    sw    t4, 0(t3)
 
-wait_tx_ready_B:
-    lw    x3, 8(x1)        # UART_STATUS
-    andi  x3, x3, 16       # bit4 = TX busy
-    bne   x3, x0, wait_tx_ready_B
+wait_done:
+    # Poll DMA CTRL for DONE bit (bit 2)
+    lw    t6, 0(t3)
+    andi  t6, t6, 4
+    beq   t6, x0, wait_done
 
-    # Send 'C'
-    addi  x2, x0, 67       # 'C'
-    sw    x2, 0(x1)        # TX
-
-wait_tx_ready_C:
-    lw    x3, 8(x1)        # UART_STATUS
-    andi  x3, x3, 16       # bit4 = TX busy
-    bne   x3, x0, wait_tx_ready_C
-
-    addi  x17, x0, 93    # ecall: exit
-    addi  x10, x0, 0     # exit code 0
+    # Exit (ecall)
+    addi  x17, x0, 93
+    addi  x10, x0, 0
     ecall
