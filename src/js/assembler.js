@@ -922,8 +922,15 @@ export const assembler = {
     _handleStringDirective(operands, nullTerminated) {
         this._ensureDataSection(nullTerminated ? ".asciiz" : ".ascii");
         const str = this._parseStringLiteral(operands.join(","), nullTerminated ? ".asciiz" : ".ascii");
+        // Write string bytes
         for (let i = 0; i < str.length; i++) this.memory[this.currentAddress++] = str.charCodeAt(i) & 0xFF;
+        // Optional NUL terminator for .asciiz/.string
         if (nullTerminated) this.memory[this.currentAddress++] = 0;
+
+        // Pad the data so the total size of this string entry is a multiple of 4 bytes
+        const writtenBytes = str.length + (nullTerminated ? 1 : 0);
+        const pad = (4 - (writtenBytes % 4)) % 4;
+        for (let i = 0; i < pad; i++) this.memory[this.currentAddress++] = 0;
     },
     _handleSpaceDirective(operands) {
         this._ensureDataSection(".space");

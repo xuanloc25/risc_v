@@ -24,7 +24,10 @@ _start:
     # Queue descriptor: src, dst, config
     sw    t2, 0(t1)            # source address
     sw    t3, 0(t1)            # destination address
-    li    t5, 0xA0000010       # config: dstMode=2, srcMode=2, len=16 bytes
+    # New mapping: both source and dest increment by 1 byte, 16 elements
+    # dstMode=1 (inc), srcMode=1 (inc), srcWidth=0 (byte), dstWidth=0 (byte), numElements=16
+    # config = (1<<30)|(1<<28)|(0<<26)|(0<<24)|16 = 0x50000010
+    li    t5, 0x50000010       # config (new mapping)
     sw    t5, 0(t1)
 
     # Enable DMA (bit0)

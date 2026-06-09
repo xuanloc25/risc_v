@@ -25,27 +25,40 @@ export class DMADescriptor {
     }
 
     parseConfig() {
-        const config = this.configWord;
+        const config = this.configWord >>> 0;
         return {
-            numElements: config & 0xFFFFFF,
-            reserved: (config >> 24) & 0x7,
-            bswap: (config >> 27) & 0x1,
-            srcMode: (config >> 28) & 0x3,
-            dstMode: (config >> 30) & 0x3
+            dstMode: (config >>> 30) & 0x3,     // bits [31:30] destination address mode: 0=fixed,1=inc,2=dec
+            srcMode: (config >>> 28) & 0x3,     // bits [29:28] source address mode
+            srcWidth: (config >>> 26) & 0x3,    // bits [27:26] source element width: 0=8-bit,1=16-bit,2=32-bit
+            dstWidth: (config >>> 24) & 0x3,    // bits [25:24] destination element width
+            burstSize: (config >>> 21) & 0x7,   // bits [23:21] burst size code (0=1 beat, 1=4, 2=8, ...)
+            bswap: (config >>> 20) & 0x1,       // bit 20: byte-swap (endian) enable
+            reserved: (config >>> 16) & 0xF,    // bits [19:16] reserved (unused)
+            numElements: config & 0xFFFF        // bits [15:0] number of destination elements (count)
         };
     }
 
-    static createConfig(numElements, bswap = 0, srcMode = 2, dstMode = 2) {
-        if (numElements <= 0 || numElements > 0xFFFFFF) {
-            throw new Error('Number of elements must be > 0 and <= 16777215');
+    static createConfig(numElements, bswap = 0, srcMode = 3, dstMode = 3, srcWidth = 2, dstWidth = 2, burstSize = 0, reserved = 0) {
+        if (numElements <= 0 || numElements > 0xFFFF) {
+            throw new Error('Number of elements must be > 0 and <= 65535');
         }
-        return (dstMode << 30) | (srcMode << 28) | (bswap << 27) | numElements;
+        const cfg = ((dstMode & 0x3) << 30) |
+            ((srcMode & 0x3) << 28) |
+            ((srcWidth & 0x3) << 26) |
+            ((dstWidth & 0x3) << 24) |
+            ((burstSize & 0x7) << 21) |
+            ((bswap & 0x1) << 20) |
+            ((reserved & 0xF) << 16) |
+            (numElements & 0xFFFF);
+
+        return cfg >>> 0;
     }
 
     toString() {
         const config = this.parseConfig();
         return `DMADescriptor{src:0x${this.sourceAddr.toString(16)}, dst:0x${this.destAddr.toString(16)}, ` +
-            `elements:${config.numElements}, srcMode:${config.srcMode}, dstMode:${config.dstMode}, bswap:${config.bswap}}`;
+            `elements:${config.numElements}, srcMode:${config.srcMode}, dstMode:${config.dstMode}, ` +
+            `srcWidth:${config.srcWidth}, dstWidth:${config.dstWidth}, burstSize:${config.burstSize}, bswap:${config.bswap}}`;
     }
 }
 
@@ -229,6 +242,9 @@ export class DMARegisters {
         this.currentDescriptorWords = [];
         // clear data FIFO as well
         this.dataFifo = [];
+        // reset prefetch progress/state
+        this.readProgress = 0;
+        this.prefetchMode = false;
         // FIFO status flags are computed; arrays cleared above
         console.log('[DMA] Reset completed');
     }
@@ -278,13 +294,13 @@ export class DMAController {
         this.waitingRequest = null;
         this.pendingResponse = null;
         this.activeRequestLink = null;
-        this.latchedData = 0;
-        this.latchedSrcAddr = 0;
-        this.latchedDstAddr = 0;
         this.burstRemainingReads = 0;
         this.burstRemainingWrites = 0;
-        this.burstDataBuffer = [];
         this.pendingRegReq = null;
+
+        this.isDraining = false; //Quản lý trạng thái ép xả cạn FIFO
+
+        // Note: use `waitingRequest` object to hold a queued request so the send occurs next tick
 
         console.log('[DMA] Controller initialized');
     }
@@ -346,7 +362,8 @@ export class DMAController {
 
         this.registers.writeCtrl(1);
 
-        const config = DMADescriptor.createConfig(length, 0, 2, 2);
+        // Legacy start: use incrementing addresses and 32-bit widths by default
+        const config = DMADescriptor.createConfig(length, 0, 1, 1, 2, 2);
         this.registers.writeDescriptor(src);
         this.registers.writeDescriptor(dst);
         this.registers.writeDescriptor(config);
@@ -356,6 +373,17 @@ export class DMAController {
     }
 
     tick() {
+
+        // If a request was queued in `waitingRequest` last tick, send it now (one-cycle delay)
+        if (this.waitingRequest && this.waitingRequest.req && !this.waitingRequest.__sent) {
+            try {
+                this.waitingRequest.link.sendRequest(this.waitingRequest.from, this.waitingRequest.req);
+                this.waitingRequest.__sent = true;
+                this.activeRequestLink = this.waitingRequest.link;
+            } catch (e) {
+                console.error('[DMA] Error sending queued request', e);
+            }
+        }
 
         if (this.registers.canStartTransfer()) {
             this.startNextTransfer();
@@ -423,24 +451,31 @@ export class DMAController {
         this.bswap = config.bswap !== 0;
         this.srcMode = config.srcMode;
         this.dstMode = config.dstMode;
+        this.srcWidth = config.srcWidth;
+        this.dstWidth = config.dstWidth;
+        this.burstSize = config.burstSize;
         this.currentSrcAddr = this.currentDescriptor.sourceAddr;
         this.currentDstAddr = this.currentDescriptor.destAddr;
-        this.transferProgress = 0;
+        this.transferProgress = 0; // counts destination elements written
         this.transferStage = null;
+        // track read-prefetch progress separately from write progress
+        this.readProgress = 0;
+        // if FIFO can hold the whole transfer, enable strict prefetch mode
+        this.prefetchMode = (this.registers.dataFifoDepth >= this.numElements);
         this.waitingRequest = null;
         this.pendingResponse = null;
         this.activeRequestLink = null;
-        this.latchedData = 0;
         this.burstRemainingReads = 0;
         this.burstRemainingWrites = 0;
-        this.burstDataBuffer = [];
 
         this.registers.busy = true;
         this.registers.done = false;
         this.registers.error = false;
 
+        this.isDraining = false;
+
         console.log(`[DMA] Transfer started: ${this.currentDescriptor.toString()}`);
-        console.log(`[DMA] Config: elements=${this.numElements}, bswap=${this.bswap}, srcMode=${this.srcMode}, dstMode=${this.dstMode}`);
+        console.log(`[DMA] Config: elements=${this.numElements}, bswap=${this.bswap}, srcMode=${this.srcMode}, dstMode=${this.dstMode}, srcWidth=${this.srcWidth}, dstWidth=${this.dstWidth}`);
         console.log(
             `[DMA] TileLink route src=${hex(this.currentSrcAddr)} via=${describeLink(this._resolveLink(this.currentSrcAddr))} ` +
             `dst=${hex(this.currentDstAddr)} via=${describeLink(this._resolveLink(this.currentDstAddr))}`
@@ -449,70 +484,142 @@ export class DMAController {
     }
 
     performTransferStep() {
-
         if (this.transferProgress >= this.numElements) {
             this.completeTransfer();
             return;
         }
 
         try {
-            if (!this.transferStage) {
-                this.latchedSrcAddr = this.calculateAddress(this.currentSrcAddr, this.transferProgress, this.srcMode);
-                this.latchedDstAddr = this.calculateAddress(this.currentDstAddr, this.transferProgress, this.dstMode);
-                this.transferStage = 'read';
+            const srcElemSize = this.getElementSize(this.srcWidth);
+            const dstElemSize = this.getElementSize(this.dstWidth);
+            
+            // Tổng số byte cần đọc từ nguồn để phục vụ đủ nhu cầu ghi ở đích
+            const totalSrcBytesNeeded = Math.ceil((this.numElements * dstElemSize) / srcElemSize) * srcElemSize;
+            
+            // Định nghĩa độ dài chuỗi Burst dựa trên burstSize: 0 -> 1 beat, 1 -> 4 beats, 2 -> 8 beats, 3 -> 16 beats...
+            const maxBurstBeats = this.burstSize === 0 ? 1 : (1 << (this.burstSize + 1));
+
+            // --- 1. KHỞI TẠO CHU KỲ BURST MỚI KHI CẢ HAI TRẠNG THÁI VỀ 0 ---
+            if (this.burstRemainingReads === 0 && this.burstRemainingWrites === 0) {
+                const remainingSrcBeats = Math.ceil((totalSrcBytesNeeded - this.readProgress) / srcElemSize);
+                const freeSpaceBytes = this.registers.dataFifoDepth - this.registers.dataFifo.length;
+                const maxReadsForFifo = Math.floor(freeSpaceBytes / srcElemSize);
+
+                // --- LOGIC ĐIỀU KHIỂN LUỒNG HYSTERESIS (CHỐNG PING-PONG) ---
+                if (this.registers.dataFifoFull) {
+                    // Khi FIFO đầy khít, bật chế độ ÉP XẢ (Draining Mode) để khóa mạch READ lại
+                    this.isDraining = true;
+                    console.log(`[DMA][FLOW CONTROL] FIFO FULL (${this.registers.dataFifo.length}/${this.registers.dataFifoDepth}). Kích hoạt Draining Mode: Chặn READ, ép WRITE liên tục!`);
+                } else if (this.registers.dataFifoEmpty) {
+                    // Chỉ khi nào xả cạn sạch hoàn toàn (Empty), mới giải phóng cờ để cho phép READ tiếp
+                    this.isDraining = false;
+                }
+
+                // ĐIỀU KIỆN READ: Phải còn dữ liệu nguồn, FIFO còn chỗ VÀ KHÔNG nằm trong chế độ ép xả (!this.isDraining)
+                if (remainingSrcBeats > 0 && maxReadsForFifo > 0 && !this.isDraining) {
+                    this.burstRemainingReads = Math.min(maxBurstBeats, maxReadsForFifo, remainingSrcBeats);
+                    console.log(`[DMA] >>> Starting READ BURST: ${this.burstRemainingReads} beats consecutive`);
+                }
+                // Ngược lại, chuyển sang kích hoạt WRITE BURST để xả dữ liệu từ FIFO ra ngoại vi 
+                else {
+                    const availableDstElements = Math.floor(this.registers.dataFifo.length / dstElemSize);
+                    const remainingDstElements = this.numElements - this.transferProgress;
+
+                    if (remainingDstElements > 0 && availableDstElements > 0) {
+                        this.burstRemainingWrites = Math.min(maxBurstBeats, availableDstElements, remainingDstElements);
+                        console.log(`[DMA] >>> Starting WRITE BURST: ${this.burstRemainingWrites} beats consecutive`);
+                    } else if (remainingDstElements > 0 && availableDstElements === 0 && remainingSrcBeats === 0) {
+                        // Trường hợp đặc biệt: Hết dữ liệu nguồn để đọc nhưng dữ liệu dư trong FIFO không đủ tạo thành 1 phần tử đích
+                        console.warn(`[DMA] Stalling: Trailing bytes in FIFO cannot form a complete destination element.`);
+                        this.completeTransfer();
+                        return;
+                    } else {
+                        if (this.transferProgress >= this.numElements) {
+                            this.completeTransfer();
+                        }
+                        return;
+                    }
+                }
             }
 
-            if (this.transferStage === 'read') {
+            // --- 2. THỰC THI CHUỖI READ BURST (ĐỌC LIÊN TIẾP TỪ RAM) ---
+            if (this.burstRemainingReads > 0) {
                 if (!this.waitingRequest && !this.pendingResponse) {
-                    const readReq = this.buildReadRequest(this.latchedSrcAddr, this.srcMode);
-                    const requestLink = this._resolveLink(this.latchedSrcAddr);
-                    this.waitingRequest = readReq;
-                    this.activeRequestLink = requestLink;
+                    const addr = this.calculateAddress(this.currentSrcAddr, this.readProgress / srcElemSize, this.srcMode, srcElemSize);
+                    const readReq = this.buildReadRequest(addr, this.srcWidth);
+                    const requestLink = this._resolveLink(addr);
+                    
+                    this.waitingRequest = { req: readReq, link: requestLink, from: 'dma', __sent: false };
                     console.log(
-                        `[DMA] ISSUE_READ via=${describeLink(requestLink)} ` +
-                        `element=${this.transferProgress + 1}/${this.numElements} ` +
-                        `type=${describeAOpcode(readReq.type)} addr=${hex(readReq.address)} size=${1 << readReq.size}B`
+                        `[DMA] BURST_READ queued via=${describeLink(requestLink)} ` +
+                        `beat=${this.burstRemainingReads} addr=0x${addr.toString(16)} width=${srcElemSize}B`
                     );
-                    requestLink.sendRequest('dma', readReq);
+                    // Also log an explicit queued-send line so it appears before TileLink UH logs
+                    console.log(`[DMA] Sending queued request via=${describeLink(requestLink)} addr=0x${addr.toString(16)} (queued)`);
                     return;
                 }
 
                 if (this.pendingResponse) {
                     let data = this.pendingResponse.data >>> 0;
                     if (this.bswap) {
-                        data = this.swapBytes(data, this.getElementSize(this.srcMode));
+                        data = this.swapBytes(data, srcElemSize);
                     }
-                    // Push payload into data FIFO; stall if FIFO is full
-                    if (!this.registers.writeDataFifo(data)) {
-                        console.log('[DMA] Data FIFO full, stalling read completion');
-                        return;
+
+                    // TỰ ĐỘNG UNPACK: Đẩy từng byte bóc được vào Data FIFO
+                    if (this.srcWidth === 2) { // 32-bit Word
+                        this.registers.writeDataFifo(data & 0xFF);
+                        this.registers.writeDataFifo((data >>> 8) & 0xFF);
+                        this.registers.writeDataFifo((data >>> 16) & 0xFF);
+                        this.registers.writeDataFifo((data >>> 24) & 0xFF);
+                    } else if (this.srcWidth === 1) { // 16-bit Halfword
+                        this.registers.writeDataFifo(data & 0xFF);
+                        this.registers.writeDataFifo((data >>> 8) & 0xFF);
+                    } else { // 8-bit Byte
+                        this.registers.writeDataFifo(data & 0xFF);
                     }
+
                     this.pendingResponse = null;
                     this.waitingRequest = null;
                     this.activeRequestLink = null;
-                    this.transferStage = 'write';
+                    this.readProgress += srcElemSize;
+                    this.burstRemainingReads--; // Giảm số lượng beat cần đọc của chuỗi burst hiện tại
+                    return;
                 }
                 return;
             }
 
-            if (this.transferStage === 'write') {
+            // --- 3. THỰC THI CHUỖI WRITE BURST (GHI LIÊN TIẾP RA ĐÍCH) ---
+            if (this.burstRemainingWrites > 0) {
                 if (!this.waitingRequest && !this.pendingResponse) {
-                    const dataToWrite = this.registers.readDataFifo();
-                    if (dataToWrite == null) {
-                        console.log('[DMA] Data FIFO empty, stalling write');
-                        return;
+                    let dataToWrite = 0;
+
+                    // TỰ ĐỘNG PACK: Gom góp các byte đơn lẻ từ FIFO lên thành định dạng đích
+                    if (this.dstWidth === 2) { // 32-bit Word
+                        const b0 = this.registers.readDataFifo();
+                        const b1 = this.registers.readDataFifo();
+                        const b2 = this.registers.readDataFifo();
+                        const b3 = this.registers.readDataFifo();
+                        dataToWrite = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+                    } else if (this.dstWidth === 1) { // 16-bit Halfword
+                        const b0 = this.registers.readDataFifo();
+                        const b1 = this.registers.readDataFifo();
+                        dataToWrite = b0 | (b1 << 8);
+                    } else { // 8-bit Byte
+                        dataToWrite = this.registers.readDataFifo();
                     }
-                    const writeReq = this.buildWriteRequest(this.latchedDstAddr, dataToWrite, this.dstMode);
-                    const requestLink = this._resolveLink(this.latchedDstAddr);
-                    this.waitingRequest = writeReq;
-                    this.activeRequestLink = requestLink;
+
+                    const addr = this.calculateAddress(this.currentDstAddr, this.transferProgress, this.dstMode, dstElemSize);
+                    const writeReq = this.buildWriteRequest(addr, dataToWrite, this.dstWidth);
+                    const requestLink = this._resolveLink(addr);
+                    
+                    this.waitingRequest = { req: writeReq, link: requestLink, from: 'dma', __sent: false };
                     console.log(
-                        `[DMA] ISSUE_WRITE via=${describeLink(requestLink)} ` +
+                        `[DMA] BURST_WRITE queued via=${describeLink(requestLink)} ` +
                         `element=${this.transferProgress + 1}/${this.numElements} ` +
-                        `type=${describeAOpcode(writeReq.type)} addr=${hex(writeReq.address)} ` +
-                        `size=${1 << writeReq.size}B data=${hex(writeReq.value ?? 0)}`
+                        `addr=0x${addr.toString(16)} data=0x${dataToWrite.toString(16)}`
                     );
-                    requestLink.sendRequest('dma', writeReq);
+                    // Also log an explicit queued-send line so it appears before TileLink UL logs
+                    console.log(`[DMA] Sending queued request via=${describeLink(requestLink)} addr=0x${addr.toString(16)} (queued)`);
                     return;
                 }
 
@@ -521,11 +628,13 @@ export class DMAController {
                     this.waitingRequest = null;
                     this.activeRequestLink = null;
                     this.transferProgress++;
-                    this.transferStage = null;
+                    this.burstRemainingWrites--; // Giảm số lượng beat cần ghi của chuỗi burst hiện tại
                     console.log(`[DMA] Progress: ${this.transferProgress}/${this.numElements}`);
+                    
                     if (this.transferProgress >= this.numElements) {
                         this.completeTransfer();
                     }
+                    return;
                 }
             }
         } catch (error) {
@@ -536,58 +645,61 @@ export class DMAController {
         }
     }
 
-    calculateAddress(baseAddr, progress, mode) {
+    calculateAddress(baseAddr, progress, mode, elementSize) {
+        // mode: 0 = Fixed, 1 = Increment, 2 = Decrement
         switch (mode) {
-            case 0:
-            case 1:
+            case 0: // Fixed
                 return baseAddr;
-            case 2:
-                return baseAddr + progress;
-            case 3:
-                return baseAddr + (progress * 4);
+            case 1: // Increment
+                return baseAddr + (progress * elementSize);
+            case 2: // Decrement
+                return baseAddr - (progress * elementSize);
             default:
                 throw new Error(`Invalid address mode: ${mode}`);
         }
     }
 
-    getElementSize(mode) {
-        switch (mode) {
+    getElementSize(width) {
+        // width: 0 = 8-bit, 1 = 16-bit, 2 = 32-bit
+        switch (width) {
             case 0:
-            case 2:
                 return 1;
             case 1:
-            case 3:
+                return 2;
+            case 2:
                 return 4;
             default:
                 return 1;
         }
     }
 
-    buildReadRequest(address, mode) {
-        switch (mode) {
-            case 0:
-            case 2:
-                return { type: TL_A_Opcode.Get, address, size: 0 };
-            case 1:
-            case 3:
-                return { type: TL_A_Opcode.Get, address, size: 2 };
+    buildReadRequest(address, width) {
+        // width -> TL size field: 0=byte,1=halfword,2=word
+        let size = 0;
+        switch (width) {
+            case 0: size = 0; break;
+            case 1: size = 1; break;
+            case 2: size = 2; break;
+            default: size = 0;
+        }
+        return { type: TL_A_Opcode.Get, address, size };
+    }
+
+    buildWriteRequest(address, data, width) {
+        // width -> TL size and opcode
+        switch (width) {
+            case 0: // byte
+                return { type: TL_A_Opcode.PutPartialData, address, value: data & 0xFF, size: 0 };
+            case 1: // halfword
+                return { type: TL_A_Opcode.PutPartialData, address, value: data & 0xFFFF, size: 1 };
+            case 2: // word
+                return { type: TL_A_Opcode.PutFullData, address, value: data >>> 0, size: 2 };
             default:
-                throw new Error(`Invalid read mode: ${mode}`);
+                throw new Error(`Invalid write width: ${width}`);
         }
     }
 
-    buildWriteRequest(address, data, mode) {
-        switch (mode) {
-            case 0:
-            case 2:
-                return { type: TL_A_Opcode.PutPartialData, address, value: data & 0xFF, size: 0 };
-            case 1:
-            case 3:
-                return { type: TL_A_Opcode.PutFullData, address, value: data >>> 0, size: 2 };
-            default:
-                throw new Error(`Invalid write mode: ${mode}`);
-        }
-    }
+        // Note: requests are queued by setting `this.waitingRequest = { req, link, from, __sent:false }`.
 
     receiveResponse(resp) {
         console.log(
@@ -600,6 +712,10 @@ export class DMAController {
     swapBytes(data, size) {
         if (size === 1) {
             return data;
+        }
+        if (size === 2) {
+            return ((data & 0xFF) << 8) |
+                ((data >> 8) & 0xFF);
         }
         if (size === 4) {
             return ((data & 0xFF) << 24) |

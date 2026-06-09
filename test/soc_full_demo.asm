@@ -50,7 +50,9 @@ mem_ok:
     sw    t4, 0(t0)          # enable DMA
     sw    t2, 0(t1)          # descriptor word 1: source
     sw    t3, 0(t1)          # descriptor word 2: destination
-    li    t5, 0xF0000004     # dstMode=3, srcMode=3, length=4 words
+    # New mapping: word-increment for src/dst, 4 elements
+    # dstMode=1, srcMode=1, srcWidth=2, dstWidth=2, numElements=4 -> 0x5A000004
+    li    t5, 0x5A000004
     sw    t5, 0(t1)          # descriptor word 3: config
     li    t4, 3
     sw    t4, 0(t0)          # EN | START
