@@ -374,8 +374,9 @@ export const simulator = {
         this.dCache.setEnabled(this.useCache);
         this.l2Cache.setEnabled(this.useCache);
 
-        // TileLink-UH
-        this.tilelink_UH = new TileLink_UH();
+        // TileLink-UH (high-performance fabric, carries a transaction latency)
+        const tilelinkUhLatency = 2;
+        this.tilelink_UH = new TileLink_UH('TileLink-UH', { latency: tilelinkUhLatency });
 
         // RAM, DMA, Bridge, TileLink-UL
         const mainMemoryLatency = 20;

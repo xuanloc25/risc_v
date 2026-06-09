@@ -73,11 +73,17 @@ export class DMARegisters {
         this.fifoDepth = 8;
         this.currentDescriptorWords = [];
 
-        // Data FIFO for payloads (separate from descriptor FIFO)
-        this.dataFifo = [];
-        this.dataFifoDepth = 64;
+        // Independent payload buffers. The READ engine fills readFifo from the
+        // source; an internal datapath shuttles bytes into writeFifo; the WRITE
+        // engine drains writeFifo to the destination. Keeping the two sides on
+        // separate storage decouples reads from writes (no shared FIFO, no
+        // read/write ping-pong on a single buffer).
+        this.readFifo = [];
+        this.writeFifo = [];
+        this.readFifoDepth = 32;
+        this.writeFifoDepth = 32;
 
-        console.log(`[DMA] Registers initialized. FIFO depth: ${this.fifoDepth}`);
+        console.log(`[DMA] Registers initialized. Descriptor FIFO depth: ${this.fifoDepth}, read/write buffer depth: ${this.readFifoDepth}/${this.writeFifoDepth}`);
     }
 
     // Descriptor FIFO computed helpers
@@ -93,50 +99,52 @@ export class DMARegisters {
         return this.descriptorFifo.length >= this.fifoDepth;
     }
 
-    // Data FIFO computed helpers
-    get dataFifoCount() {
-        return this.dataFifo.length;
-    }
+    // READ-side buffer helpers (filled by the read engine)
+    get readFifoCount() { return this.readFifo.length; }
+    get readFifoEmpty() { return this.readFifo.length === 0; }
+    get readFifoFull() { return this.readFifo.length >= this.readFifoDepth; }
+    get readFifoFree() { return this.readFifoDepth - this.readFifo.length; }
 
-    get dataFifoEmpty() {
-        return this.dataFifo.length === 0;
-    }
+    // WRITE-side buffer helpers (drained by the write engine)
+    get writeFifoCount() { return this.writeFifo.length; }
+    get writeFifoEmpty() { return this.writeFifo.length === 0; }
+    get writeFifoFull() { return this.writeFifo.length >= this.writeFifoDepth; }
+    get writeFifoFree() { return this.writeFifoDepth - this.writeFifo.length; }
 
-    get dataFifoFull() {
-        return this.dataFifo.length >= this.dataFifoDepth;
-    }
+    // Combined view, kept for the CTRL status register / debugging.
+    get dataFifoCount() { return this.readFifo.length + this.writeFifo.length; }
+    get dataFifoEmpty() { return this.readFifoEmpty && this.writeFifoEmpty; }
+    get dataFifoFull() { return this.readFifoFull || this.writeFifoFull; }
 
-    // Return a snapshot of data FIFO contents (as unsigned 32-bit numbers)
     dumpDataFifo() {
-        return this.dataFifo.map(v => v >>> 0);
+        return {
+            read: this.readFifo.map(v => v >>> 0),
+            write: this.writeFifo.map(v => v >>> 0)
+        };
     }
 
-    writeDataFifo(word) {
-        if (this.dataFifoFull) {
-            return false;
-        }
-        this.dataFifo.push(word >>> 0);
-        // Log FIFO snapshot to system log console
-        try {
-            const hexContents = this.dataFifo.map(v => '0x' + (v >>> 0).toString(16));
-            console.log(`[DMA][DATAFIFO] PUSH value=0x${(word>>>0).toString(16)} count=${this.dataFifo.length} contents=${hexContents.join(',')}`);
-        } catch (e) {
-            console.log('[DMA][DATAFIFO] PUSH (error formatting contents)');
-        }
+    // Push/pop one byte to the independent READ buffer.
+    pushReadFifo(byte) {
+        if (this.readFifoFull) return false;
+        this.readFifo.push(byte & 0xFF);
         return true;
     }
 
-    readDataFifo() {
-        if (this.dataFifoEmpty) return null;
-        const v = this.dataFifo.shift();
-        // Log FIFO snapshot after pop
-        try {
-            const hexContents = this.dataFifo.map(x => '0x' + (x >>> 0).toString(16));
-            console.log(`[DMA][DATAFIFO] POP value=0x${(v>>>0).toString(16)} count=${this.dataFifo.length} contents=${hexContents.join(',')}`);
-        } catch (e) {
-            console.log('[DMA][DATAFIFO] POP (error formatting contents)');
-        }
-        return v >>> 0;
+    popReadFifo() {
+        if (this.readFifoEmpty) return null;
+        return this.readFifo.shift() & 0xFF;
+    }
+
+    // Push/pop one byte to the independent WRITE buffer.
+    pushWriteFifo(byte) {
+        if (this.writeFifoFull) return false;
+        this.writeFifo.push(byte & 0xFF);
+        return true;
+    }
+
+    popWriteFifo() {
+        if (this.writeFifoEmpty) return null;
+        return this.writeFifo.shift() & 0xFF;
     }
 
     readCtrl() {
@@ -153,8 +161,8 @@ export class DMARegisters {
         // Data FIFO status: bits 24 = empty, 25 = full
         if (this.dataFifoEmpty) ctrl |= (1 << 24);
         if (this.dataFifoFull) ctrl |= (1 << 25);
-        // Data FIFO count (8 bits) at bits [8..15]
-        const dataCount = (this.dataFifo?.length ?? 0) & 0xFF;
+        // Data FIFO count (8 bits) at bits [8..15] — combined read+write occupancy
+        const dataCount = this.dataFifoCount & 0xFF;
         ctrl |= (dataCount << 8);
         if (this.error) ctrl |= (1 << 29);
         if (this.done) ctrl |= (1 << 30);
@@ -240,8 +248,9 @@ export class DMARegisters {
         this.startRequested = false;
         this.descriptorFifo = [];
         this.currentDescriptorWords = [];
-        // clear data FIFO as well
-        this.dataFifo = [];
+        // clear both independent payload buffers as well
+        this.readFifo = [];
+        this.writeFifo = [];
         // reset prefetch progress/state
         this.readProgress = 0;
         this.prefetchMode = false;
@@ -298,8 +307,6 @@ export class DMAController {
         this.burstRemainingReads = 0;
         this.burstRemainingWrites = 0;
         this.pendingRegReq = null;
-
-        this.isDraining = false; //Quản lý trạng thái ép xả cạn FIFO
 
         // Note: use `waitingRequests` array to hold queued requests so the send occurs next tick
 
@@ -465,8 +472,8 @@ export class DMAController {
         this.transferStage = null;
         // track read-prefetch progress separately from write progress
         this.readProgress = 0;
-        // if FIFO can hold the whole transfer, enable strict prefetch mode
-        this.prefetchMode = (this.registers.dataFifoDepth >= this.numElements);
+        // if both buffers together can hold the whole transfer, enable strict prefetch mode
+        this.prefetchMode = ((this.registers.readFifoDepth + this.registers.writeFifoDepth) >= this.numElements);
         this.waitingRequests = [];
         this.pendingResponses = [];
         this.activeRequestLink = null;
@@ -476,8 +483,6 @@ export class DMAController {
         this.registers.busy = true;
         this.registers.done = false;
         this.registers.error = false;
-
-        this.isDraining = false;
 
         console.log(`[DMA] Transfer started: ${this.currentDescriptor.toString()}`);
         console.log(`[DMA] Config: elements=${this.numElements}, bswap=${this.bswap}, srcMode=${this.srcMode}, dstMode=${this.dstMode}, srcWidth=${this.srcWidth}, dstWidth=${this.dstWidth}`);
@@ -497,48 +502,44 @@ export class DMAController {
         try {
             const srcElemSize = this.getElementSize(this.srcWidth);
             const dstElemSize = this.getElementSize(this.dstWidth);
-            
-            // Tổng số byte cần đọc từ nguồn để phục vụ đủ nhu cầu ghi ở đích
+
+            // Total source bytes required to satisfy every destination element.
             const totalSrcBytesNeeded = Math.ceil((this.numElements * dstElemSize) / srcElemSize) * srcElemSize;
-            
-            // Định nghĩa độ dài chuỗi Burst dựa trên burstSize: 0 -> 1 beat, 1 -> 4 beats, 2 -> 8 beats, 3 -> 16 beats...
+
+            // Burst length from burstSize: 0 -> 1 beat, 1 -> 4 beats, 2 -> 8, 3 -> 16...
             const maxBurstBeats = this.burstSize === 0 ? 1 : (1 << (this.burstSize + 1));
 
-            // --- 1. KHỞI TẠO CHU KỲ BURST MỚI KHI CẢ HAI TRẠNG THÁI VỀ 0 ---
+            // Internal datapath: shuttle bytes from the READ buffer into the
+            // WRITE buffer. Because the buffers are independent, the read and
+            // write engines never contend for the same storage (no ping-pong).
+            this._drainReadToWrite();
+
+            // --- 1. START A NEW BURST CYCLE WHEN BOTH ENGINES ARE IDLE ---
             if (this.burstRemainingReads === 0 && this.burstRemainingWrites === 0) {
                 const remainingSrcBeats = Math.ceil((totalSrcBytesNeeded - this.readProgress) / srcElemSize);
-                const freeSpaceBytes = this.registers.dataFifoDepth - this.registers.dataFifo.length;
-                const maxReadsForFifo = Math.floor(freeSpaceBytes / srcElemSize);
+                const maxReadsForFifo = Math.floor(this.registers.readFifoFree / srcElemSize);
 
-                // --- LOGIC ĐIỀU KHIỂN LUỒNG HYSTERESIS (CHỐNG PING-PONG) ---
-                if (this.registers.dataFifoFull) {
-                    // Khi FIFO đầy khít, bật chế độ ÉP XẢ (Draining Mode) để khóa mạch READ lại
-                    this.isDraining = true;
-                    console.log(`[DMA][FLOW CONTROL] FIFO FULL (${this.registers.dataFifo.length}/${this.registers.dataFifoDepth}). Kích hoạt Draining Mode: Chặn READ, ép WRITE liên tục!`);
-                } else if (this.registers.dataFifoEmpty) {
-                    // Chỉ khi nào xả cạn sạch hoàn toàn (Empty), mới giải phóng cờ để cho phép READ tiếp
-                    this.isDraining = false;
-                }
-
-                // ĐIỀU KIỆN READ: Phải còn dữ liệu nguồn, FIFO còn chỗ VÀ KHÔNG nằm trong chế độ ép xả (!this.isDraining)
-                if (remainingSrcBeats > 0 && maxReadsForFifo > 0 && !this.isDraining) {
+                // Prefer READ while the source still has data and the read buffer
+                // has room; otherwise drain the write buffer to the destination.
+                if (remainingSrcBeats > 0 && maxReadsForFifo > 0) {
                     this.burstRemainingReads = Math.min(maxBurstBeats, maxReadsForFifo, remainingSrcBeats);
                     console.log(`[DMA] >>> Starting READ BURST: ${this.burstRemainingReads} beats consecutive`);
-                }
-                // Ngược lại, chuyển sang kích hoạt WRITE BURST để xả dữ liệu từ FIFO ra ngoại vi 
-                else {
-                    const availableDstElements = Math.floor(this.registers.dataFifo.length / dstElemSize);
+                } else {
+                    const availableDstElements = Math.floor(this.registers.writeFifoCount / dstElemSize);
                     const remainingDstElements = this.numElements - this.transferProgress;
 
                     if (remainingDstElements > 0 && availableDstElements > 0) {
                         this.burstRemainingWrites = Math.min(maxBurstBeats, availableDstElements, remainingDstElements);
                         console.log(`[DMA] >>> Starting WRITE BURST: ${this.burstRemainingWrites} beats consecutive`);
-                    } else if (remainingDstElements > 0 && availableDstElements === 0 && remainingSrcBeats === 0) {
-                        // Trường hợp đặc biệt: Hết dữ liệu nguồn để đọc nhưng dữ liệu dư trong FIFO không đủ tạo thành 1 phần tử đích
-                        console.warn(`[DMA] Stalling: Trailing bytes in FIFO cannot form a complete destination element.`);
+                    } else if (remainingDstElements > 0 && availableDstElements === 0 &&
+                               remainingSrcBeats === 0 && this.registers.readFifoEmpty) {
+                        // Source drained and the leftover bytes cannot form a full destination element.
+                        console.warn(`[DMA] Stalling: Trailing bytes in buffer cannot form a complete destination element.`);
                         this.completeTransfer();
                         return;
                     } else {
+                        // Nothing to start this tick (e.g. bytes still moving through
+                        // the read buffer); let the datapath catch up next tick.
                         if (this.transferProgress >= this.numElements) {
                             this.completeTransfer();
                         }
@@ -547,38 +548,55 @@ export class DMAController {
                 }
             }
 
-            // --- 2. THỰC THI CHUỖI READ BURST (ĐỌC LIÊN TIẾP TỪ RAM) ---
+            // --- 2. READ: fill readFifo from the source ---
             if (this.burstRemainingReads > 0) {
-                // If no outstanding read request enqueued for this burst, create a single multi-beat GET
                 if (this.waitingRequests.length === 0) {
-                    const readsToEnqueue = this.burstRemainingReads;
-                    const startAddr = this.calculateAddress(this.currentSrcAddr, this.readProgress / srcElemSize, this.srcMode, srcElemSize);
-                    const totalBytes = readsToEnqueue * srcElemSize;
-                    const sizeLog2 = Math.log2(totalBytes) >>> 0;
-                    const readReq = { type: TL_A_Opcode.Get, address: startAddr, size: sizeLog2 };
-                    const requestLink = this._resolveLink(startAddr);
-                    // expectedBeats helps us know when the burst completes
-                    this.waitingRequests.push({ req: readReq, link: requestLink, from: 'dma', __sent: false, expectedBeats: readsToEnqueue });
-                    console.log(`[DMA] Enqueued multi-beat READ addr=0x${startAddr.toString(16)} bytes=${totalBytes} size=${sizeLog2}`);
-                    return; // let tick() send the queued request(s)
+                    if (this._useReadBurst(this.burstRemainingReads)) {
+                        // Contiguous word source: ONE multi-beat GET (power-of-two beats).
+                        const readsToEnqueue = this._largestPow2AtMost(this.burstRemainingReads);
+                        const startAddr = this.calculateAddress(this.currentSrcAddr, this.readProgress / srcElemSize, this.srcMode, srcElemSize);
+                        const totalBytes = readsToEnqueue * srcElemSize;
+                        const sizeLog2 = Math.log2(totalBytes) >>> 0;
+                        const readReq = { type: TL_A_Opcode.Get, address: startAddr, size: sizeLog2 };
+                        const requestLink = this._resolveLink(startAddr);
+                        // expectedBeats helps us know when the burst completes
+                        this.waitingRequests.push({ req: readReq, link: requestLink, from: 'dma', __sent: false, expectedBeats: readsToEnqueue });
+                        console.log(
+                            `[DMA] ISSUE_READ via=${describeLink(requestLink)} ` +
+                            `addr=0x${startAddr.toString(16)} bytes=${totalBytes} size=${sizeLog2} beats=${readsToEnqueue} (multi-beat)`
+                        );
+                        return; // let tick() send the queued request(s)
+                    }
+
+                    // Sub-word width or non-contiguous mode: one Get per source
+                    // element so each response maps 1:1 to one source element.
+                    const addr = this.calculateAddress(this.currentSrcAddr, this.readProgress / srcElemSize, this.srcMode, srcElemSize);
+                    const readReq = this.buildReadRequest(addr, this.srcWidth);
+                    const requestLink = this._resolveLink(addr);
+                    this.waitingRequests.push({ req: readReq, link: requestLink, from: 'dma', __sent: false, expectedBeats: 1 });
+                    console.log(
+                        `[DMA] ISSUE_READ via=${describeLink(requestLink)} ` +
+                        `addr=0x${addr.toString(16)} bytes=${srcElemSize} size=${this.srcWidth} beats=1`
+                    );
+                    return;
                 }
 
-                // Process pending beat responses from memory
+                // Process pending beat responses from memory into the READ buffer
                 if (this.pendingResponses.length > 0) {
                     const resp = this.pendingResponses.shift();
                     let data = resp.data >>> 0;
                     if (this.bswap) data = this.swapBytes(data, srcElemSize);
 
                     if (this.srcWidth === 2) { // 32-bit Word
-                        this.registers.writeDataFifo(data & 0xFF);
-                        this.registers.writeDataFifo((data >>> 8) & 0xFF);
-                        this.registers.writeDataFifo((data >>> 16) & 0xFF);
-                        this.registers.writeDataFifo((data >>> 24) & 0xFF);
+                        this.registers.pushReadFifo(data & 0xFF);
+                        this.registers.pushReadFifo((data >>> 8) & 0xFF);
+                        this.registers.pushReadFifo((data >>> 16) & 0xFF);
+                        this.registers.pushReadFifo((data >>> 24) & 0xFF);
                     } else if (this.srcWidth === 1) { // 16-bit Halfword
-                        this.registers.writeDataFifo(data & 0xFF);
-                        this.registers.writeDataFifo((data >>> 8) & 0xFF);
+                        this.registers.pushReadFifo(data & 0xFF);
+                        this.registers.pushReadFifo((data >>> 8) & 0xFF);
                     } else { // 8-bit Byte
-                        this.registers.writeDataFifo(data & 0xFF);
+                        this.registers.pushReadFifo(data & 0xFF);
                     }
 
                     this.activeRequestLink = null;
@@ -597,49 +615,74 @@ export class DMAController {
                 return;
             }
 
-            // --- 3. THỰC THI CHUỖI WRITE BURST (GHI LIÊN TIẾP RA ĐÍCH) ---
+            // --- 3. WRITE BURST: drain writeFifo -> destination ---
             if (this.burstRemainingWrites > 0) {
-                // enqueue a sequence of write beats for this burst if none queued yet
+                // enqueue the write transaction(s) for this burst if none queued yet
                 if (this.waitingRequests.length === 0) {
                     const writesToEnqueue = this.burstRemainingWrites;
-                    for (let i = 0; i < writesToEnqueue; i++) {
-                        let dataToWrite = 0;
-                        // pack bytes from FIFO for each destination element
-                        if (this.dstWidth === 2) {
-                            const b0 = this.registers.readDataFifo();
-                            const b1 = this.registers.readDataFifo();
-                            const b2 = this.registers.readDataFifo();
-                            const b3 = this.registers.readDataFifo();
-                            dataToWrite = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
-                        } else if (this.dstWidth === 1) {
-                            const b0 = this.registers.readDataFifo();
-                            const b1 = this.registers.readDataFifo();
-                            dataToWrite = b0 | (b1 << 8);
-                        } else {
-                            dataToWrite = this.registers.readDataFifo();
-                        }
 
+                    // Pack one destination element worth of bytes from the WRITE buffer.
+                    const packElement = () => {
+                        if (this.dstWidth === 2) {
+                            const b0 = this.registers.popWriteFifo();
+                            const b1 = this.registers.popWriteFifo();
+                            const b2 = this.registers.popWriteFifo();
+                            const b3 = this.registers.popWriteFifo();
+                            return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+                        } else if (this.dstWidth === 1) {
+                            const b0 = this.registers.popWriteFifo();
+                            const b1 = this.registers.popWriteFifo();
+                            return (b0 | (b1 << 8)) >>> 0;
+                        }
+                        return this.registers.popWriteFifo() >>> 0;
+                    };
+
+                    if (this._useWriteBurst(writesToEnqueue)) {
+                        // True TileLink-UH multi-beat write: ONE PutFullData
+                        // transaction carrying a power-of-two number of data beats
+                        // to a contiguous block. Any remainder is written by a
+                        // subsequent pass (next burst or single-word fallback).
+                        const burstBeats = this._largestPow2AtMost(writesToEnqueue);
+                        const beats = [];
+                        for (let i = 0; i < burstBeats; i++) beats.push(packElement());
+                        const startAddr = this.calculateAddress(this.currentDstAddr, this.transferProgress, this.dstMode, dstElemSize);
+                        const totalBytes = burstBeats * dstElemSize;
+                        const sizeLog2 = Math.log2(totalBytes) >>> 0;
+                        const writeReq = { type: TL_A_Opcode.PutFullData, address: startAddr, value: beats[0] >>> 0, beats, size: sizeLog2 };
+                        const requestLink = this._resolveLink(startAddr);
+                        this.waitingRequests.push({ req: writeReq, link: requestLink, from: 'dma', __sent: false, expectedBeats: burstBeats });
+                        console.log(
+                            `[DMA] ISSUE_WRITE via=${describeLink(requestLink)} ` +
+                            `addr=0x${startAddr.toString(16)} bytes=${totalBytes} size=${sizeLog2} beats=${burstBeats} (multi-beat)`
+                        );
+                        return;
+                    }
+
+                    // Fallback: one single-word transaction per destination element
+                    // (non-contiguous address modes or sub-word element widths).
+                    for (let i = 0; i < writesToEnqueue; i++) {
+                        const dataToWrite = packElement();
                         const addr = this.calculateAddress(this.currentDstAddr, this.transferProgress + i, this.dstMode, dstElemSize);
                         const writeReq = this.buildWriteRequest(addr, dataToWrite, this.dstWidth);
                         const requestLink = this._resolveLink(addr);
-                        this.waitingRequests.push({ req: writeReq, link: requestLink, from: 'dma', __sent: false });
+                        this.waitingRequests.push({ req: writeReq, link: requestLink, from: 'dma', __sent: false, expectedBeats: 1 });
                         console.log(
-                            `[DMA] BURST_WRITE queued via=${describeLink(requestLink)} ` +
+                            `[DMA] ISSUE_WRITE via=${describeLink(requestLink)} ` +
                             `element=${this.transferProgress + i + 1}/${this.numElements} ` +
                             `addr=0x${addr.toString(16)} data=0x${dataToWrite.toString(16)}`
                         );
-                        console.log(`[DMA] Sending queued request via=${describeLink(requestLink)} addr=0x${addr.toString(16)} (queued)`);
                     }
                     return;
                 }
 
-                // process any incoming write ack
+                // process incoming write ack(s)
                 if (this.pendingResponses.length > 0) {
                     this.pendingResponses.shift();
-                    if (this.waitingRequests.length > 0) this.waitingRequests.shift();
+                    const queued = this.waitingRequests.shift();
+                    const beatsDone = (queued && typeof queued.expectedBeats === 'number') ? queued.expectedBeats : 1;
                     this.activeRequestLink = null;
-                    this.transferProgress++;
-                    this.burstRemainingWrites--; // Giảm số lượng beat cần ghi của chuỗi burst hiện tại
+                    this.transferProgress += beatsDone;
+                    this.burstRemainingWrites -= beatsDone; // beats committed by this ack
                     console.log(`[DMA] Progress: ${this.transferProgress}/${this.numElements}`);
 
                     if (this.transferProgress >= this.numElements) {
@@ -654,6 +697,39 @@ export class DMAController {
             this.registers.busy = false;
             this.currentDescriptor = null;
         }
+    }
+
+    // Internal DMA datapath: move bytes from the independent READ buffer into
+    // the independent WRITE buffer. This is the only point where the two sides
+    // meet, which is what keeps the read and write engines decoupled.
+    _drainReadToWrite() {
+        const regs = this.registers;
+        let moved = 0;
+        while (!regs.readFifoEmpty && !regs.writeFifoFull) {
+            regs.pushWriteFifo(regs.popReadFifo());
+            moved++;
+        }
+        if (moved > 0) {
+            console.log(`[DMA][DATAPATH] moved ${moved} byte(s) read->write buffer (read=${regs.readFifoCount}, write=${regs.writeFifoCount})`);
+        }
+    }
+
+    // Largest power of two <= n (0 for n<=0). A TileLink burst size is log2 of
+    // a power-of-two byte count, so multi-beat transactions must carry a
+    // power-of-two number of beats; any remainder is issued on the next pass.
+    _largestPow2AtMost(n) {
+        return n <= 0 ? 0 : (1 << (31 - Math.clz32(n)));
+    }
+
+    // A real multi-beat burst maps to a contiguous memory block, so it only
+    // applies to word-width, increment-mode transfers of two or more beats.
+    // Everything else falls back to single-element transactions.
+    _useReadBurst(readsToEnqueue) {
+        return readsToEnqueue >= 2 && this.srcWidth === 2 && this.srcMode === 1;
+    }
+
+    _useWriteBurst(writesToEnqueue) {
+        return writesToEnqueue >= 2 && this.dstWidth === 2 && this.dstMode === 1;
     }
 
     calculateAddress(baseAddr, progress, mode, elementSize) {

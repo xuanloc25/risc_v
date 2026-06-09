@@ -93,13 +93,20 @@ export class Mem {
         const sizeLog2 = getTransferSizeLog2(req, 2);
         const bytesRequested = 1 << sizeLog2;
 
-        if (bytesRequested > 4) {
+        const beats = Array.isArray(req.beats) ? req.beats : null;
+        if (bytesRequested > 4 || (beats && beats.length > 1)) {
+            // When an explicit beats[] payload is present (write burst), its
+            // length is authoritative for the beat count — the size field can
+            // only encode powers of two, so never re-derive the count from it.
+            const totalBytes = beats ? beats.length * 4 : bytesRequested;
             this.burstState = {
                 req,
-                totalBytes: bytesRequested,
-                bytesRemaining: bytesRequested,
+                totalBytes,
+                bytesRemaining: totalBytes,
                 currentAddr: req.address >>> 0,
                 isWrite: isTileLinkWrite(req.type),
+                beats,
+                beatIndex: 0,
                 refillBeat: req.type === 'fill',
                 blockBase: (req.blockBase ?? req.address) >>> 0,
                 readyCycle: this.cycle + this.burstBeatLatency
@@ -185,7 +192,42 @@ export class Mem {
                 state.readyCycle = this.cycle + this.burstBeatLatency;
             }
         } else {
-            this.burstState = null;
+            // Multi-beat WRITE burst: commit one word per beat to consecutive
+            // addresses, then emit a single AccessAck when the last beat lands.
+            const beatCount = Math.ceil(state.totalBytes / 4);
+            const beatIndex = state.beatIndex;
+            const addr = state.currentAddr >>> 0;
+            const data = state.beats ? (state.beats[beatIndex] >>> 0) : 0;
+            this.directWrite(addr, data, 2);
+
+            console.log(
+                `[${this.name}] ${this.name} -> ${bus?.name ?? 'TileLink'} WRITE_BEAT ` +
+                `to=${state.req.from} addr=0x${addr.toString(16)} data=0x${(data >>> 0).toString(16)} ` +
+                `${beatIndex + 1}/${beatCount}`
+            );
+
+            state.beatIndex++;
+            state.bytesRemaining -= 4;
+            state.currentAddr += 4;
+
+            const lastBeat = state.bytesRemaining <= 0;
+            if (lastBeat) {
+                bus.sendResponse({
+                    from: this.name,
+                    to: state.req.from,
+                    type: TL_D_Opcode.AccessAck,
+                    address: state.req.address >>> 0,
+                    size: getTransferSizeLog2(state.req, 2),
+                    refillBeat: state.refillBeat,
+                    blockBase: state.blockBase,
+                    beatIndex,
+                    beatCount,
+                    lastBeat: true
+                });
+                this.burstState = null;
+            } else {
+                state.readyCycle = this.cycle + this.burstBeatLatency;
+            }
         }
     }
 

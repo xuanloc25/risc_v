@@ -45,10 +45,18 @@ function describeDOpcode(type) {
 }
 
 export class TileLinkBase {
-    constructor({ name = 'TileLink', variant = 'UL', allowedOpcodes = [] } = {}) {
+    constructor({ name = 'TileLink', variant = 'UL', allowedOpcodes = [], latency = 0 } = {}) {
         this.name = name;
         this.variant = variant;
         this.allowedOpcodes = new Set(allowedOpcodes);
+
+        // Transaction latency: number of bus cycles a request is held on the
+        // fabric before it is forwarded to the slave. latency = 0 reproduces the
+        // original same-cycle forwarding behaviour.
+        this.latency = latency;
+        this.cycle = 0;
+        this._inFlightForwarded = false;
+        this._forwardAt = 0;
 
         this.requestQueue = [];
         this.inFlight = null;
@@ -105,22 +113,35 @@ export class TileLinkBase {
             throw new Error(`${this.name} has no attached slave`);
         }
 
+        this.cycle++;
+
         this.signals.a.ready = !this.inFlight;
         this.signals.d.ready = true;
 
+        // Accept the next request from the queue when the fabric is idle. The
+        // request is latched immediately but only forwarded to the slave after
+        // `latency` cycles, modelling TileLink fabric latency.
         if (!this.inFlight && this.requestQueue.length > 0) {
             const nextReq = this.requestQueue.shift();
             this._validateRequest(nextReq);
 
             this.inFlight = nextReq;
+            this._inFlightForwarded = false;
+            this._forwardAt = this.cycle + this.latency;
             Object.assign(this.signals.a, snapshotAChannel(nextReq));
 
             const opcodeName = describeAOpcode(nextReq.type);
             console.log(
                 `[${this.name}][A] issue from=${nextReq.from} type=${opcodeName} ` +
-                `addr=0x${(nextReq.address >>> 0).toString(16)} val=${hex(nextReq.value ?? '')}`
+                `addr=0x${(nextReq.address >>> 0).toString(16)} val=${hex(nextReq.value ?? '')}` +
+                (this.latency > 0 ? ` (fabric latency=${this.latency})` : '')
             );
+        }
 
+        // Forward the latched request to the slave once its latency has elapsed.
+        if (this.inFlight && !this._inFlightForwarded && this.cycle >= this._forwardAt) {
+            const nextReq = this.inFlight;
+            const opcodeName = describeAOpcode(nextReq.type);
             const slaveEntry = this._selectSlaveEntry(nextReq.address);
             if (typeof this.onTraceTransaction === 'function') {
                 this.onTraceTransaction('request', {
@@ -136,7 +157,10 @@ export class TileLinkBase {
                 `from=${nextReq.from} type=${opcodeName} addr=0x${(nextReq.address >>> 0).toString(16)}`
             );
             slaveEntry.target.receiveRequest(nextReq);
-        } else if (!this.inFlight) {
+            this._inFlightForwarded = true;
+        }
+
+        if (!this.inFlight) {
             clearChannel(this.signals.a, this.signalDefaults.a);
             this.signals.a.ready = true;
         }
