@@ -72,13 +72,13 @@ function readStoredNumber(key, fallback, allowedValues) {
 }
 
 function readStoredTlbWays(tlbSize) {
-    if (typeof localStorage === 'undefined') return 4;
-    const rawValue = localStorage.getItem('mmu_tlb_ways') ?? '4';
+    if (typeof localStorage === 'undefined') return 2;
+    const rawValue = localStorage.getItem('mmu_tlb_ways') ?? '2';
     const value = rawValue === 'fully' ? 'fully' : Number.parseInt(rawValue, 10);
-    if (!MMU_TLB_WAY_OPTIONS.includes(value)) return 4;
+    if (!MMU_TLB_WAY_OPTIONS.includes(value)) return 2;
 
     const waysValue = value === 'fully' ? tlbSize : value;
-    if (waysValue > tlbSize || tlbSize % waysValue !== 0) return 4;
+    if (waysValue > tlbSize || tlbSize % waysValue !== 0) return 2;
     return value;
 }
 
@@ -342,7 +342,7 @@ export const simulator = {
         const mmuTlbSize = isBrowser
             ? readStoredNumber('mmu_tlb_size', 8, MMU_TLB_SIZE_OPTIONS)
             : 8;
-        const mmuTlbWays = isBrowser ? readStoredTlbWays(mmuTlbSize) : 4;
+        const mmuTlbWays = isBrowser ? readStoredTlbWays(mmuTlbSize) : 2;
         this.mmu = new MMU(null, null, {
             pageSize: mmuPageSize,
             tlbSize: mmuTlbSize,

@@ -1211,23 +1211,13 @@ function renderMMUView() {
     const translations = s.translations ?? 0;
     const tlbHits = s.tlbHits ?? 0;
     const tlbMisses = s.tlbMisses ?? 0;
-    const tlbRefills = s.tlbRefills ?? 0;
-    const tlbEvictions = s.tlbEvictions ?? 0;
-    const pageTableHits = s.pageTableHits ?? 0;
-    const identityFallbacks = s.identityFallbacks ?? 0;
-    const permissionFaults = s.permissionFaults ?? 0;
     const hitRate = translations > 0 ? `${((tlbHits / translations) * 100).toFixed(1)}%` : '0.0%';
 
     const overviewMetrics = [
         ['Translations', translations],
         ['TLB Hits', tlbHits],
         ['TLB Misses', tlbMisses],
-        ['TLB Hit Rate', hitRate],
-        ['TLB Refills', tlbRefills],
-        ['TLB Evictions', tlbEvictions],
-        ['Page Table Hits', pageTableHits],
-        ['Identity Fallbacks', identityFallbacks],
-        ['Permission Faults', permissionFaults]
+        ['TLB Hit Rate', hitRate]
     ];
 
     mmuOverviewStats.innerHTML = `
@@ -1243,19 +1233,10 @@ function renderMMUView() {
     });
 
     const configRows = [
-        ['Position', 'CPU -> MMU -> L1I/L1D -> L2 -> TileLink-UH'],
         ['Page size', `${pageSize} bytes (${formatHex(pageSize, 4)})`],
-        ['Offset bits', `${offsetBits}`],
-        ['VPN / PPN bits', `${vpnBits} / ${vpnBits}`],
-        ['Page table entries', `${pageTableEntries.length}`],
-        ['TLB Capacity', `${mmu.tlbSize} entries`],
-        ['TLB Occupied', `${mmu.tlbBlocks.filter(b => b.valid).length} entries`],
-        ['TLB Policy / Eviction', `Set-Associative (${mmu.tlbSets} sets x ${mmu.tlbWays} ways), LRU eviction`],
-        ['Identity fallback', 'Enabled for unmapped bare-metal addresses'],
-        ['Permission checks', 'Read / Write / Execute per mapped page'],
-        ['Fetch route', endpointName(mmu.instructionLowerPort, 'instruction-cache')],
-        ['Data route', endpointName(mmu.dataLowerPort, 'data-cache')],
-        ['Last reference', `${mmu.referenceCounter ?? 0}`]
+        ['TLB', `${mmu.tlbSize} entries, ${mmu.tlbSets} sets x ${mmu.tlbWays} ways, LRU`],
+        ['Permission checks', 'Read / Write / Execute'],
+        ['Identity fallback', 'Enabled (bare-metal)']
     ];
 
     mmuConfigTableBody.innerHTML = '';
@@ -1376,32 +1357,31 @@ function renderCacheView() {
         tableBody.innerHTML = '';
 
         if (!simulator.useCache) {
-            tableBody.innerHTML = '<tr><td colspan="7">Cache disabled.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="4">Cache disabled.</td></tr>';
             if (statsNode) statsNode.textContent = `${label} disabled`;
             return;
         }
 
         if (!cache) {
-            tableBody.innerHTML = '<tr><td colspan="7">Cache not initialized.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="4">Cache not initialized.</td></tr>';
             if (statsNode) statsNode.textContent = `${label} not initialized`;
             return;
         }
 
         const assoc = cache.policy?.numWays ?? cache.numWays ?? 1;
+        let validCount = 0;
         cache.blocks.forEach(block => {
+            if (!block.valid) return;
+            validCount++;
             const row = tableBody.insertRow();
-            const set = Math.floor(block.id / assoc);
-            const way = block.id % assoc;
-            const bytesPreview = Array.from(block.data.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-
-            row.insertCell().textContent = set;
-            row.insertCell().textContent = way;
-            row.insertCell().textContent = block.valid ? '1' : '0';
-            row.insertCell().textContent = block.modified ? '1' : '0';
+            row.insertCell().textContent = Math.floor(block.id / assoc);
+            row.insertCell().textContent = block.id % assoc;
             row.insertCell().textContent = formatHex(block.tag);
-            row.insertCell().textContent = block.lastReference;
-            row.insertCell().textContent = block.valid ? bytesPreview : '';
+            row.insertCell().textContent = block.modified ? '1' : '0';
         });
+        if (validCount === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4">No cached blocks yet.</td></tr>';
+        }
 
         if (statsNode) {
             const s = cache.statistics;
@@ -2139,7 +2119,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setSelectValue(mmuPageSizeSelect, localStorage.getItem('mmu_page_size') ?? '4096', '4096');
     setSelectValue(mmuTlbSizeSelect, localStorage.getItem('mmu_tlb_size') ?? '8', '8');
-    setSelectValue(mmuTlbWaysSelect, localStorage.getItem('mmu_tlb_ways') ?? '4', '4');
+    setSelectValue(mmuTlbWaysSelect, localStorage.getItem('mmu_tlb_ways') ?? '2', '2');
 
     if (applyMmuSettingsBtn && mmuPageSizeSelect && mmuTlbSizeSelect && mmuTlbWaysSelect) {
         applyMmuSettingsBtn.addEventListener('click', () => {

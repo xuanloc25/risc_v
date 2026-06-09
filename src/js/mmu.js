@@ -29,7 +29,7 @@ function describeEndpoint(endpoint, fallback = 'lower') {
 }
 
 export class MMU {
-    constructor(upperPort = null, lowerPort = null, { pageSize = 4096, cacheabilityPredicate = () => true, tlbSize = 8, tlbWays = 4 } = {}) {
+    constructor(upperPort = null, lowerPort = null, { pageSize = 4096, cacheabilityPredicate = () => true, tlbSize = 8, tlbWays = 2 } = {}) {
         // MMU nằm giữa CPU và hệ thống cache/bộ nhớ cấp thấp.
         // Nó biên dịch địa chỉ ảo, thực thi các quyền, và gắn thẻ
         // yêu cầu với thông tin khả năng lưu đệm (cacheability) cho các cấp thấp hơn.

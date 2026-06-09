@@ -289,10 +289,10 @@
                                         <div
                                             style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="mmuPageSizeSelect"
-                                                style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">Page
+                                                style="font-size: 0.9rem; color: #2d3436; font-weight: 500;">Page
                                                 Size:</label>
                                             <select id="mmuPageSizeSelect"
-                                                style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
+                                                style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.9rem;">
                                                 <option value="1024">1 KB</option>
                                                 <option value="2048">2 KB</option>
                                                 <option value="4096" selected>4 KB</option>
@@ -302,10 +302,10 @@
                                         <div
                                             style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="mmuTlbSizeSelect"
-                                                style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">TLB
+                                                style="font-size: 0.9rem; color: #2d3436; font-weight: 500;">TLB
                                                 Entries:</label>
                                             <select id="mmuTlbSizeSelect"
-                                                style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
+                                                style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.9rem;">
                                                 <option value="4">4 slots</option>
                                                 <option value="8" selected>8 slots</option>
                                                 <option value="16">16 slots</option>
@@ -315,16 +315,16 @@
                                         <div
                                             style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="mmuTlbWaysSelect"
-                                                style="font-size: 0.8rem; color: #2d3436; font-weight: 500;">Associativity:</label>
+                                                style="font-size: 0.9rem; color: #2d3436; font-weight: 500;">Associativity:</label>
                                             <select id="mmuTlbWaysSelect"
-                                                style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem;">
-                                                <option value="2">2-Way Set-Associative</option>
-                                                <option value="4" selected>4-Way Set-Associative</option>
+                                                style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.9rem;">
+                                                <option value="2" selected>2-Way Set-Associative</option>
+                                                <option value="4">4-Way Set-Associative</option>
                                                 <option value="fully">Fully Associative</option>
                                             </select>
                                         </div>
                                         <button id="applyMmuSettingsBtn" class="mdc-button mdc-button--raised"
-                                            style="width: 100%; margin-top: 4px; height: 32px; font-size: 0.78rem;">
+                                            style="width: 100%; margin-top: 4px; height: 34px; font-size: 0.85rem;">
                                             <span class="mdc-button__label">Apply & Reset Simulator</span>
                                         </button>
                                     </div>
@@ -451,11 +451,8 @@
                                         <tr>
                                             <th>Set</th>
                                             <th>Way</th>
-                                            <th>Valid</th>
-                                            <th>Dirty</th>
                                             <th>Tag</th>
-                                            <th>Last Ref</th>
-                                            <th>Bytes (0-15)</th>
+                                            <th>Dirty</th>
                                         </tr>
                                     </thead>
                                     <tbody id="l1iCacheTableBody"></tbody>
@@ -472,11 +469,8 @@
                                         <tr>
                                             <th>Set</th>
                                             <th>Way</th>
-                                            <th>Valid</th>
-                                            <th>Dirty</th>
                                             <th>Tag</th>
-                                            <th>Last Ref</th>
-                                            <th>Bytes (first 8)</th>
+                                            <th>Dirty</th>
                                         </tr>
                                     </thead>
                                     <tbody id="l1dCacheTableBody"></tbody>
@@ -493,11 +487,8 @@
                                         <tr>
                                             <th>Set</th>
                                             <th>Way</th>
-                                            <th>Valid</th>
-                                            <th>Dirty</th>
                                             <th>Tag</th>
-                                            <th>Last Ref</th>
-                                            <th>Bytes (first 8)</th>
+                                            <th>Dirty</th>
                                         </tr>
                                     </thead>
                                     <tbody id="l2CacheTableBody"></tbody>

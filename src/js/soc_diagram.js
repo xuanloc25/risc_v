@@ -3,8 +3,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 export const SOC_NODES = {
     cpu: {
         name: 'RISC-V Core',
-        x: 375.5,
-        y: 24,
+        x: 225.5,
+        y: 12,
         w: 235,
         h: 56,
         group: 'compute',
@@ -17,8 +17,8 @@ export const SOC_NODES = {
     },
     mmu: {
         name: 'MMU',
-        x: 398,
-        y: 124,
+        x: 248,
+        y: 86,
         w: 190,
         h: 56,
         group: 'memory',
@@ -31,8 +31,8 @@ export const SOC_NODES = {
     },
     l1i: {
         name: 'L1I Cache',
-        x: 80.5,
-        y: 220,
+        x: 65,
+        y: 166,
         w: 205,
         h: 56,
         group: 'memory',
@@ -46,8 +46,8 @@ export const SOC_NODES = {
     },
     l1d: {
         name: 'L1D Cache',
-        x: 700.5,
-        y: 220,
+        x: 420,
+        y: 166,
         w: 205,
         h: 56,
         group: 'memory',
@@ -61,8 +61,8 @@ export const SOC_NODES = {
     },
     l2: {
         name: 'L2 Cache',
-        x: 398,
-        y: 220,
+        x: 248,
+        y: 254,
         w: 190,
         h: 56,
         group: 'memory',
@@ -77,7 +77,7 @@ export const SOC_NODES = {
     dma: {
         name: 'DMA Controller',
         x: 885,
-        y: 24,
+        y: 12,
         w: 180,
         h: 60,
         group: 'compute',
@@ -90,8 +90,8 @@ export const SOC_NODES = {
     },
     'tl-uh': {
         name: 'TileLink-UH',
-        x: 388,
-        y: 370,
+        x: 238,
+        y: 360,
         w: 210,
         h: 60,
         group: 'bus',
@@ -104,8 +104,8 @@ export const SOC_NODES = {
     },
     memory: {
         name: 'Main Memory',
-        x: 73,
-        y: 370,
+        x: 230.5,
+        y: 452,
         w: 225,
         h: 60,
         group: 'memory',
@@ -119,7 +119,7 @@ export const SOC_NODES = {
     'tl-ul': {
         name: 'TileLink-UL',
         x: 897,
-        y: 370,
+        y: 360,
         w: 210,
         h: 60,
         group: 'bus',
@@ -130,20 +130,20 @@ export const SOC_NODES = {
         status: 'Idle',
         logModule: 'tilelink',
         ports: {
-            uart: { x: 34, y: 60, side: 'bottom' },
-            led: { x: 79, y: 60, side: 'bottom' },
-            keyboard: { x: 143, y: 60, side: 'bottom' },
-            mouse: { x: 188, y: 60, side: 'bottom' }
+            uart: { x: 42, y: 60, side: 'bottom' },
+            led: { x: 84, y: 60, side: 'bottom' },
+            keyboard: { x: 126, y: 60, side: 'bottom' },
+            mouse: { x: 168, y: 60, side: 'bottom' }
         }
     },
     uart: {
         name: 'UART Console',
-        x: 332.5,
-        y: 544,
-        w: 158,
-        h: 54,
+        x: 486,
+        y: 552,
+        w: 150,
+        h: 48,
         group: 'peripheral',
-        icon: 'terminal',
+        icon: null,
         desc: 'MMIO 0x10000000',
         tooltip: 'UART Console: character-based serial communication interface. Prints program output and receives console input.',
         statusId: 'soc-status-uart',
@@ -151,17 +151,17 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'uartInput',
         ports: {
-            busTop: { x: 79, y: 0, side: 'top' }
+            busTop: { x: 75, y: 0, side: 'top' }
         }
     },
     led: {
         name: 'LED Matrix',
-        x: 544.5,
-        y: 544,
-        w: 165,
-        h: 54,
+        x: 654,
+        y: 552,
+        w: 150,
+        h: 48,
         group: 'peripheral',
-        icon: 'grid_on',
+        icon: null,
         desc: 'MMIO 0xFF000000',
         tooltip: 'LED Matrix: 32x32 color matrix. Writing words in the 0xFF000000 address range updates pixel colors (0x00RRGGBB).',
         statusId: 'soc-status-led',
@@ -169,17 +169,17 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'ledMatrixCanvas',
         ports: {
-            busTop: { x: 83, y: 0, side: 'top' }
+            busTop: { x: 75, y: 0, side: 'top' }
         }
     },
     keyboard: {
         name: 'Keyboard',
-        x: 769.5,
-        y: 544,
-        w: 165,
-        h: 54,
+        x: 822,
+        y: 552,
+        w: 150,
+        h: 48,
         group: 'peripheral',
-        icon: 'keyboard',
+        icon: null,
         desc: 'MMIO 0xFFFF0000',
         tooltip: 'Keyboard Peripheral: buffers keystrokes as ASCII values to be polled by program instructions.',
         statusId: 'soc-status-keyboard',
@@ -187,17 +187,17 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'keyboardInput',
         ports: {
-            busTop: { x: 83, y: 0, side: 'top' }
+            busTop: { x: 75, y: 0, side: 'top' }
         }
     },
     mouse: {
         name: 'Mouse',
-        x: 1002,
-        y: 544,
-        w: 165,
-        h: 54,
+        x: 990,
+        y: 552,
+        w: 150,
+        h: 48,
         group: 'peripheral',
-        icon: 'mouse',
+        icon: null,
         desc: 'MMIO 0xFF100000',
         tooltip: 'Mouse Peripheral: reports cursor coordinates (X, Y) and click status when interacting with the LED Matrix canvas.',
         statusId: 'soc-status-mouse',
@@ -205,19 +205,19 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'ledMatrixCanvas',
         ports: {
-            busTop: { x: 83, y: 0, side: 'top' }
+            busTop: { x: 75, y: 0, side: 'top' }
         }
     }
 };
 
 export const SOC_EDGES = [
-    { id: 'cpuToMmu', from: 'cpu:bottom', to: 'mmu:top', bus: 'core', markers: false },
+    { id: 'cpuToMmu', from: 'cpu:bottom', to: 'mmu:top', bus: 'core', bidirectional: true },
     { id: 'mmuToL1I', from: 'mmu:bottom.30', to: 'l1i:top.50', bus: 'core', bidirectional: true },
     { id: 'mmuToL1D', from: 'mmu:bottom.70', to: 'l1d:top.50', bus: 'core', bidirectional: true },
-    { id: 'l1iToL2', from: 'l1i:right', to: 'l2:left', bus: 'core', bidirectional: true },
-    { id: 'l1dToL2', from: 'l1d:left', to: 'l2:right', bus: 'core', bidirectional: true },
+    { id: 'l1iToL2', from: 'l1i:right', to: 'l2:top.35', bus: 'core', bidirectional: false },
+    { id: 'l1dToL2', from: 'l1d:left', to: 'l2:top.65', bus: 'core', bidirectional: false },
     { id: 'l2ToUh', from: 'l2:bottom', to: 'tl-uh:top', bus: 'uh', bidirectional: true },
-    { id: 'uhToMainMemory', from: 'tl-uh:left', to: 'memory:right', bus: 'uh', bidirectional: true },
+    { id: 'uhToMainMemory', from: 'tl-uh:bottom', to: 'memory:top', bus: 'uh', bidirectional: true },
     {
         id: 'uhToDma',
         from: 'tl-uh:top.85',
@@ -225,9 +225,9 @@ export const SOC_EDGES = [
         bus: 'dma',
         bidirectional: true,
         waypoints: [
-            { x: 566.5, y: 320 },
-            { x: 948, y: 320 },
-            { x: 948, y: 84 }
+            { x: 416.5, y: 328 },
+            { x: 948, y: 328 },
+            { x: 948, y: 72 }
         ]
     },
     {
@@ -238,9 +238,9 @@ export const SOC_EDGES = [
         bidirectional: true,
         aliasFor: 'uhToDma',
         waypoints: [
-            { x: 566.5, y: 320 },
-            { x: 948, y: 320 },
-            { x: 948, y: 84 }
+            { x: 416.5, y: 328 },
+            { x: 948, y: 328 },
+            { x: 948, y: 72 }
         ]
     },
     {
@@ -265,7 +265,7 @@ export const SOC_EDGES = [
         to: 'uart:busTop',
         bus: 'ul',
         bidirectional: true,
-        waypoints: [{ x: 931, y: 468 }, { x: 411.5, y: 468 }]
+        waypoints: [{ x: 939, y: 505 }, { x: 561, y: 505 }]
     },
     {
         id: 'ulToLedMatrix',
@@ -273,7 +273,7 @@ export const SOC_EDGES = [
         to: 'led:busTop',
         bus: 'ul',
         bidirectional: true,
-        waypoints: [{ x: 976, y: 486 }, { x: 627.5, y: 486 }]
+        waypoints: [{ x: 981, y: 520 }, { x: 729, y: 520 }]
     },
     {
         id: 'ulToKeyboard',
@@ -281,7 +281,7 @@ export const SOC_EDGES = [
         to: 'keyboard:busTop',
         bus: 'ul',
         bidirectional: true,
-        waypoints: [{ x: 1040, y: 504 }, { x: 852.5, y: 504 }]
+        waypoints: [{ x: 1023, y: 535 }, { x: 897, y: 535 }]
     },
     {
         id: 'ulToMouse',
@@ -518,7 +518,6 @@ function createSocNode(nodeId, node) {
         height: node.h
     });
     const block = document.createElement('div');
-    const icon = document.createElement('i');
     const content = document.createElement('div');
     const name = document.createElement('span');
     const status = document.createElement('span');
@@ -531,9 +530,13 @@ function createSocNode(nodeId, node) {
     block.setAttribute('tabindex', '0');
     block.setAttribute('aria-label', node.name);
 
-    icon.className = 'material-icons';
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = node.icon;
+    if (node.icon) {
+        const icon = document.createElement('i');
+        icon.className = 'material-icons';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = node.icon;
+        block.appendChild(icon);
+    }
 
     content.className = 'soc-block-content';
     name.className = 'soc-block-name';
@@ -545,7 +548,7 @@ function createSocNode(nodeId, node) {
     address.textContent = node.desc || '';
 
     content.append(name, status, address);
-    block.append(icon, content);
+    block.appendChild(content);
     foreignObject.appendChild(block);
 
     return foreignObject;

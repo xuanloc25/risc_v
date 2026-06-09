@@ -1552,7 +1552,7 @@ li.CodeMirror-hint-active,
 
 .mmu-overview-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 4.5fr 5.5fr;
     gap: 15px;
     padding: 15px;
     flex: 1;
@@ -1573,7 +1573,7 @@ li.CodeMirror-hint-active,
     background-color: #f1f2f6;
     padding: 8px 12px;
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     color: #2d3436;
     border-bottom: 1px solid var(--border-color);
 }
@@ -1581,6 +1581,10 @@ li.CodeMirror-hint-active,
 .mmu-compact-table {
     flex: 1;
     overflow: auto;
+}
+
+.mmu-overview-section .simple-table {
+    font-size: 0.95rem;
 }
 
 /* Stats metrics styling */
@@ -1594,7 +1598,7 @@ li.CodeMirror-hint-active,
 .mmu-stats-inline {
     border-bottom: 1px solid #eef1f4;
     background: #fbfcfd;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
 }
 
 .mmu-metric-row {
@@ -1617,7 +1621,7 @@ li.CodeMirror-hint-active,
 }
 
 .mmu-metric span {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     color: #636e72;
     text-transform: uppercase;
     font-family: 'Roboto', sans-serif;
@@ -1625,7 +1629,7 @@ li.CodeMirror-hint-active,
 }
 
 .mmu-metric strong {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     color: #2d3436;
     font-family: 'Consolas', monospace;
 }
@@ -1663,7 +1667,7 @@ li.CodeMirror-hint-active,
     border-radius: 4px;
     padding: 6px 10px;
     font-family: 'Roboto', sans-serif;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: #2d3436;
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
