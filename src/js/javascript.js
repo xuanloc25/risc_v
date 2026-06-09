@@ -1285,32 +1285,28 @@ function renderMMUView() {
         });
     }
 
-    if (!mmu.tlbBlocks || mmu.tlbBlocks.length === 0) {
-        insertEmptyRow(mmuTlbTableBody, 10, 'TLB is empty. A mapped page-table hit will refill it.');
+    const validTlbBlocks = (mmu.tlbBlocks ?? []).filter(block => block.valid);
+    if (validTlbBlocks.length === 0) {
+        insertEmptyRow(mmuTlbTableBody, 6, 'TLB is empty. A mapped page-table hit will refill it.');
     } else {
         mmuTlbTableBody.innerHTML = '';
-        mmu.tlbBlocks.forEach((block) => {
+        validTlbBlocks.forEach((block) => {
             const row = mmuTlbTableBody.insertRow();
             const isLastTranslated = mmu.lastTranslation &&
                                      mmu.lastTranslation.mode === 'mapped' &&
-                                     mmu.lastTranslation.vpn === block.vpn &&
-                                     block.valid;
+                                     mmu.lastTranslation.vpn === block.vpn;
             if (isLastTranslated) {
                 row.classList.add('tlb-highlight');
             }
 
             const blockKey = `tlb:${block.set}:${block.way}`;
-            insertTrackedCell(row, `${blockKey}:set`, block.set);
-            insertTrackedCell(row, `${blockKey}:way`, block.way);
-            insertTrackedCell(row, `${blockKey}:valid`, formatBool(block.valid), { html: true });
-            insertTrackedCell(row, `${blockKey}:vpn`, block.valid ? formatId(block.vpn) : '-');
-            insertTrackedCell(row, `${blockKey}:va`, block.valid ? formatHex(block.virtualBase) : '-');
-            const ppn = block.valid ? Math.floor((block.physicalBase >>> 0) / pageSize) : 0;
-            insertTrackedCell(row, `${blockKey}:ppn`, block.valid ? formatId(ppn) : '-');
-            insertTrackedCell(row, `${blockKey}:pa`, block.valid ? formatHex(block.physicalBase) : '-');
-            insertTrackedCell(row, `${blockKey}:perms`, block.valid ? permissionText(block) : '-');
-            insertTrackedCell(row, `${blockKey}:cacheable`, block.valid ? formatBool(block.cacheable) : '-', { html: block.valid });
-            insertTrackedCell(row, `${blockKey}:last-ref`, block.valid ? (block.lastReference ?? 0) : '-');
+            const ppn = Math.floor((block.physicalBase >>> 0) / pageSize);
+            insertTrackedCell(row, `${blockKey}:vpn`, formatId(block.vpn));
+            insertTrackedCell(row, `${blockKey}:va`, formatHex(block.virtualBase));
+            insertTrackedCell(row, `${blockKey}:ppn`, formatId(ppn));
+            insertTrackedCell(row, `${blockKey}:pa`, formatHex(block.physicalBase));
+            insertTrackedCell(row, `${blockKey}:perms`, permissionText(block));
+            insertTrackedCell(row, `${blockKey}:cacheable`, formatBool(block.cacheable), { html: true });
         });
     }
 
