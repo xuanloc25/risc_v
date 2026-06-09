@@ -80,7 +80,6 @@ srcWords1.forEach((expected, i) => {
     if (!ok) pass1 = false;
     console.log(`  dst[${i}] ${hex(0x400 + i*4)} = ${hex(got)}  ${ok ? 'OK' : `FAIL (expected ${hex(expected)})`}`);
 });
-assert.equal(pass1, true, 'DMA JS API copy should preserve all source words.');
 console.log(pass1 ? '[PASS] JS API copy OK' : '[FAIL]');
 
 // ════════════════════════════════════════════════════════════════
@@ -112,7 +111,7 @@ _start:
 
     sw    t2, 0(t1)             # src addr
     sw    t3, 0(t1)             # dst addr
-    li    t5, 0xAA000010        # config: dstMode=2,srcMode=2,srcWidth=2,dstWidth=2,len=16 (new mapping)
+    li    t5, 0x5A000004        # config: srcMode=1,dstMode=1 (INCREMENT), srcWidth=2,dstWidth=2 (word), len=4
     sw    t5, 0(t1)             # config word
 
     # Bước 3: Enable + Start (bit0|bit1 = 3)
@@ -147,7 +146,6 @@ srcWords2.forEach((expected, i) => {
     if (!ok) pass2 = false;
     console.log(`  dst[${i}] ${hex(0x600 + i*4)} = ${hex(got)}  ${ok ? 'OK' : `FAIL (expected ${hex(expected)})`}`);
 });
-assert.equal(pass2, true, 'CPU-driven DMA register copy should preserve all source words.');
 console.log(pass2 ? '[PASS] ASM DMA copy OK' : '[FAIL]');
 
 // ════════════════════════════════════════════════════════════════
@@ -165,11 +163,16 @@ pokeWord(0x704, 0xAABBCCDD);
 console.log(`[Source] 0x700 = ${hex(peekWord(0x700))}`);
 console.log(`[Source] 0x704 = ${hex(peekWord(0x704))}`);
 
-// config: dstMode=3 (word-stride), srcMode=3 (word-stride), bswap=1, numElements=2 (2×4-byte words = 8 bytes)
-// Using new mapping: bits dstMode/srcMode/srcWidth/dstWidth/bswap/numElements
-const bswapConfig = (3 << 30) | (3 << 28) | (2 << 26) | (2 << 24) | (1 << 20) | 2;
-simulator.dma.start(0x700, 0x800, 2);   // 2 elements placeholder, configWord overridden below
-simulator.dma.registers.descriptorFifo[0].configWord = bswapConfig >>> 0;
+// config: srcMode=1,dstMode=1 (INCREMENT), srcWidth=2,dstWidth=2 (word), bswap=1, numElements=2 → 0x5A100002
+// (mode 3 is NOT a valid address mode — calculateAddress only supports 0=fixed,1=inc,2=dec)
+const bswapConfig = (1 << 30) | (1 << 28) | (2 << 26) | (2 << 24) | (1 << 20) | 2;
+// Program the transfer straight through the descriptor/CTRL registers so the exact
+// config word is used (no mutating FIFO internals after start()).
+simulator.dma.registers.writeCtrl(1);                        // enable
+simulator.dma.registers.writeDescriptor(0x700);              // src
+simulator.dma.registers.writeDescriptor(0x800);              // dst
+simulator.dma.registers.writeDescriptor(bswapConfig >>> 0);  // config
+simulator.dma.registers.writeCtrl(3);                        // enable + start
 const cycles3 = runUntilDone();
 
 const got3a = peekWord(0x800);
@@ -178,14 +181,15 @@ console.log(`\n[After — ${cycles3} cycles]`);
 console.log(`  dst 0x800 = ${hex(got3a)}  (expected ${hex(0x44332211)})`);
 console.log(`  dst 0x804 = ${hex(got3b)}  (expected ${hex(0xDDCCBBAA)})`);
 const pass3 = got3a === 0x44332211 && got3b === 0xDDCCBBAA;
-assert.equal(pass3, true, 'DMA byte-swap should reverse bytes within each 32-bit word.');
 console.log(pass3 ? '[PASS] Byte-swap OK' : '[FAIL]');
 
 // ════════════════════════════════════════════════════════════════
 console.log(`\n${SEP}`);
 const allPass = pass1 && pass2 && pass3;
-assert.equal(allPass, true, 'At least one DMA scenario failed.');
 console.log(allPass
     ? '  Tất cả 3 kịch bản DMA đều PASS'
     : '  Có kịch bản FAIL — kiểm tra log bên trên');
 console.log(SEP);
+// Chạy hết cả 3 kịch bản rồi mới assert một lần ở cuối, để không kịch bản nào
+// bị che bởi lỗi của kịch bản trước; message nêu rõ kịch bản nào fail.
+assert.equal(allPass, true, `Có kịch bản DMA FAIL — pass1=${pass1}, pass2=${pass2}, pass3=${pass3}`);

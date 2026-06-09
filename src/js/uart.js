@@ -149,6 +149,15 @@ export class UART {
         console.log(`[UART] Transmitting 0x${this.pendingTx.toString(16)}, will complete in ${cyclesPerByte} cycles (${(cyclesPerByte/this.cpuFrequency*1000000).toFixed(2)} μs)`);
     }
     
+    // Flow control: true while the TX FIFO can accept one more byte without
+    // dropping it. pendingTx is the shift register (byte on the wire); txQueue
+    // is the 16-deep FIFO. The bus uses this to apply backpressure (stall the
+    // master) instead of silently discarding bytes when a producer such as the
+    // DMA outruns the transmitter.
+    canAcceptTx() {
+        return this.pendingTx === null || this.txQueue.length < this.txQueueDepth;
+    }
+
     // Receive a character (called when CPU reads from UART_RX)
     receive() {
         if (this.rxBuffer.length === 0) {

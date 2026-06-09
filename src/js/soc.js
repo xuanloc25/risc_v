@@ -82,7 +82,7 @@ function readStoredTlbWays(tlbSize) {
     return value;
 }
 
-function createMMIOEndpoint(bus, name, { read, write }) {
+function createMMIOEndpoint(bus, name, { read, write, canAccept }) {
     return {
         directRead(address, size, accessType) {
             void accessType;
@@ -92,6 +92,12 @@ function createMMIOEndpoint(bus, name, { read, write }) {
             void size;
             void accessType;
             if (typeof write === 'function') write(address, value);
+        },
+        // A-channel backpressure hook. Returning false makes the fabric hold the
+        // request (a_ready deasserted) and retry it until the slave is ready —
+        // e.g. a UART whose TX FIFO is full. Defaults to always-ready.
+        canAccept(req) {
+            return typeof canAccept === 'function' ? canAccept(req.address >>> 0, req) : true;
         },
         receiveRequest(req) {
             const size = getTransferSizeLog2(req, 2);
@@ -433,7 +439,13 @@ export const simulator = {
 
         const uartEndpoint = createMMIOEndpoint(this.tilelink_UL, 'UART', {
             read: (addr) => this.uart.readRegister(addr),
-            write: (addr, value) => this.uart.writeRegister(addr, value)
+            write: (addr, value) => this.uart.writeRegister(addr, value),
+            // Only a write to UART_TX (offset 0x00) is gated by the TX FIFO;
+            // status reads and control/baud writes are always accepted.
+            canAccept: (addr, req) => {
+                const isTxWrite = isTileLinkWrite(req.type) && (addr - UART_BASE_ADDRESS) === 0x00;
+                return !isTxWrite || this.uart.canAcceptTx();
+            }
         });
 
         const ledEndpoint = createMMIOEndpoint(this.tilelink_UL, 'LED Matrix', {

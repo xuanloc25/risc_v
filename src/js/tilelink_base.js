@@ -141,23 +141,32 @@ export class TileLinkBase {
         // Forward the latched request to the slave once its latency has elapsed.
         if (this.inFlight && !this._inFlightForwarded && this.cycle >= this._forwardAt) {
             const nextReq = this.inFlight;
-            const opcodeName = describeAOpcode(nextReq.type);
             const slaveEntry = this._selectSlaveEntry(nextReq.address);
-            if (typeof this.onTraceTransaction === 'function') {
-                this.onTraceTransaction('request', {
-                    from: nextReq.from,
-                    type: nextReq.type,
-                    address: nextReq.address,
-                    value: nextReq.value,
-                    slaveName: slaveEntry.name
-                });
+
+            // A-channel backpressure: if the slave cannot accept this beat yet
+            // (e.g. UART TX FIFO full), keep a_ready deasserted and hold the
+            // request on the fabric. It is retried every cycle until accepted,
+            // so the master (DMA/CPU) stalls instead of losing the beat.
+            if (typeof slaveEntry.target.canAccept === 'function' && !slaveEntry.target.canAccept(nextReq)) {
+                this.signals.a.ready = false;
+            } else {
+                const opcodeName = describeAOpcode(nextReq.type);
+                if (typeof this.onTraceTransaction === 'function') {
+                    this.onTraceTransaction('request', {
+                        from: nextReq.from,
+                        type: nextReq.type,
+                        address: nextReq.address,
+                        value: nextReq.value,
+                        slaveName: slaveEntry.name
+                    });
+                }
+                console.log(
+                    `[${this.name}] TileLink -> ${describeTarget(slaveEntry)} REQUEST ` +
+                    `from=${nextReq.from} type=${opcodeName} addr=0x${(nextReq.address >>> 0).toString(16)}`
+                );
+                slaveEntry.target.receiveRequest(nextReq);
+                this._inFlightForwarded = true;
             }
-            console.log(
-                `[${this.name}] TileLink -> ${describeTarget(slaveEntry)} REQUEST ` +
-                `from=${nextReq.from} type=${opcodeName} addr=0x${(nextReq.address >>> 0).toString(16)}`
-            );
-            slaveEntry.target.receiveRequest(nextReq);
-            this._inFlightForwarded = true;
         }
 
         if (!this.inFlight) {
