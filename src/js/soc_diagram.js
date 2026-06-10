@@ -130,36 +130,36 @@ export const SOC_NODES = {
         status: 'Idle',
         logModule: 'tilelink',
         ports: {
-            uart: { x: 25, y: 60, side: 'bottom' },
+            can: { x: 25, y: 60, side: 'bottom' },
             led: { x: 67.5, y: 60, side: 'bottom' },
-            can: { x: 105, y: 60, side: 'bottom' },
+            uart: { x: 105, y: 60, side: 'bottom' },
             keyboard: { x: 147.5, y: 60, side: 'bottom' },
             mouse: { x: 185, y: 60, side: 'bottom' }
         }
     },
     uart: {
-        name: 'UART Console',
-        x: 400,
+        name: 'UART',
+        x: 746,
         y: 552,
-        w: 145,
+        w: 120,
         h: 48,
         group: 'peripheral',
         icon: null,
         desc: 'MMIO 0x10000000',
-        tooltip: 'UART Console: character-based serial communication interface. Prints program output and receives console input.',
+        tooltip: 'UART: character-based serial communication interface. Prints program output and receives console input.',
         statusId: 'soc-status-uart',
         status: 'TX: 0 / RX: 0',
         targetTab: 'view-io',
         focusId: 'uartInput',
         ports: {
-            busTop: { x: 72.5, y: 0, side: 'top' }
+            busTop: { x: 60, y: 0, side: 'top' }
         }
     },
     led: {
         name: 'LED Matrix',
-        x: 550,
+        x: 608,
         y: 552,
-        w: 145,
+        w: 120,
         h: 48,
         group: 'peripheral',
         icon: null,
@@ -170,14 +170,14 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'ledMatrixCanvas',
         ports: {
-            busTop: { x: 72.5, y: 0, side: 'top' }
+            busTop: { x: 60, y: 0, side: 'top' }
         }
     },
     can: {
-        name: 'CAN Controller',
-        x: 700,
+        name: 'CAN',
+        x: 470,
         y: 552,
-        w: 145,
+        w: 120,
         h: 48,
         group: 'peripheral',
         icon: null,
@@ -188,14 +188,14 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'canInjectId',
         ports: {
-            busTop: { x: 72.5, y: 0, side: 'top' }
+            busTop: { x: 60, y: 0, side: 'top' }
         }
     },
     keyboard: {
         name: 'Keyboard',
-        x: 850,
+        x: 884,
         y: 552,
-        w: 145,
+        w: 120,
         h: 48,
         group: 'peripheral',
         icon: null,
@@ -206,14 +206,14 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'keyboardInput',
         ports: {
-            busTop: { x: 72.5, y: 0, side: 'top' }
+            busTop: { x: 60, y: 0, side: 'top' }
         }
     },
     mouse: {
         name: 'Mouse',
-        x: 1000,
+        x: 1022,
         y: 552,
-        w: 145,
+        w: 120,
         h: 48,
         group: 'peripheral',
         icon: null,
@@ -224,7 +224,7 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'ledMatrixCanvas',
         ports: {
-            busTop: { x: 72.5, y: 0, side: 'top' }
+            busTop: { x: 60, y: 0, side: 'top' }
         }
     }
 };
@@ -284,7 +284,7 @@ export const SOC_EDGES = [
         to: 'uart:busTop',
         bus: 'ul',
         bidirectional: true,
-        waypoints: [{ x: 922, y: 505 }, { x: 472.5, y: 505 }]
+        waypoints: [{ x: 1002, y: 522 }, { x: 806, y: 522 }]
     },
     {
         id: 'ulToLedMatrix',
@@ -292,7 +292,7 @@ export const SOC_EDGES = [
         to: 'led:busTop',
         bus: 'ul',
         bidirectional: true,
-        waypoints: [{ x: 964.5, y: 520 }, { x: 622.5, y: 520 }]
+        waypoints: [{ x: 964.5, y: 510 }, { x: 668, y: 510 }]
     },
     {
         id: 'ulToCan',
@@ -300,7 +300,7 @@ export const SOC_EDGES = [
         to: 'can:busTop',
         bus: 'ul',
         bidirectional: true,
-        waypoints: [{ x: 1002, y: 535 }, { x: 772.5, y: 535 }]
+        waypoints: [{ x: 922, y: 498 }, { x: 530, y: 498 }]
     },
     {
         id: 'ulToKeyboard',
@@ -308,7 +308,7 @@ export const SOC_EDGES = [
         to: 'keyboard:busTop',
         bus: 'ul',
         bidirectional: true,
-        waypoints: [{ x: 1044.5, y: 535 }, { x: 922.5, y: 535 }]
+        waypoints: [{ x: 1044.5, y: 534 }, { x: 944, y: 534 }]
     },
     {
         id: 'ulToMouse',
