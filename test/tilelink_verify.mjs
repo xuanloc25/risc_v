@@ -202,7 +202,11 @@ function testSimpleCachePartialWrite() {
     assert.equal(readWord(mem.mem, 0x120) >>> 0, 0x1122AA44);
 }
 
-function testUhAtomicsThroughSimpleCache() {
+// Atomics committed through the SimpleCache write-through path (ADD then OR).
+// NOTE: this connects the cache directly to Mem, so it does NOT exercise a
+// TileLink-UH bus — the UH-allows-atomics / UL-rejects-atomics opcode rule is
+// covered in test/tilelink_backpressure_verify.mjs.
+function testAtomicsThroughSimpleCache() {
     const mem = new Mem({ burstBeatLatency: 0 });
     const cache = createCache();
     const master = makeMaster();
@@ -240,7 +244,10 @@ function testUhAtomicsThroughSimpleCache() {
     assert.equal(readWord(mem.mem, 0x200) >>> 0, 0x18);
 }
 
-function testDmaByteTransfer() {
+// Legacy dma.start() path: start(src,dst,4) builds createConfig(4,0,1,1,2,2),
+// i.e. four 32-bit WORDS (16 bytes), increment mode — NOT a byte transfer.
+// Only the first source word is seeded, so only the first dst word is checked.
+function testDmaLegacyWordTransfer() {
     const tilelink_UH = new TileLink_UH();
     const mem = new Mem();
     const dma = new DMAController(tilelink_UH);
@@ -294,6 +301,55 @@ function testDmaWordIncrementingTransfer() {
     assert.equal(readWord(mem.mem, 0x604) >>> 0, 0x55667788);
 }
 
+// Headline TileLink-UH feature: genuine multi-beat bursts. burstSize=1 =>
+// maxBurstBeats = 4, so 8 increment-mode words become TWO 4-beat Get/PutFullData
+// transactions (not a single-element loop). Verifies both the copied data AND
+// that real multi-beat transactions were issued.
+function testDmaMultiBeatBurst() {
+    const tilelink_UH = new TileLink_UH();
+    const mem = new Mem();
+    const dma = new DMAController(tilelink_UH);
+
+    const srcWords = [
+        0x11223344, 0x55667788, 0x99aabbcc, 0xddeeff00,
+        0x0a0b0c0d, 0x1a2b3c4d, 0xdeadbeef, 0xcafebabe
+    ];
+    const srcBase = 0x700, dstBase = 0x800;
+    const memMap = {};
+    srcWords.forEach((w, i) => {
+        memMap[srcBase + i * 4] = w & 0xFF;
+        memMap[srcBase + i * 4 + 1] = (w >>> 8) & 0xFF;
+        memMap[srcBase + i * 4 + 2] = (w >>> 16) & 0xFF;
+        memMap[srcBase + i * 4 + 3] = (w >>> 24) & 0xFF;
+    });
+    mem.loadMemoryMap(memMap);
+
+    attachPort(tilelink_UH, Port.upper('dma', dma));
+    attachPort(tilelink_UH, Port.lower('mem', mem, () => true));
+
+    const logs = captureLogs(() => {
+        dma.registers.writeCtrl(1);
+        dma.registers.writeDescriptor(srcBase);
+        dma.registers.writeDescriptor(dstBase);
+        // numElements=8, inc/inc, word/word, burstSize=1 (=> 4 beats per burst)
+        dma.registers.writeDescriptor(DMADescriptor.createConfig(8, 0, 1, 1, 2, 2, 1));
+        dma.registers.writeCtrl(3);
+        tickDmaMemoryUntil(dma, tilelink_UH, mem, () => !dma.isBusy && !dma.registers.startRequested);
+    });
+
+    assert.equal(dma.isBusy, false);
+    // Every one of the 8 words must land contiguously at the destination.
+    srcWords.forEach((w, i) => {
+        assert.equal(readWord(mem.mem, dstBase + i * 4) >>> 0, w >>> 0, `burst word ${i} mismatch`);
+    });
+    // Prove genuine multi-beat transactions were issued (beats=4), not a fallback
+    // loop of single-element transfers: 8 words / 4-beat bursts = 2 read + 2 write.
+    const multiBeatReads = logs.filter((l) => l.includes('ISSUE_READ') && l.includes('beats=4')).length;
+    const multiBeatWrites = logs.filter((l) => l.includes('ISSUE_WRITE') && l.includes('multi-beat')).length;
+    assert.equal(multiBeatReads, 2, '8 words / 4-beat bursts = 2 multi-beat READ transactions on UH');
+    assert.equal(multiBeatWrites, 2, '8 words / 4-beat bursts = 2 multi-beat WRITE transactions on UH');
+}
+
 function testDmaRegisterMmio() {
     const DMA_REG_BASE = 0xFFED0000;
     const dmaRegRange = (addr) => addr >= DMA_REG_BASE && addr < DMA_REG_BASE + 0x08;
@@ -322,7 +378,16 @@ function testDmaRegisterMmio() {
 
     assert.equal(master.responses[0].type, TL_D_Opcode.AccessAck);
     assert.equal(master.responses[1].type, TL_D_Opcode.AccessAckData);
-    assert.equal(master.responses[1].data & 0x1, 1);
+    // Decode the CTRL word (readCtrl in dma.js) instead of only the enable bit,
+    // so a regression in any encoded field is caught. After a bare CTRL=1 write
+    // (enable, no descriptor, no transfer): enabled=1 (bit0), fifoDepthLog2=3
+    // (bits 16..19, log2 of the depth-8 descriptor FIFO), dataFifoEmpty=1
+    // (bit24, no payload buffered), descriptor-FIFO-empty=1 (bit27).
+    const ctrl = master.responses[1].data >>> 0;
+    assert.equal(ctrl & 0x1, 1, 'CTRL enabled bit');
+    assert.equal((ctrl >>> 16) & 0xF, 3, 'CTRL fifoDepthLog2 = log2(8) = 3');
+    assert.equal((ctrl >>> 24) & 0x1, 1, 'CTRL dataFifoEmpty bit');
+    assert.equal((ctrl >>> 27) & 0x1, 1, 'CTRL descriptor-FIFO-empty bit');
     assert.ok(logs.some((line) => line.includes('[uh-to-ul-bridge] BRIDGE_REQUEST TileLink-UH->TileLink-UL')), 'DMA config UH -> UL bridge request log is missing');
     assert.ok(logs.some((line) => line.includes('[TileLink-UL] TileLink -> DMA Controller DIRECT_WRITE')), 'DMA config UL -> DMA direct write log is missing');
     assert.ok(logs.some((line) => line.includes('[TileLink-UL] TileLink -> DMA Controller DIRECT_READ')), 'DMA config UL -> DMA direct read log is missing');
@@ -588,9 +653,10 @@ function testMmuL2TileLinkMemoryLogs() {
 
 testSimpleCacheReadWriteThroughMemory();
 testSimpleCachePartialWrite();
-testUhAtomicsThroughSimpleCache();
-testDmaByteTransfer();
+testAtomicsThroughSimpleCache();
+testDmaLegacyWordTransfer();
 testDmaWordIncrementingTransfer();
+testDmaMultiBeatBurst();
 testDmaRegisterMmio();
 testDmaIoUsesUhUlBridge();
 testDirectMemoryLatency();

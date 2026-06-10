@@ -141,7 +141,7 @@ assert.equal(dmaLatencyHits, 8, 'Mỗi giao dịch A-channel của DMA (4 đọc
 
 console.log(`\n  [1] Buffer độc lập:   readFifo≠writeFifo=${buffersIndependent}, datapath moves=${datapathMoves}`);
 console.log(`  [2] Burst UH:         READ bursts=${multiReadBursts} (beats=${readBeats}), WRITE bursts=${multiWriteBursts} (beats=${writeBeats})`);
-console.log(`  [3] Latency UH:       latency=${simulator.tilelink_UH.latency} cycle, log hits=${latencyHits}`);
+console.log(`  [3] Latency UH:       latency=${simulator.tilelink_UH.latency} cycle, DMA latency hits=${dmaLatencyHits}`);
 console.log(`  Hoàn tất trong ${cycles} cycle.`);
 
 // ── Regression: tính đúng dữ liệu trên ma trận cấu hình ─────────────────────
