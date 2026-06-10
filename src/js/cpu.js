@@ -6,17 +6,16 @@ export class CPU {
         this.registers = new Int32Array(32);
         this.fregisters = new Float32Array(32);
         this.pc = 0;
-        this.upperPort = null;
         this.lowerPort = null;
         this.isRunning = false;
         this.instructionCount = 0;
-        this.maxSteps = 1000000;
         this.pendingResponse = null;
         this.waitingRequest = null;
-        this.resolve = null;
+
         this.fetchPending = null;
         this.fetchWaiting = false;
         this.replayInstruction = null;
+        
         this.onSyscallOutput = null;
         this.onSyscallExit = null;
         this.onSyscallError = null;
@@ -33,7 +32,6 @@ export class CPU {
         this.instructionCount = 0;
         this.pendingResponse = null;
         this.waitingRequest = null;
-        this.resolve = null;
         this.fetchPending = null;
         this.fetchWaiting = false;
         this.replayInstruction = null;
@@ -60,10 +58,6 @@ export class CPU {
         if (typeof this.onSyscallError !== 'function') return false;
         this.onSyscallError(String(message));
         return true;
-    }
-
-    attachUpperPort(upperPort) {
-        this.upperPort = upperPort;
     }
 
     attachLowerPort(lowerPort) {
