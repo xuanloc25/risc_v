@@ -599,6 +599,17 @@ export class DMAController {
                         this.registers.pushReadFifo(data & 0xFF);
                     }
 
+                    // Read-buffer occupancy after each source beat lands. In the
+                    // normal fill phase the datapath drains it again immediately
+                    // (read stays low); but while the write side is back-pressured
+                    // (e.g. UART TX FIFO full) the read buffer visibly fills toward
+                    // its depth (read=4,8,...,32) before any byte can move across,
+                    // making the independent read/write buffering observable here.
+                    console.log(
+                        `[DMA][BUFFER] read buffer +${srcElemSize} byte(s) from source ` +
+                        `(read=${this.registers.readFifoCount}, write=${this.registers.writeFifoCount})`
+                    );
+
                     this.activeRequestLink = null;
                     this.readProgress += srcElemSize;
                     this.burstRemainingReads--; // one beat satisfied
