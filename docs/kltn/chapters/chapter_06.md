@@ -25,7 +25,7 @@ Hệ thống còn các hạn chế chính sau:
 - Điều phối bus vẫn theo hàng đợi một giao dịch, chưa phải bộ phân xử đa master đầy đủ.
 - Chưa có cơ chế ngắt phần cứng tới CPU; DMA và ngoại vi chủ yếu dùng đọc thăm dò.
 - Chưa có bộ benchmark hiệu năng định lượng lặp lại; số liệu hiện phục vụ quan sát trong mô phỏng.
-- CAN mới được mô phỏng ở mức frame/message qua MMIO để phục vụ giáo dục và demo SoC; chưa mô phỏng bit-level/physical layer đầy đủ, bit stuffing, CRC thật, ACK slot, arbitration theo từng bit, transceiver hoặc error frame hoàn chỉnh [19].
+- CAN là ngoại vi giáo dục tối thiểu ở mức frame/message qua MMIO với standard ID 11-bit, DLC 0..8, payload 8 byte, TX/RX mailbox và loopback; không có physical layer, bit stuffing, CRC, ACK hoặc arbitration bit-level [19].
 
 ## 6.3. Hướng phát triển
 
@@ -34,7 +34,7 @@ Các hướng phát triển tiếp theo gồm:
 - Bổ sung CSR, chế độ đặc quyền, FCSR, cờ ngoại lệ và chế độ làm tròn động cho nhóm lệnh dấu phẩy động.
 - Thực thi `fence` như một thao tác có hiệu lực trong lõi xử lý.
 - Mở rộng TileLink với các kênh B/C/E, cơ chế TileLink-C và bộ phân xử đa master đầy đủ.
-- Bổ sung bộ điều khiển ngắt và đường IRQ từ DMA, UART, CAN, bàn phím, chuột tới CPU.
+- Bổ sung bộ điều khiển ngắt và đường IRQ cho các khối phù hợp tới CPU.
 - Mở rộng mô hình CAN theo hướng kết nối nhiều nút và mô hình lỗi chi tiết hơn; chỉ nghiên cứu bit-level/physical layer khi có mục tiêu và bộ kiểm chứng phù hợp [19].
 - Xây dựng benchmark hiệu năng định lượng cho bộ nhớ đệm, DMA và tốc độ mô phỏng.
 - Hoàn thiện log kiểm chứng chính thức, mở rộng độ phủ kiểm thử và xây dựng thêm bài thực hành phục vụ giảng dạy.

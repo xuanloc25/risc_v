@@ -267,7 +267,7 @@ Một đặc điểm quan trọng của vùng MMIO là các truy cập tới nó
 Ở mức khái niệm, hệ thống của đề tài có năm thiết bị ngoại vi, mỗi thiết bị chiếm một vùng địa chỉ MMIO riêng:
 
 - **Bộ thu phát không đồng bộ đa năng (Universal Asynchronous Receiver/Transmitter – UART):** thiết bị giao tiếp nối tiếp, dùng làm cổng console để truyền và nhận dữ liệu dạng ký tự, có thể cấu hình tốc độ truyền (baud).
-- **Bộ điều khiển mạng CAN (Controller Area Network – CAN):** mô hình controller ở mức frame/message qua MMIO, có hàng đợi truyền/nhận và loopback để minh họa luồng dữ liệu trong SoC; không đại diện physical layer hoặc giao thức theo từng bit đầy đủ.
+- **Bộ điều khiển mạng CAN (Controller Area Network – CAN):** ngoại vi giáo dục tối thiểu ở mức frame/message qua MMIO, có standard ID 11-bit, DLC 0..8, payload 8 byte, một TX mailbox, một RX mailbox và loopback; không có physical layer, bit stuffing, CRC, ACK hoặc arbitration bit-level.
 - **Ma trận đèn (Light-Emitting Diode – LED):** thiết bị hiển thị dạng lưới điểm ảnh, trạng thái các điểm ảnh được lưu trong một vùng bộ nhớ hiển thị (video memory) được ánh xạ vào không gian địa chỉ.
 - **Bàn phím (keyboard):** thiết bị nhập, dùng một bộ đệm để lưu các ký tự gõ vào theo thứ tự, phần mềm đọc lần lượt qua thanh ghi dữ liệu.
 - **Chuột (mouse):** thiết bị nhập, cung cấp tọa độ con trỏ và trạng thái nút nhấn qua các thanh ghi tương ứng.

@@ -29,7 +29,9 @@ Dự án mô hình hóa một hệ thống SoC gồm các thành phần chính:
 - `Memory`: lưu trữ chương trình và dữ liệu.
 - `Peripheral`: mô phỏng các thiết bị ngoại vi như UART, CAN, LED matrix, keyboard và mouse.
 
-CAN được hiện thực như một **Classic CAN message-level educational controller** qua MMIO, phục vụ giáo dục và demo SoC. Mô hình hỗ trợ TX/RX FIFO, loopback, identifier chuẩn 11 bit và identifier mở rộng 29 bit khi bật `EXT_ID_EN`. Đây không phải mô phỏng bit-level/physical-layer CAN đầy đủ: không mô hình hóa chính xác physical layer, bit stuffing, CRC thật, ACK slot, arbitration theo từng bit hoặc error frame hoàn chỉnh.
+CAN được hiện thực như một ngoại vi giáo dục tối thiểu ở mức frame/message qua MMIO. Mô hình chỉ hỗ trợ standard ID 11-bit, DLC 0..8, payload tối đa 8 byte, một TX mailbox, một RX mailbox và loopback. Mô hình không có physical layer, bit stuffing, CRC, ACK hoặc arbitration bit-level.
+
+Tài liệu *Bosch M_CAN Controller Area Network User's Manual*, Revision 3.3.1, được dùng làm tham khảo về cách tổ chức một CAN controller. Project không tái hiện M_CAN mà chỉ chọn tập con tối thiểu nêu trên.
 
 ## Bản đồ ngoại vi MMIO
 

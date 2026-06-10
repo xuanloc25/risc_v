@@ -182,9 +182,9 @@ export const SOC_NODES = {
         group: 'peripheral',
         icon: null,
         desc: 'MMIO 0xFF200000',
-        tooltip: 'CAN message-level MMIO controller: supports TX/RX FIFO and loopback. Not bit-level or physical-layer simulation; no real CRC, ACK slot, arbitration bit-level, complete error frames, or full ISO 11898 model.',
+        tooltip: 'Classic CAN message-level MMIO, standard ID, loopback',
         statusId: 'soc-status-can',
-        status: 'TX:0 RX:0',
+        status: 'TX:- RX:-',
         targetTab: 'view-io',
         focusId: 'canInjectId',
         ports: {

@@ -199,14 +199,14 @@ File liên quan:
 Bằng chứng từ source:
 
 - UART base `0x10000000`, range `0x14`; register `TX`, `RX`, `STATUS`, `CTRL`, `BAUD` trong `src/js/uart.js`.
-- CAN base `0xFF200000`, range `0x100`; controller mức frame/message có TX/RX FIFO, loopback và ID chuẩn/mở rộng trong `src/js/can.js`.
+- CAN base `0xFF200000`, range `0x100`; controller giáo dục mức frame/message có standard ID 11-bit, DLC 0..8, payload 8 byte, một TX mailbox, một RX mailbox và loopback trong `src/js/can.js`.
 - LED Matrix base `0xFF000000`, kích thước `32 * 32 * 4`; `src/js/led_matrix.js` dùng canvas và VRAM `Uint32Array`.
 - Keyboard base `0xFFFF0000`, range `0x08`; `KEYBOARD_CTRL` và `KEYBOARD_DATA` trong `src/js/keyboard.js`.
 - Mouse base `0xFF100000`, range `0x14`; register X/Y/button/status/control trong `src/js/mouse.js`.
 - `src/js/soc.js` tạo endpoint MMIO cho UART/CAN/LED/Keyboard/Mouse qua TileLink-UL.
 - `src/js/javascript.js` gắn callback UART console, keyboard input, pointer event từ LED canvas vào mouse peripheral.
 
-Giới hạn CAN xác định từ source: mô hình chỉ ở mức frame/message qua MMIO, không mô phỏng bit-level/physical layer đầy đủ, CRC thật, ACK slot, arbitration theo từng bit hoặc error frame hoàn chỉnh.
+Giới hạn CAN xác định từ source: mô hình chỉ ở mức frame/message qua MMIO, không có physical layer, bit stuffing, CRC, ACK hoặc arbitration bit-level.
 
 ### 4.5. UI/Visualization
 
@@ -401,7 +401,7 @@ Benchmark:
 
 4. Peripheral:
    - CAN nằm trong phạm vi cuối cùng ở mức frame/message qua MMIO; source chính là `src/js/can.js`.
-   - UART/CAN/Keyboard interrupt hiện mới ở mức cờ/trạng thái hay polling, chưa có IRQ tới CPU.
+   - UART/Keyboard hiện mới ở mức cờ/trạng thái hay polling, chưa có IRQ tới CPU.
 
 5. Verification:
    - Cung cấp log chính thức của `verify_rv32imf_against_gnu.mjs`, `verify_project_assembler_spike.mjs`, `verify_riscv_tests_spike.mjs`.

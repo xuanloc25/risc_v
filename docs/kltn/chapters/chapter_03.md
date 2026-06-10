@@ -109,7 +109,7 @@ Mỗi khối phần cứng trong sơ đồ kiến trúc được hiện thực b
 | Lớp cổng kết nối (Port) | Trừu tượng hóa việc nối hai mô-đun hoặc đăng ký endpoint vào bus | `src/js/port_link.js` | Cung cấp các loại cổng link/upper/lower/memory |
 | Bộ điều khiển DMA | Truyền khối dữ liệu độc lập với CPU theo mô tả truyền | `src/js/dma.js`, `src/js/soc.js` | Master trên cả UH và UL; thanh ghi điều khiển là slave trên UH (0xFFED0000) |
 | UART | Giao tiếp nối tiếp dạng console, có cấu hình tốc độ | `src/js/uart.js`, `src/js/soc.js` | Endpoint MMIO không lưu đệm trên UL (0x10000000) |
-| Bộ điều khiển CAN | Mô phỏng CAN controller ở mức frame/message qua MMIO với TX/RX FIFO, loopback và ID chuẩn/mở rộng | `src/js/can.js`, `src/js/soc.js` | Endpoint MMIO không lưu đệm trên UL (`0xFF200000`–`0xFF2000FF`); phục vụ giáo dục và demo SoC, không mô phỏng bit-level/physical layer đầy đủ |
+| Bộ điều khiển CAN | Ngoại vi giáo dục tối thiểu ở mức frame/message qua MMIO với standard ID 11-bit, DLC 0..8, payload 8 byte, một TX mailbox, một RX mailbox và loopback | `src/js/can.js`, `src/js/soc.js` | Endpoint MMIO không lưu đệm trên UL (`0xFF200000`–`0xFF2000FF`); không có physical layer, bit stuffing, CRC, ACK hoặc arbitration bit-level |
 | Ma trận LED | Hiển thị lưới 32×32 điểm ảnh từ vùng bộ nhớ hiển thị | `src/js/led_matrix.js`, `src/js/soc.js` | Endpoint MMIO trên UL (0xFF000000); vẽ bằng canvas |
 | Bàn phím | Bộ đệm ký tự nhập vào để phần mềm đọc thăm dò | `src/js/keyboard.js`, `src/js/soc.js` | Endpoint MMIO trên UL (0xFFFF0000) |
 | Chuột | Cung cấp tọa độ con trỏ và trạng thái nút qua thanh ghi | `src/js/mouse.js`, `src/js/soc.js` | Endpoint MMIO trên UL (0xFF100000) |
@@ -190,7 +190,7 @@ Thanh bên gồm bảy mục điều hướng, mỗi mục tương ứng một k
 | MMU | Tổng quan và cấu hình; bảng trang phần mềm; bảng TLB; lịch sử dịch địa chỉ gần đây | FR10 |
 | Cache | Trạng thái L1I, L1D, L2 (tập, đường, hợp lệ, bẩn, thẻ); thống kê trúng/trượt | FR11 |
 | Memory | Bộ nhớ lệnh (địa chỉ, mã máy, disassembly, cột đặt điểm dừng); vùng dữ liệu theo hàng, chuyển đổi hex/ASCII | FR6, FR9 |
-| I/O | Ma trận LED; console UART; khung CAN TX/RX và inject frame; ô nhập bàn phím và trạng thái bộ đệm | FR13 |
+| I/O | Ma trận LED; console UART; khung CAN hiển thị TX gần nhất, RX mailbox và inject frame; ô nhập bàn phím và trạng thái bộ đệm | FR13 |
 | Help | Tra cứu lệnh, pseudo-instruction, directive, syscall, bản đồ địa chỉ và hướng dẫn quy trình chạy | (hỗ trợ FR1–FR5) |
 
 Thanh công cụ phía trên chứa các nút điều khiển thực thi theo đúng vòng đời thao tác: **Assemble** (biên dịch và nạp), **Reset** (khởi tạo lại), **Run** (chạy liên tục), **Pause** (tạm dừng/tiếp tục), **Stop** (dừng hẳn) và **Step** (chạy từng bước). Bên cạnh đó là một thanh trượt điều chỉnh tốc độ (Speed) cho phép thay đổi số chu kỳ thực thi trên mỗi khung hình, và một chỉ số hiển thị tốc độ thực thi ước lượng (IPS — số lệnh/chu kỳ trên giây) cập nhật trong khi chạy (xem source: `src/index.html`, `src/js/javascript.js`). Trạng thái khả dụng của các nút thay đổi theo trạng thái chạy: ví dụ Pause và Stop chỉ được kích hoạt khi chương trình đang chạy, còn Step bị vô hiệu hóa khi đang chạy liên tục mà chưa tạm dừng.

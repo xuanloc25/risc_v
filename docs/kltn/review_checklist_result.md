@@ -12,8 +12,9 @@
 ## (1) TÓM TẮT ĐIỀU HÀNH
 
 > **Ghi chú cập nhật 10/06/2026:** Các nhận định cũ trong checklist cho rằng CAN chỉ nằm ở hướng phát triển
-> đã được thay thế bởi implementation `src/js/can.js` và bộ test CAN. Phạm vi hiện tại là frame/message qua
-> MMIO, không phải mô phỏng bit-level/physical-layer đầy đủ.
+> đã được thay thế bởi implementation `src/js/can.js` và bộ test CAN. Phạm vi hiện tại là ngoại vi giáo dục
+> tối thiểu ở mức frame/message qua MMIO với standard ID 11-bit, DLC 0..8, payload 8 byte, TX/RX mailbox và
+> loopback; không có physical layer, bit stuffing, CRC, ACK hoặc arbitration bit-level.
 >
 > ⚠️ **PHẠM VI ĐỢT NÀY: KHÔNG GỒM CHƯƠNG 5.** Chương 5 (`chapter_05.md`) đang làm lại phần kiểm
 > chứng nên không được đọc/không bị báo lỗi. Mọi vấn đề chỉ phát sinh do phụ thuộc nội dung Chương 5

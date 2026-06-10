@@ -393,11 +393,11 @@ Hệ thống có năm thiết bị ngoại vi gắn vào TileLink-UL: UART, bộ
 | UART | `0x10000000` | 20 byte (`0x14`) | TileLink-UL | Giao tiếp nối tiếp dạng console (TX/RX/STATUS/CTRL/BAUD) |
 | Ma trận LED | `0xFF000000` | 4096 byte (32×32×4) | TileLink-UL | Hiển thị lưới 32×32 điểm ảnh từ VRAM |
 | Chuột | `0xFF100000` | 20 byte (`0x14`) | TileLink-UL | Tọa độ con trỏ và trạng thái nút |
-| CAN Controller | `0xFF200000` | 256 byte (`0x100`) | TileLink-UL | Mô hình frame/message qua MMIO; TX/RX FIFO, loopback, ID chuẩn/mở rộng |
+| CAN Controller | `0xFF200000` | 256 byte (`0x100`) | TileLink-UL | Ngoại vi giáo dục mức frame/message; standard ID 11-bit, TX/RX mailbox, loopback |
 | Bàn phím | `0xFFFF0000` | 8 byte (`0x08`) | TileLink-UL | Bộ đệm ký tự nhập (đọc thăm dò) |
 | *(Thanh ghi DMA)* | `0xFFED0000` | 8 byte (`0x08`) | TileLink-UH | CTRL/DESC của bộ điều khiển DMA (mục 4.5) |
 
-Lớp giao diện nối các sự kiện đầu vào của trình duyệt vào thiết bị tương ứng: sự kiện gõ phím được chuyển thành mã ký tự đưa vào bộ đệm bàn phím; sự kiện con trỏ trên vùng canvas LED được chuyển thành tọa độ/nút cho thiết bị chuột; kết quả truyền của UART được hiển thị ra khung console; khung CAN cho phép quan sát TX/RX FIFO và bơm một frame nhận vào mô hình để demo (xem source: `src/js/soc.js`, `src/js/javascript.js`).
+Lớp giao diện nối các sự kiện đầu vào của trình duyệt vào thiết bị tương ứng: sự kiện gõ phím được chuyển thành mã ký tự đưa vào bộ đệm bàn phím; sự kiện con trỏ trên vùng canvas LED được chuyển thành tọa độ/nút cho thiết bị chuột; kết quả truyền của UART được hiển thị ra khung console; khung CAN hiển thị frame TX gần nhất, frame trong RX mailbox và cho phép bơm một frame nhận vào mô hình để demo (xem source: `src/js/soc.js`, `src/js/javascript.js`).
 
 Hình 4.11 minh họa kiến trúc ngoại vi và các đường sự kiện từ giao diện.
 
@@ -421,7 +421,7 @@ Việc truyền được mô hình hóa có tính tới tốc độ baud: thanh 
 
 ### 4.6.3. Bộ điều khiển CAN
 
-Bộ điều khiển CAN (xem source: `src/js/can.js`) là một **Classic CAN message-level educational controller** được mô phỏng ở mức frame/message qua MMIO, phục vụ giáo dục và demo SoC. Mô hình tham khảo cách tổ chức thanh ghi và hàng đợi của bộ điều khiển CAN [19], nhưng không tái hiện M_CAN hoặc tuyên bố tuân thủ đầy đủ một chuẩn CAN cụ thể. Hai FIFO TX/RX đều sâu 16 frame; mỗi frame chứa identifier, DLC từ 0 đến 8, cờ identifier mở rộng và tối đa 8 byte dữ liệu. Identifier chuẩn được giới hạn 11 bit; identifier mở rộng được giới hạn 29 bit và chỉ được chấp nhận khi bật `EXT_ID_EN`. Chế độ loopback đưa frame truyền xong vào RX FIFO để chương trình kiểm thử toàn bộ đường MMIO mà không cần nút CAN ngoài.
+Bộ điều khiển CAN (xem source: `src/js/can.js`) là một ngoại vi giáo dục tối thiểu được mô phỏng ở mức frame/message qua MMIO. Mô hình dùng standard ID 11-bit, DLC từ 0 đến 8, payload tối đa 8 byte, một TX mailbox, một RX mailbox và loopback. TX mailbox gồm các thanh ghi ID, DLC và hai word dữ liệu; lệnh `SEND` phát frame qua callback của mô hình. Khi bật loopback, frame truyền được đặt vào RX mailbox nếu mailbox đang trống. Tài liệu Bosch M_CAN User's Manual [19] chỉ được dùng làm tham khảo về cấu trúc controller và cách tổ chức thanh ghi; project không tái hiện M_CAN mà chỉ chọn tập con tối thiểu vừa nêu.
 
 Vùng CAN chiếm 256 byte từ `0xFF200000` đến `0xFF2000FF`, không lưu đệm và được nối vào TileLink-UL. Bảng 4.11 liệt kê register map đúng theo mã nguồn.
 
@@ -429,26 +429,20 @@ Vùng CAN chiếm 256 byte từ `0xFF200000` đến `0xFF2000FF`, không lưu đ
 
 | Thanh ghi | Offset | Quyền | Ý nghĩa |
 |---|---:|---|---|
-| CTRL | `0x00` | Đọc/Ghi | Bit 0 EN; bit 1 SOFT_RESET; bit 2 LOOPBACK; bit 3 SILENT; bit 4 EXT_ID_EN |
-| STATUS | `0x04` | Đọc | TX_READY, RX_AVAILABLE, TX/RX full, RX overrun, error; kèm số frame TX/RX và mã lỗi gần nhất |
-| INT_STATUS | `0x08` | Đọc/Ghi-1-để-xóa | TX_DONE, RX_NEW, RX_OVERRUN, ERROR |
-| INT_ENABLE | `0x0C` | Đọc/Ghi | Mặt nạ cho bốn cờ trạng thái ngắt; hiện chưa có đường IRQ tới CPU |
-| BITRATE | `0x10` | Đọc/Ghi | Tốc độ danh nghĩa dùng để ước lượng độ trễ truyền trong mô hình |
-| TX_ID | `0x20` | Đọc/Ghi | Identifier của frame truyền |
-| TX_DLC | `0x24` | Đọc/Ghi | Bits 3:0 là DLC; bit 4 đánh dấu identifier mở rộng |
+| CTRL | `0x00` | Đọc/Ghi | Bit 0 EN; bit 1 SOFT_RESET; bit 2 LOOPBACK |
+| STATUS | `0x04` | Đọc | Bit 0 TX_READY; bit 1 RX_AVAILABLE; bit 2 ERROR |
+| TX_ID | `0x20` | Đọc/Ghi | Standard identifier 11-bit của TX mailbox (`0x000`–`0x7FF`) |
+| TX_DLC | `0x24` | Đọc/Ghi | DLC của TX mailbox, hợp lệ trong khoảng 0..8 |
 | TX_DATA0 / TX_DATA1 | `0x28` / `0x2C` | Đọc/Ghi | Tối đa 8 byte payload, little-endian theo từng từ 32 bit |
-| CMD | `0x30` | Ghi | Bit 0 SEND; bit 1 CLEAR_TX; bit 2 CLEAR_RX; bit 3 CLEAR_ERROR |
-| RX_ID | `0x40` | Đọc | Identifier của frame đầu RX FIFO |
-| RX_DLC | `0x44` | Đọc | DLC và cờ identifier mở rộng của frame đầu RX FIFO |
-| RX_DATA0 / RX_DATA1 | `0x48` / `0x4C` | Đọc | Payload của frame đầu RX FIFO |
-| RX_POP | `0x50` | Ghi | Ghi bit 0 bằng 1 để loại frame đầu RX FIFO |
-| ERR_STATUS | `0x60` | Đọc | Cờ lỗi, mã lỗi gần nhất và bộ đếm lỗi TX/RX đơn giản |
-| VERSION | `0xF0` | Đọc | Giá trị nhận dạng phiên bản mô hình (`0x43414E01`) |
-| CAP | `0xF4` | Đọc | Độ sâu FIFO TX/RX và cờ khả năng identifier mở rộng |
+| CMD | `0x30` | Ghi | Bit 0 SEND; bit 1 CLEAR_ERROR |
+| RX_ID | `0x40` | Đọc | Standard identifier của frame trong RX mailbox |
+| RX_DLC | `0x44` | Đọc | DLC của frame trong RX mailbox |
+| RX_DATA0 / RX_DATA1 | `0x48` / `0x4C` | Đọc | Payload của frame trong RX mailbox |
+| RX_POP | `0x50` | Ghi | Ghi bit 0 bằng 1 để xóa frame khỏi RX mailbox |
 
-Khi ghi lệnh `SEND`, endpoint có thể hạ `a.ready` và giữ giao dịch đang chờ nếu TX FIFO đầy; backpressure này truyền qua TileLink-UL, cầu nối UH→UL và đường bypass MMIO của cache. Sau một số chu kỳ ước lượng từ bitrate, loại identifier và DLC, frame được đánh dấu truyền xong; nếu bật loopback thì frame được đẩy sang RX FIFO. Các cờ `INT_STATUS` chỉ là trạng thái để phần mềm đọc thăm dò vì hệ thống chưa nối IRQ tới CPU.
+Khi ghi lệnh `SEND`, controller yêu cầu bit EN đã bật, identifier không vượt `0x7FF` và DLC không vượt 8. Vi phạm điều kiện đặt cờ ERROR và không phát frame. RX mailbox chỉ giữ một frame; nếu inject hoặc loopback khi mailbox đang có dữ liệu, frame mới bị từ chối, cờ ERROR được đặt và frame cũ được giữ nguyên. Ghi `CLEAR_ERROR` xóa cờ lỗi đơn giản, còn `RX_POP` xóa frame nhận.
 
-Giới hạn phạm vi cần được hiểu rõ: mô hình không phải mô phỏng bit-level/physical-layer CAN đầy đủ và không mô hình hóa bit stuffing, CRC thật, ACK slot, arbitration theo từng bit, đồng bộ thời gian bus, transceiver hoặc error frame hoàn chỉnh. Do đó kết quả phù hợp để minh họa controller/MMIO, FIFO, backpressure và luồng frame trong SoC, không dùng để xác nhận tính tương thích mạng CAN thực.
+Giới hạn phạm vi cần được hiểu rõ: mô hình không có physical layer, bit stuffing, CRC, ACK hoặc arbitration bit-level. Do đó kết quả chỉ phù hợp để minh họa controller/MMIO và luồng frame trong SoC, không dùng để xác nhận tính tương thích mạng CAN thực.
 
 ### 4.6.4. Ma trận LED
 

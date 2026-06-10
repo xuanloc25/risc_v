@@ -639,8 +639,8 @@ li.CodeMirror-hint-active,
 }
 
 #view-io .can-device-card {
-    flex-basis: 620px;
-    width: auto !important;
+    flex-basis: 400px;
+    width: 400px;
 }
 
 .io-device-card:hover {
@@ -717,22 +717,23 @@ li.CodeMirror-hint-active,
     grid-template-columns: 1fr;
     align-items: stretch;
     justify-content: stretch;
-    gap: 10px;
-    padding: 12px;
+    gap: 8px;
+    padding: 10px;
 }
 
 .can-status-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(80px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 5px;
 }
 
 .can-status-grid div {
     border: 1px solid #dfe6e9;
     border-radius: 6px;
-    padding: 7px 8px;
+    padding: 6px 4px;
     background: #f8f9fb;
     min-width: 0;
+    text-align: center;
 }
 
 .can-status-grid span,
@@ -740,14 +741,19 @@ li.CodeMirror-hint-active,
     display: block;
     color: #636e72;
     font-size: 0.72rem;
+    line-height: 1.15;
     margin-bottom: 3px;
+}
+
+.can-status-grid span {
+    overflow-wrap: anywhere;
 }
 
 .can-status-grid strong {
     display: block;
     color: #2d3436;
     font-family: 'Fira Code', 'Consolas', monospace;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     overflow-wrap: anywhere;
     white-space: normal;
 }
@@ -776,22 +782,21 @@ li.CodeMirror-hint-active,
     font-size: 0.72rem;
 }
 
-.can-frame-list {
-    min-height: 46px;
-    max-height: 118px;
-    overflow: auto;
+.can-frame-value {
+    min-height: 38px;
     padding: 8px 9px;
     background: #1e1e1e;
     color: #00ff00;
     font-family: 'Courier New', monospace;
-    font-size: 0.8rem;
-    line-height: 1.45;
+    font-size: 0.76rem;
+    line-height: 1.35;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .can-inject-grid {
     display: grid;
-    grid-template-columns: minmax(100px, 0.75fr) minmax(110px, 0.75fr) minmax(70px, 0.45fr) minmax(220px, 1.4fr) auto;
+    grid-template-columns: minmax(0, 1fr) 80px;
     gap: 8px;
     align-items: end;
     padding: 9px;
@@ -808,19 +813,13 @@ li.CodeMirror-hint-active,
     font-size: 0.85rem;
 }
 
-.can-checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    min-height: 35px;
-}
-
-.can-checkbox-label span {
-    margin-bottom: 0;
-}
-
 .can-payload-label {
     min-width: 0;
+    grid-column: 1 / -1;
+}
+
+#canInjectButton {
+    grid-column: 1 / -1;
 }
 
 .can-inject-status {
@@ -850,9 +849,12 @@ li.CodeMirror-hint-active,
         width: 100% !important;
     }
 
-    .can-status-grid,
+    .can-status-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .can-inject-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr) 72px;
     }
 }
 

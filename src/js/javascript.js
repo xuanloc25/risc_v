@@ -112,18 +112,7 @@ const runState = {
     programOutputStarted: false
 };
 
-const CAN_TX_LOG_LIMIT = 32;
-const CAN_ERROR_NAMES = Object.freeze({
-    0: 'NONE',
-    1: 'DISABLED',
-    2: 'INVALID_DLC',
-    3: 'INVALID_ID',
-    4: 'TX_FULL',
-    5: 'RX_OVERRUN',
-    6: 'EXT_DISABLED',
-    7: 'INVALID_BITRATE'
-});
-let canTxLogFrames = [];
+let canLastTxFrame = null;
 let canBoundController = null;
 let canUiMessage = '';
 let canUiMessageKind = '';
@@ -902,12 +891,11 @@ function formatCANByte(value) {
 function formatCANFrame(frame) {
     if (!frame) return 'No frame';
     const dlc = Math.max(0, Math.min(8, frame.dlc ?? 0));
-    const idPad = frame.extended ? 8 : 3;
     const data = Array.isArray(frame.data) || ArrayBuffer.isView(frame.data)
         ? Array.from(frame.data).slice(0, dlc)
         : [];
     const payload = data.length > 0 ? data.map(formatCANByte).join(' ') : '(none)';
-    return `${frame.extended ? 'EXT' : 'STD'} ID=${formatCANHex(frame.id ?? 0, idPad)} DLC=${dlc} DATA=${payload}`;
+    return `STD ID=${formatCANHex(frame.id ?? 0, 3)} DLC=${dlc} DATA=${payload}`;
 }
 
 function setCANMessage(message = '', kind = '') {
@@ -915,70 +903,50 @@ function setCANMessage(message = '', kind = '') {
     canUiMessageKind = kind;
 }
 
-function renderCANFrameList(container, frames, emptyText, limit = 6) {
+function renderCANFrame(container, frame, emptyText) {
     if (!container) return;
-    const list = Array.isArray(frames) ? frames : [];
-    if (list.length === 0) {
-        container.textContent = emptyText;
-        return;
-    }
-
-    container.textContent = list
-        .slice(0, limit)
-        .map((frame, index) => `${index + 1}. ${formatCANFrame(frame)}`)
-        .join('\n');
+    container.textContent = frame ? formatCANFrame(frame) : emptyText;
 }
 
 function renderCANView() {
     const can = simulator?.can;
     const statusEn = document.getElementById('canStatusEn');
     const statusLoopback = document.getElementById('canStatusLoopback');
-    const statusTxCount = document.getElementById('canStatusTxCount');
-    const statusRxCount = document.getElementById('canStatusRxCount');
+    const statusTxReady = document.getElementById('canStatusTxReady');
+    const statusRxAvailable = document.getElementById('canStatusRxAvailable');
     const statusError = document.getElementById('canStatusError');
-    const txLog = document.getElementById('canTxLog');
-    const rxPreview = document.getElementById('canRxPreview');
+    const txFrame = document.getElementById('canTxFrame');
+    const rxMailbox = document.getElementById('canRxMailbox');
     const injectStatus = document.getElementById('canInjectStatus');
 
-    if (!statusEn && !statusLoopback && !txLog && !rxPreview && !injectStatus) return;
+    if (!statusEn && !statusLoopback && !txFrame && !rxMailbox && !injectStatus) return;
 
     if (!can) {
         if (statusEn) statusEn.textContent = 'OFF';
         if (statusLoopback) statusLoopback.textContent = 'OFF';
-        if (statusTxCount) statusTxCount.textContent = '0';
-        if (statusRxCount) statusRxCount.textContent = '0';
-        if (statusError) statusError.textContent = 'No CAN';
-        renderCANFrameList(txLog, [], 'No transmitted frames yet.');
-        renderCANFrameList(rxPreview, [], 'RX FIFO is empty.');
+        if (statusTxReady) statusTxReady.textContent = 'OFF';
+        if (statusRxAvailable) statusRxAvailable.textContent = 'OFF';
+        if (statusError) statusError.textContent = 'OFF';
+        renderCANFrame(txFrame, null, 'No transmitted frame.');
+        renderCANFrame(rxMailbox, null, 'RX mailbox is empty.');
         return;
     }
 
     const base = getCANBase(can);
     const ctrl = can.readRegister(base + CAN_REGISTERS.CTRL) >>> 0;
     const status = can.readRegister(base + CAN_REGISTERS.STATUS) >>> 0;
-    const txCount = (status >>> 8) & 0xFF;
-    const rxCount = (status >>> 16) & 0xFF;
-    const lastError = (status >>> 24) & 0xFF;
-    const rxOverrun = (status & CAN_STATUS_BITS.RX_OVERRUN) !== 0;
+    const txReady = (status & CAN_STATUS_BITS.TX_READY) !== 0;
+    const rxAvailable = (status & CAN_STATUS_BITS.RX_AVAILABLE) !== 0;
     const hasError = (status & CAN_STATUS_BITS.ERROR) !== 0;
 
     if (statusEn) statusEn.textContent = (ctrl & CAN_CTRL_BITS.EN) ? 'ON' : 'OFF';
     if (statusLoopback) statusLoopback.textContent = (ctrl & CAN_CTRL_BITS.LOOPBACK) ? 'ON' : 'OFF';
-    if (statusTxCount) statusTxCount.textContent = `${txCount} pending / ${canTxLogFrames.length} sent`;
-    if (statusRxCount) statusRxCount.textContent = `${rxCount} queued`;
-    if (statusError) {
-        if (!rxOverrun && !hasError) {
-            statusError.textContent = 'OK';
-        } else {
-            const parts = [];
-            if (rxOverrun) parts.push('RX_OVERRUN');
-            if (hasError) parts.push(CAN_ERROR_NAMES[lastError] || `ERR_${lastError}`);
-            statusError.textContent = parts.join(' / ');
-        }
-    }
+    if (statusTxReady) statusTxReady.textContent = txReady ? 'ON' : 'OFF';
+    if (statusRxAvailable) statusRxAvailable.textContent = rxAvailable ? 'ON' : 'OFF';
+    if (statusError) statusError.textContent = hasError ? 'ON' : 'OFF';
 
-    renderCANFrameList(txLog, canTxLogFrames, 'No transmitted frames yet.', 10);
-    renderCANFrameList(rxPreview, can.rxFifo || [], 'RX FIFO is empty.', 5);
+    renderCANFrame(txFrame, canLastTxFrame, 'No transmitted frame.');
+    renderCANFrame(rxMailbox, can.rxMailbox, 'RX mailbox is empty.');
 
     if (injectStatus) {
         injectStatus.textContent = canUiMessage;
@@ -1020,18 +988,15 @@ function parseCANPayloadBytes(rawValue) {
 function injectCANFrameFromUI() {
     const can = simulator?.can;
     const idInput = document.getElementById('canInjectId');
-    const extendedInput = document.getElementById('canInjectExtended');
     const dlcInput = document.getElementById('canInjectDlc');
     const payloadInput = document.getElementById('canInjectPayload');
 
-    if (!can || !idInput || !extendedInput || !dlcInput || !payloadInput) return;
+    if (!can || !idInput || !dlcInput || !payloadInput) return;
 
     try {
-        const extended = !!extendedInput.checked;
         const id = parseCANHexInteger(idInput.value, 'CAN ID');
-        const maxId = extended ? 0x1FFFFFFF : 0x7FF;
-        if (id > maxId) {
-            throw new Error(`${extended ? 'Extended' : 'Standard'} CAN ID must be <= ${formatCANHex(maxId)}.`);
+        if (id > 0x7FF) {
+            throw new Error('Standard CAN ID must be <= 0x7FF.');
         }
 
         const dlc = Number.parseInt(dlcInput.value, 10);
@@ -1047,10 +1012,10 @@ function injectCANFrameFromUI() {
         const paddedPayload = payload.slice();
         while (paddedPayload.length < dlc) paddedPayload.push(0);
 
-        const frame = { id, extended, dlc, data: paddedPayload };
+        const frame = { id, dlc, data: paddedPayload };
         const accepted = can.injectFrame(frame);
         if (!accepted) {
-            setCANMessage('CAN rejected frame. Check RX FIFO space and CTRL EXT_ID_EN for extended IDs.', 'error');
+            setCANMessage('CAN rejected the frame because the RX mailbox is occupied.', 'error');
         } else {
             const paddingNote = paddedPayload.length > payload.length ? ' Missing bytes padded with 00.' : '';
             setCANMessage(`Injected ${formatCANFrame(frame)}.${paddingNote}`, 'ok');
@@ -1064,12 +1029,12 @@ function injectCANFrameFromUI() {
 }
 
 function clearCANLogAndStatus() {
-    canTxLogFrames = [];
+    canLastTxFrame = null;
     const can = simulator?.can;
     if (can) {
         can.writeRegister(getCANBase(can) + CAN_REGISTERS.CMD, CAN_CMD_BITS.CLEAR_ERROR);
     }
-    setCANMessage('Cleared CAN UI log and sticky error status.', 'ok');
+    setCANMessage('Cleared latest TX display and error status.', 'ok');
     renderCANView();
     renderSocView();
 }
@@ -1244,11 +1209,10 @@ function renderSocView() {
     if (canStatusText && simulator.can) {
         const can = simulator.can;
         const status = can.readRegister(getCANBase(can) + CAN_REGISTERS.STATUS) >>> 0;
-        const txCount = (status >>> 8) & 0xFF;
-        const rxCount = (status >>> 16) & 0xFF;
+        const txReady = (status & CAN_STATUS_BITS.TX_READY) !== 0;
+        const rxAvailable = (status & CAN_STATUS_BITS.RX_AVAILABLE) !== 0;
         const hasError = (status & CAN_STATUS_BITS.ERROR) !== 0;
-        const rxOverrun = (status & CAN_STATUS_BITS.RX_OVERRUN) !== 0;
-        canStatusText.textContent = `TX:${txCount} RX:${rxCount}${rxOverrun ? ' OVR' : ''}${hasError ? ' ERR' : ''}`;
+        canStatusText.textContent = `TX:${txReady ? 'R' : '-'} RX:${rxAvailable ? 'A' : '-'}${hasError ? ' ERR' : ''}`;
     }
 
     // 8. Update LED Matrix Status
@@ -1686,17 +1650,22 @@ function setupCANCallbacks() {
     if (typeof simulator === 'undefined' || !simulator.can) return;
 
     const can = simulator.can;
-    if (canBoundController !== can) {
-        canBoundController = can;
-        canTxLogFrames = [];
-        setCANMessage('', '');
+    if (canBoundController === can) {
+        renderCANView();
+        return;
     }
 
+    if (canBoundController) {
+        canBoundController.onTransmit = null;
+        canBoundController.onReceive = null;
+    }
+
+    canBoundController = can;
+    canLastTxFrame = null;
+    setCANMessage('', '');
+
     can.onTransmit = (frame) => {
-        canTxLogFrames.push(frame);
-        if (canTxLogFrames.length > CAN_TX_LOG_LIMIT) {
-            canTxLogFrames = canTxLogFrames.slice(-CAN_TX_LOG_LIMIT);
-        }
+        canLastTxFrame = frame;
         renderCANView();
     };
 

@@ -7,7 +7,7 @@ import { TileLink_UL } from './tilelink_UL.js';
 import { DMAController } from './dma.js';
 import { TileLinkBridge } from './tilelink_bridge.js';
 import { UART } from './uart.js';
-import { CANController, CAN_CMD_BITS, CAN_REGISTERS } from './can.js';
+import { CANController } from './can.js';
 import { LEDMatrix } from './led_matrix.js';
 import { Keyboard } from './keyboard.js';
 import { MousePeripheral } from './mouse.js';
@@ -465,15 +465,7 @@ export const simulator = {
 
         const canEndpoint = createMMIOEndpoint(this.tilelink_UL, 'CAN Controller', {
             read: (addr) => this.can.readRegister(addr),
-            write: (addr, value) => this.can.writeRegister(addr, value),
-            canAccept: (addr, req) => {
-                const isCommandWrite = isTileLinkWrite(req.type) &&
-                    ((addr - CAN_BASE_ADDRESS) >>> 0) === CAN_REGISTERS.CMD;
-                const command = req.value ?? 0;
-                const mayClearTx = (command & CAN_CMD_BITS.CLEAR_TX) !== 0;
-                const isSend = (command & CAN_CMD_BITS.SEND) !== 0;
-                return !isCommandWrite || !isSend || mayClearTx || this.can.canAcceptCommand(command);
-            }
+            write: (addr, value) => this.can.writeRegister(addr, value)
         });
 
         const ledEndpoint = createMMIOEndpoint(this.tilelink_UL, 'LED Matrix', {
@@ -727,10 +719,6 @@ export const simulator = {
 
         if (this.uart) {
             this.uart.tick();
-        }
-
-        if (this.can) {
-            this.can.tick();
         }
 
         console.log = origLog;

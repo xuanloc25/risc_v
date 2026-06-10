@@ -10,9 +10,6 @@
 _start:
     li t0, 0xFF200000       # CAN base
 
-    li t1, 100000000        # Fast simulated bitrate so loopback completes quickly
-    sw t1, 0x10(t0)         # BITRATE
-
     li t1, 5                # CTRL: EN | LOOPBACK
     sw t1, 0x00(t0)
 

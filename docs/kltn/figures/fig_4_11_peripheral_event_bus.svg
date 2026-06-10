@@ -108,7 +108,7 @@
   <rect class="endpointBox" x="355" y="190" width="90" height="45"/>
   <text x="400" y="217" class="labelText" font-size="11px">MMIO Endpoint</text>
   <path d="M 400,235 V 320" fill="none" stroke="#475569" stroke-width="2.5" marker-end="url(#arrowBridge)"/>
-  <text x="400" y="276" class="labelText labelBus" font-size="10px">TX/RX FIFO</text>
+  <text x="400" y="276" class="labelText labelBus" font-size="10px">TX/RX mailbox</text>
 
   <!-- Keyboard (x = 510) -->
   <path d="M 510,160 V 190" class="pathLineOnly"/>

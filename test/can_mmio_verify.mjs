@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { assembler } from '../src/js/assembler.js';
 import {
     CAN_DEFAULT_BASE_ADDRESS,
-    CAN_INT_BITS,
     CAN_REGISTERS,
     CAN_STATUS_BITS
 } from '../src/js/can.js';
@@ -69,10 +68,6 @@ assert.equal(exitCode, 0, `can_loopback.asm exited with code ${exitCode}`);
 
 const status = simulator.can.readRegister(reg(CAN_REGISTERS.STATUS));
 assert.equal(status & CAN_STATUS_BITS.RX_AVAILABLE, 0, 'RX_POP should clear RX_AVAILABLE after CPU reads the frame');
-
-const intStatus = simulator.can.readRegister(reg(CAN_REGISTERS.INT_STATUS));
-assert.ok((intStatus & CAN_INT_BITS.TX_DONE) !== 0, 'TX_DONE interrupt flag should be raised');
-assert.ok((intStatus & CAN_INT_BITS.RX_NEW) !== 0, 'RX_NEW interrupt flag should be raised');
 
 assert.ok(
     simulator.mmu.translationHistory.some((entry) =>

@@ -598,7 +598,7 @@
                     </div>
 
                     <!-- CAN Controller Card -->
-                    <div class="io-device-card can-device-card" style="width: 620px;">
+                    <div class="io-device-card can-device-card">
                         <div class="io-header">
                             <i class="material-icons">settings_input_component</i>
                             <span>CAN Controller</span>
@@ -607,26 +607,26 @@
                             <div class="can-status-grid" aria-label="CAN status">
                                 <div><span>EN</span><strong id="canStatusEn">OFF</strong></div>
                                 <div><span>LOOPBACK</span><strong id="canStatusLoopback">OFF</strong></div>
-                                <div><span>TX count</span><strong id="canStatusTxCount">0</strong></div>
-                                <div><span>RX count</span><strong id="canStatusRxCount">0</strong></div>
-                                <div><span>RX overrun/error</span><strong id="canStatusError">OK</strong></div>
+                                <div><span>TX_READY</span><strong id="canStatusTxReady">OFF</strong></div>
+                                <div><span>RX_AVAILABLE</span><strong id="canStatusRxAvailable">OFF</strong></div>
+                                <div><span>ERROR</span><strong id="canStatusError">OFF</strong></div>
                             </div>
 
                             <div class="can-panel">
                                 <div class="can-panel-title">
-                                    <span>TX log</span>
+                                    <span>Latest TX frame</span>
                                     <button type="button" id="canClearButton" class="mdc-button mdc-button--outlined can-small-button">
-                                        <span class="mdc-button__label">Clear log/status</span>
+                                        <span class="mdc-button__label">Clear</span>
                                     </button>
                                 </div>
-                                <div id="canTxLog" class="can-frame-list">No transmitted frames yet.</div>
+                                <div id="canTxFrame" class="can-frame-value">No transmitted frame.</div>
                             </div>
 
                             <div class="can-panel">
                                 <div class="can-panel-title">
-                                    <span>RX FIFO preview</span>
+                                    <span>RX mailbox</span>
                                 </div>
-                                <div id="canRxPreview" class="can-frame-list">RX FIFO is empty.</div>
+                                <div id="canRxMailbox" class="can-frame-value">RX mailbox is empty.</div>
                             </div>
 
                             <div class="can-panel can-inject-panel">
@@ -637,10 +637,6 @@
                                     <label>
                                         <span>ID hex</span>
                                         <input id="canInjectId" type="text" value="123" placeholder="123 or 0x123">
-                                    </label>
-                                    <label class="can-checkbox-label">
-                                        <input id="canInjectExtended" type="checkbox">
-                                        <span>Extended ID</span>
                                     </label>
                                     <label>
                                         <span>DLC</span>
@@ -844,9 +840,9 @@
                                     </tr>
                                     <tr>
                                         <td>CAN</td>
-                                        <td>Mô phỏng CAN controller ở mức frame/message qua MMIO, phục vụ giáo dục và demo SoC.</td>
-                                        <td>Không phải mô phỏng bit-level/physical-layer CAN đầy đủ; không mô hình hóa
-                                            bit stuffing, CRC thật, ACK slot, arbitration theo từng bit hoặc error frame hoàn chỉnh.</td>
+                                        <td>Ngoại vi giáo dục tối thiểu mức frame/message qua MMIO: standard ID 11-bit,
+                                            DLC 0..8, payload 8 byte, TX/RX mailbox và loopback.</td>
+                                        <td>Không có physical layer, bit stuffing, CRC, ACK hoặc arbitration bit-level.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1548,7 +1544,7 @@ _start:
                                     <tr>
                                         <td><code>0xFF200000-0xFF2000FF</code></td>
                                         <td>CAN Controller</td>
-                                        <td>Frame/message-level controller qua MMIO; TX/RX FIFO, loopback; MMIO không cache.</td>
+                                        <td>Controller giáo dục mức frame/message qua MMIO; standard ID 11-bit, TX/RX mailbox và loopback; MMIO không cache.</td>
                                     </tr>
                                     <tr>
                                         <td><code>0xFF000000-0xFF000FFF</code></td>
@@ -1629,24 +1625,23 @@ _start:
                                 </div>
                             </div>
                             <h3>CAN Controller <code>0xFF200000</code></h3>
-                            <p>Mô phỏng CAN controller ở mức frame/message qua MMIO, phục vụ giáo dục và demo SoC.
-                                Mô hình hỗ trợ TX/RX FIFO, loopback, identifier chuẩn và mở rộng. Đây không phải mô phỏng
-                                bit-level/physical-layer CAN đầy đủ; không mô hình hóa bit stuffing, CRC thật, ACK slot,
-                                arbitration theo từng bit hoặc error frame hoàn chỉnh.</p>
+                            <p>Đây là ngoại vi giáo dục tối thiểu ở mức frame/message qua MMIO. Mô hình chỉ hỗ trợ
+                                standard ID 11-bit, DLC 0..8, payload tối đa 8 byte, một TX mailbox, một RX mailbox và
+                                loopback. Mô hình không có physical layer, bit stuffing, CRC, ACK hoặc arbitration
+                                bit-level.</p>
                             <table class="help-table compact">
                                 <tbody>
                                     <tr>
                                         <td><code>CTRL +0x00</code></td>
-                                        <td>bit0 EN, bit1 SOFT_RESET, bit2 LOOPBACK, bit3 SILENT, bit4 EXT_ID_EN.</td>
+                                        <td>bit0 EN, bit1 SOFT_RESET, bit2 LOOPBACK.</td>
                                     </tr>
                                     <tr>
                                         <td><code>STATUS +0x04</code></td>
-                                        <td>bit0 TX_READY, bit1 RX_AVAILABLE, bit2 TX_FULL, bit3 RX_FULL, bit4 RX_OVERRUN,
-                                            bit5 ERROR, bits8..15 TX count, bits16..23 RX count, bits24..31 last error.</td>
+                                        <td>bit0 TX_READY, bit1 RX_AVAILABLE, bit2 ERROR.</td>
                                     </tr>
                                     <tr>
                                         <td><code>TX_ID/TX_DLC +0x20/+0x24</code></td>
-                                        <td>TX identifier; TX_DLC bits0..3 DLC, bit4 marks extended ID.</td>
+                                        <td>Standard identifier 0..0x7FF và DLC 0..8 của TX mailbox.</td>
                                     </tr>
                                     <tr>
                                         <td><code>TX_DATA0/1 +0x28/+0x2C</code></td>
@@ -1654,19 +1649,19 @@ _start:
                                     </tr>
                                     <tr>
                                         <td><code>CMD +0x30</code></td>
-                                        <td>bit0 SEND, bit1 CLEAR_TX, bit2 CLEAR_RX, bit3 CLEAR_ERROR.</td>
+                                        <td>bit0 SEND, bit1 CLEAR_ERROR.</td>
                                     </tr>
                                     <tr>
                                         <td><code>RX_ID/RX_DLC +0x40/+0x44</code></td>
-                                        <td>Peek first RX FIFO frame; RX_DLC bit4 marks extended ID.</td>
+                                        <td>Identifier và DLC của frame đang nằm trong RX mailbox.</td>
                                     </tr>
                                     <tr>
                                         <td><code>RX_DATA0/1 +0x48/+0x4C</code></td>
-                                        <td>Peek first RX FIFO payload bytes, little-endian by word.</td>
+                                        <td>Payload của RX mailbox, little-endian theo từng word.</td>
                                     </tr>
                                     <tr>
                                         <td><code>RX_POP +0x50</code></td>
-                                        <td>Write bit0 = 1 to pop the first RX FIFO frame.</td>
+                                        <td>Ghi bit0 = 1 để xóa frame khỏi RX mailbox.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -2013,9 +2008,6 @@ _start:
                                 .globl _start
                                 _start:
                                 li t0, 0xFF200000       # CAN base
-
-                                li t1, 100000000        # Fast simulated bitrate
-                                sw t1, 0x10(t0)         # BITRATE
 
                                 li t1, 5                # CTRL: EN | LOOPBACK
                                 sw t1, 0x00(t0)
