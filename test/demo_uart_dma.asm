@@ -11,7 +11,7 @@ _start:
     li    t2, 0xFFED0004    # t2 = DMA DESC register (write-only)
     li    t3, 0xFFED0000    # t3 = DMA CTRL register
     # Configure DMA: dst fixed (UART), src increment, src=32-bit, dst=8-bit, 65 elements
-    li    t5, 0x18200041    # t5 = DMA config (65 bytes, src=word, dst=byte)
+    li    t5, 0x18200041    # t5 = DMA config(65 bytes, src=word, dst=byte)
 
     # Make UART very fast: set baud divisor = 1
     li    t4, 1

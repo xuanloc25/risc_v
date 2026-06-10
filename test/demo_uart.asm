@@ -13,7 +13,7 @@ _start:
     li    t2, 0xFFED0004    # t2 = DMA DESC register (write-only)
     li    t3, 0xFFED0000    # t3 = DMA CTRL register
     # Configure DMA: src increment, dst increment, src=32-bit, dst=32-bit, 65 elements
-    li    t5, 0x5A200005    # t5 = DMA config (65 bytes, src=word, dst=word)
+    li    t5, 0x5A200041    # t5 = DMA config (65 bytes, src=word, dst=word)
 
     # No UART setup needed when writing to RAM
 
