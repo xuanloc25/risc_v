@@ -596,6 +596,73 @@
                             <small>Base Address: <strong>0xFFFF0000</strong> | Ctrl: +0x00, Data: +0x04</small>
                         </div>
                     </div>
+
+                    <!-- CAN Controller Card -->
+                    <div class="io-device-card can-device-card" style="width: 620px;">
+                        <div class="io-header">
+                            <i class="material-icons">settings_input_component</i>
+                            <span>CAN Controller</span>
+                        </div>
+                        <div class="io-body can-console-body">
+                            <div class="can-status-grid" aria-label="CAN status">
+                                <div><span>EN</span><strong id="canStatusEn">OFF</strong></div>
+                                <div><span>LOOPBACK</span><strong id="canStatusLoopback">OFF</strong></div>
+                                <div><span>TX count</span><strong id="canStatusTxCount">0</strong></div>
+                                <div><span>RX count</span><strong id="canStatusRxCount">0</strong></div>
+                                <div><span>RX overrun/error</span><strong id="canStatusError">OK</strong></div>
+                            </div>
+
+                            <div class="can-panel">
+                                <div class="can-panel-title">
+                                    <span>TX log</span>
+                                    <button type="button" id="canClearButton" class="mdc-button mdc-button--outlined can-small-button">
+                                        <span class="mdc-button__label">Clear log/status</span>
+                                    </button>
+                                </div>
+                                <div id="canTxLog" class="can-frame-list">No transmitted frames yet.</div>
+                            </div>
+
+                            <div class="can-panel">
+                                <div class="can-panel-title">
+                                    <span>RX FIFO preview</span>
+                                </div>
+                                <div id="canRxPreview" class="can-frame-list">RX FIFO is empty.</div>
+                            </div>
+
+                            <div class="can-panel can-inject-panel">
+                                <div class="can-panel-title">
+                                    <span>Inject RX frame</span>
+                                </div>
+                                <div class="can-inject-grid">
+                                    <label>
+                                        <span>ID hex</span>
+                                        <input id="canInjectId" type="text" value="123" placeholder="123 or 0x123">
+                                    </label>
+                                    <label class="can-checkbox-label">
+                                        <input id="canInjectExtended" type="checkbox">
+                                        <span>Extended ID</span>
+                                    </label>
+                                    <label>
+                                        <span>DLC</span>
+                                        <input id="canInjectDlc" type="number" min="0" max="8" step="1" value="8">
+                                    </label>
+                                    <label class="can-payload-label">
+                                        <span>Payload bytes hex</span>
+                                        <input id="canInjectPayload" type="text" value="11 22 33 44 55 66 77 88"
+                                            placeholder="11 22 33 44 55 66 77 88">
+                                    </label>
+                                    <button type="button" id="canInjectButton" class="mdc-button mdc-button--raised">
+                                        <span class="mdc-button__label">Inject RX</span>
+                                    </button>
+                                </div>
+                                <div id="canInjectStatus" class="can-inject-status" role="status"></div>
+                            </div>
+                        </div>
+                        <div class="io-footer">
+                            <small>Base Address: <strong>0xFF200000</strong></small>
+                            <small>CTRL, STATUS, TX_ID, TX_DLC, TX_DATA0/1, RX_ID, RX_DLC, RX_DATA0/1, RX_POP</small>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -712,7 +779,7 @@
                                     </tr>
                                     <tr>
                                         <td>I/O</td>
-                                        <td>Tương tác LED Matrix, UART Console, Keyboard, Mouse và DMA.</td>
+                                        <td>Tương tác LED Matrix, UART Console, Keyboard, Mouse, CAN và DMA.</td>
                                         <td>I/O dùng memory-mapped registers; syscall chỉ dành cho console/MMU helper.
                                         </td>
                                     </tr>
@@ -770,10 +837,16 @@
                                     </tr>
                                     <tr>
                                         <td>SoC fabric</td>
-                                        <td>MMU/TLB, L1I/L1D/L2 cache, TileLink-UH/UL, bridge, DMA, UART, LED,
+                                        <td>MMU/TLB, L1I/L1D/L2 cache, TileLink-UH/UL, bridge, DMA, UART, CAN, LED,
                                             Keyboard, Mouse.</td>
                                         <td>Mô phỏng ở mức chức năng/chu kỳ trong trình duyệt, không đại diện timing,
                                             điện năng hoặc TileLink-C coherence đầy đủ.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>CAN</td>
+                                        <td>Mô phỏng CAN controller ở mức frame/message qua MMIO, phục vụ giáo dục và demo SoC.</td>
+                                        <td>Không phải mô phỏng bit-level/physical-layer CAN đầy đủ; không mô hình hóa
+                                            bit stuffing, CRC thật, ACK slot, arbitration theo từng bit hoặc error frame hoàn chỉnh.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -795,7 +868,7 @@
                                 <li><strong>Run:</strong> chạy liên tục. Nếu đã đặt breakpoint, Run sẽ dừng khi PC tới
                                     instruction tương ứng.</li>
                                 <li><strong>Quan sát:</strong> Registers tô vàng khi giá trị đổi; Memory cho biết mã
-                                    máy/data; I/O hiển thị UART/LED/keyboard; Systems Log Console ghi log bus, CPU, DMA,
+                                    máy/data; I/O hiển thị UART/CAN/LED/keyboard; Systems Log Console ghi log bus, CPU, DMA,
                                     cache.</li>
                                 <li><strong>Lọc log:</strong> mở rộng Systems Log Console để tìm theo text, chọn level
                                     warn/error hoặc lọc module như CPU/MMU/TileLink/DMA/I/O.</li>
@@ -1473,6 +1546,11 @@ _start:
                                         <td>TX/RX/status/control/baud divisor; MMIO không cache.</td>
                                     </tr>
                                     <tr>
+                                        <td><code>0xFF200000-0xFF2000FF</code></td>
+                                        <td>CAN Controller</td>
+                                        <td>Frame/message-level controller qua MMIO; TX/RX FIFO, loopback; MMIO không cache.</td>
+                                    </tr>
+                                    <tr>
                                         <td><code>0xFF000000-0xFF000FFF</code></td>
                                         <td>LED Matrix</td>
                                         <td>32x32 pixels, row-major, mỗi pixel 1 word <code>0x00RRGGBB</code>; MMIO
@@ -1550,6 +1628,48 @@ _start:
                                     </p>
                                 </div>
                             </div>
+                            <h3>CAN Controller <code>0xFF200000</code></h3>
+                            <p>Mô phỏng CAN controller ở mức frame/message qua MMIO, phục vụ giáo dục và demo SoC.
+                                Mô hình hỗ trợ TX/RX FIFO, loopback, identifier chuẩn và mở rộng. Đây không phải mô phỏng
+                                bit-level/physical-layer CAN đầy đủ; không mô hình hóa bit stuffing, CRC thật, ACK slot,
+                                arbitration theo từng bit hoặc error frame hoàn chỉnh.</p>
+                            <table class="help-table compact">
+                                <tbody>
+                                    <tr>
+                                        <td><code>CTRL +0x00</code></td>
+                                        <td>bit0 EN, bit1 SOFT_RESET, bit2 LOOPBACK, bit3 SILENT, bit4 EXT_ID_EN.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>STATUS +0x04</code></td>
+                                        <td>bit0 TX_READY, bit1 RX_AVAILABLE, bit2 TX_FULL, bit3 RX_FULL, bit4 RX_OVERRUN,
+                                            bit5 ERROR, bits8..15 TX count, bits16..23 RX count, bits24..31 last error.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>TX_ID/TX_DLC +0x20/+0x24</code></td>
+                                        <td>TX identifier; TX_DLC bits0..3 DLC, bit4 marks extended ID.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>TX_DATA0/1 +0x28/+0x2C</code></td>
+                                        <td>Up to 8 payload bytes, little-endian by word.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>CMD +0x30</code></td>
+                                        <td>bit0 SEND, bit1 CLEAR_TX, bit2 CLEAR_RX, bit3 CLEAR_ERROR.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>RX_ID/RX_DLC +0x40/+0x44</code></td>
+                                        <td>Peek first RX FIFO frame; RX_DLC bit4 marks extended ID.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>RX_DATA0/1 +0x48/+0x4C</code></td>
+                                        <td>Peek first RX FIFO payload bytes, little-endian by word.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>RX_POP +0x50</code></td>
+                                        <td>Write bit0 = 1 to pop the first RX FIFO frame.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                             <h3>DMA quick reference</h3>
                             <table class="help-table compact">
                                 <tbody>
@@ -1582,7 +1702,7 @@ _start:
                                 <li>Đường CPU chính đi qua
                                     <code>RISC-V Core -> MMU -> Cache -> TileLink-UH -> Main Memory</code>.
                                 </li>
-                                <li>MMIO như UART/LED/Keyboard/Mouse đi qua TileLink-UL và thường không cache.</li>
+                                <li>MMIO như UART/CAN/LED/Keyboard/Mouse đi qua TileLink-UL và thường không cache.</li>
                                 <li>Cache view có 3 tab: L1I cho instruction fetch, L1D cho data access, L2 shared
                                     cache.</li>
                                 <li>Bảng cache hiển thị set/way/tag/valid/dirty và thống kê
@@ -1618,7 +1738,7 @@ _start:
                                     </tr>
                                     <tr>
                                         <td>Cacheability</td>
-                                        <td>Main memory cacheable; UART/LED/Keyboard/Mouse/DMA registers là non-cacheable
+                                        <td>Main memory cacheable; UART/CAN/LED/Keyboard/Mouse/DMA registers là non-cacheable
                                             để MMIO phản ánh trạng thái thiết bị ngay.</td>
                                     </tr>
                                     <tr>
@@ -1767,6 +1887,18 @@ _start:
                                         Nạp vào editor
                                     </button>
                                 </article>
+                                <article class="help-example">
+                                    <div>
+                                        <h3>CAN: loopback frame</h3>
+                                        <p>Enable CAN + loopback, send one frame, poll RX_AVAILABLE. Full demo:
+                                            <code>test/can_loopback.asm</code>.</p>
+                                    </div>
+                                    <button type="button" class="help-sample-button"
+                                        data-sample-template="helpSampleCanLoopback">
+                                        <i class="material-icons">content_paste</i>
+                                        Nạp vào editor
+                                    </button>
+                                </article>
                             </div>
 
                             <template id="helpSampleUart">.globl _start
@@ -1876,12 +2008,48 @@ _start:
                                 li a0, 0
                                 li a7, 93
                                 ecall</template>
+
+                            <template id="helpSampleCanLoopback">.text
+                                .globl _start
+                                _start:
+                                li t0, 0xFF200000       # CAN base
+
+                                li t1, 100000000        # Fast simulated bitrate
+                                sw t1, 0x10(t0)         # BITRATE
+
+                                li t1, 5                # CTRL: EN | LOOPBACK
+                                sw t1, 0x00(t0)
+
+                                li t1, 0x123
+                                sw t1, 0x20(t0)         # TX_ID
+                                li t1, 4
+                                sw t1, 0x24(t0)         # TX_DLC
+                                li t1, 0x44332211
+                                sw t1, 0x28(t0)         # TX_DATA0
+
+                                li t1, 1
+                                sw t1, 0x30(t0)         # CMD: SEND
+
+                                wait_rx:
+                                lw t2, 0x04(t0)         # STATUS
+                                andi t2, t2, 2          # RX_AVAILABLE
+                                beq t2, x0, wait_rx
+
+                                lw t3, 0x40(t0)         # RX_ID
+                                lw t4, 0x44(t0)         # RX_DLC
+                                lw t5, 0x48(t0)         # RX_DATA0
+                                li t1, 1
+                                sw t1, 0x50(t0)         # RX_POP
+
+                                li a0, 0
+                                li a7, 93
+                                ecall</template>
                         </section>
 
                         <div class="help-empty-state" id="helpEmptyState" hidden>
                             <i class="material-icons">search_off</i>
                             <p>Không tìm thấy nội dung phù hợp. Thử tìm bằng tên lệnh như <code>lw</code>,
-                                <code>ecall</code>, <code>UART</code>, <code>DMA</code>.
+                                <code>ecall</code>, <code>UART</code>, <code>CAN</code>, <code>DMA</code>.
                             </p>
                         </div>
                     </main>

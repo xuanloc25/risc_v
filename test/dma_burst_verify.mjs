@@ -97,19 +97,47 @@ const datapathMoves = countLines('[DMA][DATAPATH] moved');
 assert.ok(datapathMoves > 0, 'Phải có datapath chuyển byte từ read buffer sang write buffer.');
 
 // ── Yêu cầu 2: burst transfer thật cho cả đọc và ghi ──
+//
+// Số liệu EXACT suy ra từ cấu hình (N=16, srcMode=dstMode=1 inc, width=2 word,
+// burstSize=1):
+//   maxBurstBeats = 1 << (burstSize+1) = 1 << 2 = 4 beat/burst.
+//   useReadBurst/useWriteBurst đều TRUE (word + increment + beats>=2), nên:
+//     READ : 16 word / 4 beat = 4 burst, mỗi burst 4 beat  => 4 burst, 16 beat đọc.
+//     WRITE: 16 word / 4 beat = 4 burst, mỗi burst 4 beat  => 4 burst, 16 beat ghi.
+//
+// QUAN TRỌNG — chỉ đếm beat của DMA: log RESPONSE_BEAT được phát cho MỌI master
+// trên UH, kể cả L2 Cache nạp lệnh cho CPU (block refill 16 beat ở 0x400000).
+// RESPONSE_BEAT của DMA luôn mang "to=dma" (state.req.from === 'dma' trong mem.js),
+// còn refill của cache mang "to=L2 Cache". Vì vậy phải lọc theo "to=dma" để không
+// lẫn lưu lượng ngoài DMA. (WRITE_BEAT ở đây vốn đã thuần DMA — không master nào
+// khác phát giao dịch ghi multi-beat trong kịch bản này — nhưng vẫn lọc "to=dma"
+// để bất biến trước nhiễu về sau.)
 const multiReadBursts  = logLines.filter(l => l.includes('ISSUE_READ') && l.includes('beats=4')).length;
 const multiWriteBursts = logLines.filter(l => l.includes('ISSUE_WRITE') && l.includes('multi-beat')).length;
-const readBeats  = countLines('RESPONSE_BEAT');   // Mem phát beat đọc
-const writeBeats = countLines('WRITE_BEAT');       // Mem ghi từng beat
-assert.ok(multiReadBursts >= 1,  'Phải có ít nhất 1 giao dịch READ burst nhiều beat trên UH.');
-assert.ok(multiWriteBursts >= 1, 'Phải có ít nhất 1 giao dịch WRITE burst nhiều beat trên UH.');
-assert.ok(readBeats >= 4,  'Mem phải phát nhiều beat đọc (multibeat).');
-assert.ok(writeBeats >= 4, 'Mem phải ghi nhiều beat (multibeat write).');
+const dmaReadBeats  = logLines.filter(l => l.includes('RESPONSE_BEAT') && l.includes('to=dma')).length;
+const dmaWriteBeats = logLines.filter(l => l.includes('WRITE_BEAT') && l.includes('to=dma')).length;
+const allWriteBeats = countLines('WRITE_BEAT');
+// Xác nhận WRITE_BEAT trong kịch bản này vốn đã thuần DMA (mọi WRITE_BEAT = to=dma).
+assert.equal(allWriteBeats, dmaWriteBeats, 'Mọi WRITE_BEAT trong kịch bản này phải là của DMA (to=dma).');
+
+assert.equal(multiReadBursts, 4,  '16 word / 4 beat = 4 giao dịch READ burst (beats=4) trên UH.');
+assert.equal(multiWriteBursts, 4, '16 word / 4 beat = 4 giao dịch WRITE burst multi-beat trên UH.');
+assert.equal(dmaReadBeats, 16,  '4 burst x 4 beat = 16 beat đọc của DMA (RESPONSE_BEAT to=dma).');
+assert.equal(dmaWriteBeats, 16, '4 burst x 4 beat = 16 beat ghi của DMA (WRITE_BEAT to=dma).');
+// Giữ tên cũ cho phần in báo cáo bên dưới.
+const readBeats = dmaReadBeats;
+const writeBeats = dmaWriteBeats;
 
 // ── Yêu cầu 3: TileLink-UH có latency ──
-const latencyHits = countLines('fabric latency=2');
-assert.ok(simulator.tilelink_UH.latency >= 1, 'TileLink-UH phải có latency > 0.');
-assert.ok(latencyHits > 0, 'Log của UH phải thể hiện fabric latency đang áp dụng.');
+// Kiểm tra trực tiếp cấu hình bus: SoC đặt UH latency = 2 cycle.
+assert.equal(simulator.tilelink_UH.latency, 2, 'TileLink-UH phải có latency = 2 (đúng cấu hình SoC).');
+// Bằng chứng latency phải SCOPE theo DMA: dòng "[A] issue ... (fabric latency=2)"
+// được phát cho mọi master trên UH (CPU/cache cũng có). DMA phát đúng 1 giao dịch
+// A-channel cho mỗi burst => 4 Get (đọc) + 4 PutFullData (ghi) = 8 dòng issue của
+// DMA, mỗi dòng đều dán "(fabric latency=2)" vì UH latency=2.
+const dmaLatencyHits = logLines.filter(l =>
+    l.includes('issue from=dma') && l.includes('fabric latency=2')).length;
+assert.equal(dmaLatencyHits, 8, 'Mỗi giao dịch A-channel của DMA (4 đọc + 4 ghi) phải qua fabric latency=2 trên UH.');
 
 console.log(`\n  [1] Buffer độc lập:   readFifo≠writeFifo=${buffersIndependent}, datapath moves=${datapathMoves}`);
 console.log(`  [2] Burst UH:         READ bursts=${multiReadBursts} (beats=${readBeats}), WRITE bursts=${multiWriteBursts} (beats=${writeBeats})`);

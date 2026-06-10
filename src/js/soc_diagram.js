@@ -125,22 +125,23 @@ export const SOC_NODES = {
         group: 'bus',
         icon: 'swap_horiz',
         desc: 'Low-speed MMIO bus',
-        tooltip: 'TileLink-UL Bus: low-speed utility bus connecting MMIO peripherals (UART, LED, Keyboard, Mouse) via bridge adapters.',
+        tooltip: 'TileLink-UL Bus: low-speed utility bus connecting MMIO peripherals (UART, CAN, LED, Keyboard, Mouse) via bridge adapters.',
         statusId: 'soc-status-tl-ul',
         status: 'Idle',
         logModule: 'tilelink',
         ports: {
-            uart: { x: 42, y: 60, side: 'bottom' },
-            led: { x: 84, y: 60, side: 'bottom' },
-            keyboard: { x: 126, y: 60, side: 'bottom' },
-            mouse: { x: 168, y: 60, side: 'bottom' }
+            uart: { x: 25, y: 60, side: 'bottom' },
+            led: { x: 67.5, y: 60, side: 'bottom' },
+            can: { x: 105, y: 60, side: 'bottom' },
+            keyboard: { x: 147.5, y: 60, side: 'bottom' },
+            mouse: { x: 185, y: 60, side: 'bottom' }
         }
     },
     uart: {
         name: 'UART Console',
-        x: 486,
+        x: 400,
         y: 552,
-        w: 150,
+        w: 145,
         h: 48,
         group: 'peripheral',
         icon: null,
@@ -151,14 +152,14 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'uartInput',
         ports: {
-            busTop: { x: 75, y: 0, side: 'top' }
+            busTop: { x: 72.5, y: 0, side: 'top' }
         }
     },
     led: {
         name: 'LED Matrix',
-        x: 654,
+        x: 550,
         y: 552,
-        w: 150,
+        w: 145,
         h: 48,
         group: 'peripheral',
         icon: null,
@@ -169,14 +170,32 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'ledMatrixCanvas',
         ports: {
-            busTop: { x: 75, y: 0, side: 'top' }
+            busTop: { x: 72.5, y: 0, side: 'top' }
+        }
+    },
+    can: {
+        name: 'CAN Controller',
+        x: 700,
+        y: 552,
+        w: 145,
+        h: 48,
+        group: 'peripheral',
+        icon: null,
+        desc: 'MMIO 0xFF200000',
+        tooltip: 'CAN message-level MMIO controller: supports TX/RX FIFO and loopback. Not bit-level or physical-layer simulation; no real CRC, ACK slot, arbitration bit-level, complete error frames, or full ISO 11898 model.',
+        statusId: 'soc-status-can',
+        status: 'TX:0 RX:0',
+        targetTab: 'view-io',
+        focusId: 'canInjectId',
+        ports: {
+            busTop: { x: 72.5, y: 0, side: 'top' }
         }
     },
     keyboard: {
         name: 'Keyboard',
-        x: 822,
+        x: 850,
         y: 552,
-        w: 150,
+        w: 145,
         h: 48,
         group: 'peripheral',
         icon: null,
@@ -187,14 +206,14 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'keyboardInput',
         ports: {
-            busTop: { x: 75, y: 0, side: 'top' }
+            busTop: { x: 72.5, y: 0, side: 'top' }
         }
     },
     mouse: {
         name: 'Mouse',
-        x: 990,
+        x: 1000,
         y: 552,
-        w: 150,
+        w: 145,
         h: 48,
         group: 'peripheral',
         icon: null,
@@ -205,7 +224,7 @@ export const SOC_NODES = {
         targetTab: 'view-io',
         focusId: 'ledMatrixCanvas',
         ports: {
-            busTop: { x: 75, y: 0, side: 'top' }
+            busTop: { x: 72.5, y: 0, side: 'top' }
         }
     }
 };
@@ -265,7 +284,7 @@ export const SOC_EDGES = [
         to: 'uart:busTop',
         bus: 'ul',
         bidirectional: true,
-        waypoints: [{ x: 939, y: 505 }, { x: 561, y: 505 }]
+        waypoints: [{ x: 922, y: 505 }, { x: 472.5, y: 505 }]
     },
     {
         id: 'ulToLedMatrix',
@@ -273,7 +292,15 @@ export const SOC_EDGES = [
         to: 'led:busTop',
         bus: 'ul',
         bidirectional: true,
-        waypoints: [{ x: 981, y: 520 }, { x: 729, y: 520 }]
+        waypoints: [{ x: 964.5, y: 520 }, { x: 622.5, y: 520 }]
+    },
+    {
+        id: 'ulToCan',
+        from: 'tl-ul:can',
+        to: 'can:busTop',
+        bus: 'ul',
+        bidirectional: true,
+        waypoints: [{ x: 1002, y: 535 }, { x: 772.5, y: 535 }]
     },
     {
         id: 'ulToKeyboard',
@@ -281,7 +308,7 @@ export const SOC_EDGES = [
         to: 'keyboard:busTop',
         bus: 'ul',
         bidirectional: true,
-        waypoints: [{ x: 1023, y: 535 }, { x: 897, y: 535 }]
+        waypoints: [{ x: 1044.5, y: 535 }, { x: 922.5, y: 535 }]
     },
     {
         id: 'ulToMouse',
@@ -307,6 +334,7 @@ const TRACE_EDGE_IDS = [
     'ulToUhBridge',
     'ulToUart',
     'ulToLedMatrix',
+    'ulToCan',
     'ulToKeyboard',
     'ulToMouse'
 ];

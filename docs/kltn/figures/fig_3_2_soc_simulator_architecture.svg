@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 680" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
   <title id="title">Kiến trúc tổng quan SoC Simulator</title>
-  <desc id="desc">Kiến trúc tổng quan của trình mô phỏng SoC gồm lõi RISC-V, MMU, cache L1I/L1D/L2, TileLink-UH, TileLink-UL, DMA, RAM và các ngoại vi MMIO.</desc>
+  <desc id="desc">Kiến trúc tổng quan của trình mô phỏng SoC gồm lõi RISC-V, MMU, cache L1I/L1D/L2, TileLink-UH, TileLink-UL, DMA, RAM và các ngoại vi MMIO UART, CAN, LED, bàn phím, chuột.</desc>
   <defs>
     <marker id="aEnd" markerWidth="10" markerHeight="10" refX="9" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
       <path d="M0,0 L9,4.5 L0,9 Z" fill="#2d3436"/>
@@ -77,15 +77,17 @@
   <text x="198" y="584" class="lbl">Main Memory</text>
   <text x="198" y="601" class="sub">RAM</text>
 
-  <rect x="454" y="560" width="90" height="58" rx="6" class="blk periph"/>
-  <text x="499" y="594" class="lbl">UART</text>
-  <rect x="560" y="560" width="104" height="58" rx="6" class="blk periph"/>
-  <text x="612" y="585" class="lbl">LED</text>
-  <text x="612" y="600" class="sub">Matrix</text>
-  <rect x="680" y="560" width="104" height="58" rx="6" class="blk periph"/>
-  <text x="732" y="594" class="lbl">Keyboard</text>
-  <rect x="800" y="560" width="90" height="58" rx="6" class="blk periph"/>
-  <text x="845" y="594" class="lbl">Mouse</text>
+  <rect x="430" y="560" width="78" height="58" rx="6" class="blk periph"/>
+  <text x="469" y="594" class="lbl">UART</text>
+  <rect x="520" y="560" width="78" height="58" rx="6" class="blk periph"/>
+  <text x="559" y="594" class="lbl">CAN</text>
+  <rect x="610" y="560" width="78" height="58" rx="6" class="blk periph"/>
+  <text x="649" y="585" class="lbl">LED</text>
+  <text x="649" y="600" class="sub">Matrix</text>
+  <rect x="700" y="560" width="88" height="58" rx="6" class="blk periph"/>
+  <text x="744" y="594" class="lbl">Keyboard</text>
+  <rect x="800" y="560" width="78" height="58" rx="6" class="blk periph"/>
+  <text x="839" y="594" class="lbl">Mouse</text>
 
   <!-- Links -->
   <path d="M401 132 L401 174" class="link"/>
@@ -114,10 +116,11 @@
   <path d="M682 112 C618 126 574 230 548 434" class="bi"/>
   <text x="610" y="228" class="tiny">DMA regs trên UH</text>
 
-  <path d="M790 488 L790 530 L499 530 L499 560" class="thin"/>
-  <path d="M790 488 L790 530 L612 530 L612 560" class="thin"/>
-  <path d="M790 488 L790 530 L732 530 L732 560" class="thin"/>
-  <path d="M790 488 L845 530 L845 560" class="thin"/>
+  <path d="M790 488 L790 530 L469 530 L469 560" class="thin"/>
+  <path d="M790 488 L790 530 L559 530 L559 560" class="thin"/>
+  <path d="M790 488 L790 530 L649 530 L649 560" class="thin"/>
+  <path d="M790 488 L790 530 L744 530 L744 560" class="thin"/>
+  <path d="M790 488 L839 530 L839 560" class="thin"/>
 
   <!-- Legend -->
   <rect x="108" y="646" width="16" height="10" rx="2" class="blk compute"/>

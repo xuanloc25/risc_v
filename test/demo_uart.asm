@@ -3,7 +3,7 @@ msg:
     .ascii "123456789a123456789a123456789a123456789a123456789a123456789a12345"
 dst_buf:
     .space 128
-.text
+.text 0x00400000
 .globl _start
 _start:
     # --- 1. KHỞI TẠO TẤT CẢ THANH GHI Ở ĐẦU CHƯƠNG TRÌNH ---

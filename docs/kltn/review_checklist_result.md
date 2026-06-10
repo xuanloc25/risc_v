@@ -11,6 +11,10 @@
 
 ## (1) TÓM TẮT ĐIỀU HÀNH
 
+> **Ghi chú cập nhật 10/06/2026:** Các nhận định cũ trong checklist cho rằng CAN chỉ nằm ở hướng phát triển
+> đã được thay thế bởi implementation `src/js/can.js` và bộ test CAN. Phạm vi hiện tại là frame/message qua
+> MMIO, không phải mô phỏng bit-level/physical-layer đầy đủ.
+>
 > ⚠️ **PHẠM VI ĐỢT NÀY: KHÔNG GỒM CHƯƠNG 5.** Chương 5 (`chapter_05.md`) đang làm lại phần kiểm
 > chứng nên không được đọc/không bị báo lỗi. Mọi vấn đề chỉ phát sinh do phụ thuộc nội dung Chương 5
 > được đưa vào mục (4), KHÔNG tính là lỗi.
@@ -19,7 +23,7 @@
 đây là điểm mạnh nổi bật. Cả bộ "bất biến trung thực" (tập con RV32IMF; chưa có CSR/đặc quyền; chưa đủ
 FCSR/fflags/frm; `fence` mã hóa nhưng chưa thực thi; TileLink chỉ A/D mức giao dịch, không B/C/E/TL-C;
 điều phối bus một-giao-dịch chứ chưa phải phân xử đa master; chưa có IRQ — chỉ đọc thăm dò; AMOADD.W là
-RV32A ngoài tên đề tài; CAN chỉ ở hướng phát triển; chưa có benchmark định lượng) được giữ **nhất quán
+RV32A ngoài tên đề tài; CAN chỉ ở mức frame/message qua MMIO; chưa có benchmark định lượng) được giữ **nhất quán
 xuyên suốt** abstract → Ch1 → Ch2 → Ch3 → Ch4 → Ch6. **Không phát hiện overclaim hay mâu thuẫn với
 source.** Các số liệu kỹ thuật (cache L1/L2, MMU/TLB, memory map, latency) **trùng khớp** giữa các chương
 và với analysis.
@@ -118,8 +122,8 @@ và với analysis.
    trong Tóm tắt/6.1 khớp với kết quả Ch5.
 2. **Tham chiếu "mục 5.8".** `chapter_06.md:25` dẫn "các nhận định rút ra từ kiểm thử ở mục 5.8" — tạm hoãn
    đối chiếu Bảng 1.2/§6.2 ↔ §5.8 cho tới khi Ch5 xong.
-3. **Đánh số trích dẫn liên quan Ch5.** Có khoảng trống [16], [17] giữa [15] (Ch4) và [18] (CAN, Ch6, ghi
-   chú "đánh số tiếp sau các nguồn của Chương 5"). Cần xác nhận [16], [17] được định nghĩa ở Ch5 và [18] là
+3. **Đánh số trích dẫn liên quan Ch5.** Có khoảng trống [16], [17] giữa [15] (Ch4) và [19] (CAN, Ch4/Ch6).
+   Cần xác nhận [16]–[18] được định nghĩa ở Ch5 và [19] là
    số kế tiếp đúng; đồng thời xác nhận GNU binutils/riscv-tests (mục (2)#8) có được cấp số ở Ch5 hay không.
 4. **Hình/bảng ⭐ thuộc Ch5** (Hình 5.1 Quy trình kiểm thử; Bảng 5.1 Danh sách test case; Bảng 5.3 Đối
    chiếu Spike) — ngoài phạm vi đợt này; kiểm khi hoàn thiện Ch5.
@@ -144,7 +148,7 @@ và với analysis.
 - `[10]` Patterson & Hennessy COD — cần phiên bản & năm. (`chapter_02.md:304`, `chapter_04.md:530`)
 - `[12]` CodeMirror, `[13]` MDN — cần phiên bản/ngày truy cập. (Ch2/Ch4)
 - `[14]` RARS, `[15]` Material Components Web — cần ngày truy cập/phiên bản. (`chapter_04.md:538`, `chapter_04.md:540`)
-- `[18]` CAN (Bosch/ISO 11898) — cần thông tin xuất bản đầy đủ & ngày truy cập. (`chapter_06.md:73`)
+- `[19]` CAN — đã xác nhận từ PDF local: Robert Bosch GmbH, *M_CAN Controller Area Network User's Manual*, Revision 3.3.1, 11/03/2023.
 - `[1]`–`[5]` (Ch1) — ghi chú "cần rà soát lại định dạng và ngày truy cập khi hoàn thiện". (`chapter_01.md:159`)
 
 **Hạng mục cấu trúc cần hoàn tất trước khi đóng quyển:** mục Phân công công việc + Bảng 1.3; Phụ lục A–E;
@@ -180,12 +184,12 @@ Danh mục từ viết tắt; mục lục + danh mục hình/bảng; Tài liệu
   heading) — đúng khuyến nghị của outline (tránh heading cấp 4). Không có mục quá ngắn/dài bất thường.
 - **Nhóm 6 — Trích dẫn:** Đánh số `[n]` **nhất quán xuyên chương**: [6]=RISC-V ISA, [7]=TileLink, [8]=KLTN
   khóa trước, [9]=IEEE 754, [10]=Patterson COD, [11]=Hennessy CA, [12]=CodeMirror, [13]=MDN, [14]=RARS,
-  [15]=Material Components Web, [18]=CAN (mới ở Ch6). Mỗi chương chỉ liệt kê nguồn thực sự trích — tốt.
+  [15]=Material Components Web, [19]=CAN (được trích ở Ch4/Ch6). Mỗi chương chỉ liệt kê nguồn thực sự trích — tốt.
   **Vấn đề:** tham chiếu tài liệu nội bộ "phân tích phạm vi" (#7), GNU binutils/riscv-tests chưa cấp số
   (#8), outline lệch số (#17); khoảng trống [16]/[17] phụ thuộc Ch5 (mục (4)#3).
 - **Nhóm 7 — Danh mục từ viết tắt:** Phần lớn viết tắt giải nghĩa ở lần đầu (SoC, ISA, RISC/CISC, ALU, FPU,
   MMU, TLB, VPN/PPN/PTE, MMIO, DMA, LRU, TL-UL/UH/C, CSR, FCSR/fflags/frm, IEEE 754, SPA, DOM, CDN, ES
-  module — đạt). **Vấn đề:** chưa có Danh mục viết tắt (#3); FIFO chưa giải nghĩa (#9); UART/LED chưa giải
+  module — đạt). **Vấn đề:** chưa có Danh mục viết tắt (#3); FIFO chưa giải nghĩa (#9); UART/CAN/LED chưa giải
   nghĩa ở lần đầu tại Ch1 (#10); IPS chưa định nghĩa nhất quán (#4).
 - **Nhóm 8 — Văn phong:** Tiếng Việt học thuật, trang trọng, **không dùng ngôi thứ nhất** ("em/tôi") —
   đạt. Không phát hiện lỗi chính tả rõ. Lặp ý có (cảnh báo phạm vi lặp giữa §1.3.2/§2.6.3/§6.2) nhưng **chủ

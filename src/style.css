@@ -638,6 +638,11 @@ li.CodeMirror-hint-active,
     width: auto !important;
 }
 
+#view-io .can-device-card {
+    flex-basis: 620px;
+    width: auto !important;
+}
+
 .io-device-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
@@ -707,6 +712,132 @@ li.CodeMirror-hint-active,
     min-width: 0;
 }
 
+.can-console-body {
+    display: grid !important;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 10px;
+    padding: 12px;
+}
+
+.can-status-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(80px, 1fr));
+    gap: 8px;
+}
+
+.can-status-grid div {
+    border: 1px solid #dfe6e9;
+    border-radius: 6px;
+    padding: 7px 8px;
+    background: #f8f9fb;
+    min-width: 0;
+}
+
+.can-status-grid span,
+.can-inject-grid label span {
+    display: block;
+    color: #636e72;
+    font-size: 0.72rem;
+    margin-bottom: 3px;
+}
+
+.can-status-grid strong {
+    display: block;
+    color: #2d3436;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.can-panel {
+    border: 1px solid #dfe6e9;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.can-panel-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 9px;
+    background: #f1f2f6;
+    color: #2d3436;
+    font-weight: 700;
+    font-size: 0.82rem;
+}
+
+.can-small-button {
+    height: 28px;
+    font-size: 0.72rem;
+}
+
+.can-frame-list {
+    min-height: 46px;
+    max-height: 118px;
+    overflow: auto;
+    padding: 8px 9px;
+    background: #1e1e1e;
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+}
+
+.can-inject-grid {
+    display: grid;
+    grid-template-columns: minmax(100px, 0.75fr) minmax(110px, 0.75fr) minmax(70px, 0.45fr) minmax(220px, 1.4fr) auto;
+    gap: 8px;
+    align-items: end;
+    padding: 9px;
+}
+
+.can-inject-grid input[type="text"],
+.can-inject-grid input[type="number"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+
+.can-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 35px;
+}
+
+.can-checkbox-label span {
+    margin-bottom: 0;
+}
+
+.can-payload-label {
+    min-width: 0;
+}
+
+.can-inject-status {
+    min-height: 18px;
+    padding: 0 9px 9px;
+    color: #636e72;
+    font-size: 0.8rem;
+}
+
+.can-inject-status.error {
+    color: #d63031;
+}
+
+.can-inject-status.ok {
+    color: #00b894;
+}
+
 @media (max-width: 520px) {
     .uart-console-body>div:last-of-type>div {
         display: grid !important;
@@ -718,6 +849,11 @@ li.CodeMirror-hint-active,
         grid-column: 1 / -1;
         width: 100% !important;
     }
+
+    .can-status-grid,
+    .can-inject-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .io-footer {
@@ -727,6 +863,11 @@ li.CodeMirror-hint-active,
     font-size: 0.85rem;
     color: #636e72;
     text-align: center;
+}
+
+.can-device-card .io-footer {
+    display: grid;
+    gap: 4px;
 }
 
 /* --- PLACEHOLDER VIEWS --- */

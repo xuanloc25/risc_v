@@ -2,7 +2,7 @@
 
 ## 6.1. Kết luận
 
-Khóa luận đã xây dựng được trình mô phỏng hệ thống trên chip (SoC) dựa trên kiến trúc tập lệnh RISC-V RV32IMF [1] và giao thức TileLink [2], chạy trực tiếp trên trình duyệt web. Hệ thống tích hợp trình biên dịch hợp ngữ, lõi xử lý, MMU/TLB, bộ nhớ đệm L1I/L1D/L2, bus TileLink-UH/UL, bộ điều khiển DMA, bốn thiết bị ngoại vi (UART, ma trận LED, bàn phím, chuột) và các khung trực quan hóa trạng thái.
+Khóa luận đã xây dựng được trình mô phỏng hệ thống trên chip (SoC) dựa trên kiến trúc tập lệnh RISC-V RV32IMF [1] và giao thức TileLink [2], chạy trực tiếp trên trình duyệt web. Hệ thống tích hợp trình biên dịch hợp ngữ, lõi xử lý, MMU/TLB, bộ nhớ đệm L1I/L1D/L2, bus TileLink-UH/UL, bộ điều khiển DMA, năm thiết bị ngoại vi (UART, CAN, ma trận LED, bàn phím, chuột) và các khung trực quan hóa trạng thái.
 
 So với năm mục tiêu kỹ thuật ở mục 1.2.2, khóa luận đã hoàn thành 5/5 mục tiêu, tương đương khoảng 100% số mục tiêu đề ra trong phạm vi mô phỏng đã xác định:
 
@@ -25,7 +25,7 @@ Hệ thống còn các hạn chế chính sau:
 - Điều phối bus vẫn theo hàng đợi một giao dịch, chưa phải bộ phân xử đa master đầy đủ.
 - Chưa có cơ chế ngắt phần cứng tới CPU; DMA và ngoại vi chủ yếu dùng đọc thăm dò.
 - Chưa có bộ benchmark hiệu năng định lượng lặp lại; số liệu hiện phục vụ quan sát trong mô phỏng.
-- Thiết bị truyền thông CAN [19] chưa được hiện thực.
+- CAN mới được mô phỏng ở mức frame/message qua MMIO để phục vụ giáo dục và demo SoC; chưa mô phỏng bit-level/physical layer đầy đủ, bit stuffing, CRC thật, ACK slot, arbitration theo từng bit, transceiver hoặc error frame hoàn chỉnh [19].
 
 ## 6.3. Hướng phát triển
 
@@ -34,8 +34,8 @@ Các hướng phát triển tiếp theo gồm:
 - Bổ sung CSR, chế độ đặc quyền, FCSR, cờ ngoại lệ và chế độ làm tròn động cho nhóm lệnh dấu phẩy động.
 - Thực thi `fence` như một thao tác có hiệu lực trong lõi xử lý.
 - Mở rộng TileLink với các kênh B/C/E, cơ chế TileLink-C và bộ phân xử đa master đầy đủ.
-- Bổ sung bộ điều khiển ngắt và đường IRQ từ DMA, UART, bàn phím, chuột tới CPU.
-- Mở rộng hệ thống ngoại vi, trong đó có CAN [19].
+- Bổ sung bộ điều khiển ngắt và đường IRQ từ DMA, UART, CAN, bàn phím, chuột tới CPU.
+- Mở rộng mô hình CAN theo hướng kết nối nhiều nút và mô hình lỗi chi tiết hơn; chỉ nghiên cứu bit-level/physical layer khi có mục tiêu và bộ kiểm chứng phù hợp [19].
 - Xây dựng benchmark hiệu năng định lượng cho bộ nhớ đệm, DMA và tốc độ mô phỏng.
 - Hoàn thiện log kiểm chứng chính thức, mở rộng độ phủ kiểm thử và xây dựng thêm bài thực hành phục vụ giảng dạy.
 
@@ -57,4 +57,4 @@ Các hướng phát triển tiếp theo gồm:
 
 [18] "GNU Binutils," GNU Project, và "riscv-gnu-toolchain," RISC-V Collaboration. [Trực tuyến]. Có tại: https://www.gnu.org/software/binutils/ và https://github.com/riscv-collab/riscv-gnu-toolchain (truy cập: 19/01/2026).
 
-[19] Robert Bosch GmbH, "CAN Specification, Version 2.0," Stuttgart, Đức, 1991; và ISO 11898, "Road vehicles — Controller area network (CAN)," Tổ chức Tiêu chuẩn hóa Quốc tế (ISO).
+[19] Robert Bosch GmbH, "M_CAN Controller Area Network User's Manual," Revision 3.3.1, 11/03/2023.

@@ -153,10 +153,16 @@ export class Port {
 
     directWrite(address, value, size = 2, accessType = 'port') {
         if (typeof this.lower?.directWrite === 'function') {
-            this.lower.directWrite(address, value, size, accessType);
-            return;
+            return this.lower.directWrite(address, value, size, accessType);
         }
         throw new Error(`Port "${this.name}" cannot forward directWrite()`);
+    }
+
+    canAccept(req) {
+        if (typeof this.lower?.canAccept === 'function') {
+            return this.lower.canAccept(req);
+        }
+        return true;
     }
 
     memBytes() {

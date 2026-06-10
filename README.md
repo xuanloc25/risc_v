@@ -14,7 +14,7 @@ https://risc-v.vercel.app
 - Biên dịch assembly sang mã máy bằng assembler tích hợp.
 - Mô phỏng thực thi chương trình theo từng bước hoặc chạy liên tục.
 - Quan sát thanh ghi, bộ nhớ, log hệ thống và trạng thái các khối phần cứng.
-- Mô phỏng các thành phần SoC gồm CPU, MMU, cache, TileLink, DMA, UART, LED matrix, keyboard và mouse.
+- Mô phỏng các thành phần SoC gồm CPU, MMU, cache, TileLink, DMA, UART, CAN, LED matrix, keyboard và mouse.
 - Hỗ trợ kiểm thử assembler với GNU RISC-V toolchain, Spike và bộ `riscv-tests`.
 
 ## Kiến trúc mô phỏng
@@ -27,7 +27,20 @@ Dự án mô hình hóa một hệ thống SoC gồm các thành phần chính:
 - `TileLink`: mô phỏng giao tiếp giữa các master, slave và bộ nhớ.
 - `DMA`: thực hiện truyền dữ liệu độc lập với CPU.
 - `Memory`: lưu trữ chương trình và dữ liệu.
-- `Peripheral`: mô phỏng các thiết bị ngoại vi như UART, LED matrix, keyboard và mouse.
+- `Peripheral`: mô phỏng các thiết bị ngoại vi như UART, CAN, LED matrix, keyboard và mouse.
+
+CAN được hiện thực như một **Classic CAN message-level educational controller** qua MMIO, phục vụ giáo dục và demo SoC. Mô hình hỗ trợ TX/RX FIFO, loopback, identifier chuẩn 11 bit và identifier mở rộng 29 bit khi bật `EXT_ID_EN`. Đây không phải mô phỏng bit-level/physical-layer CAN đầy đủ: không mô hình hóa chính xác physical layer, bit stuffing, CRC thật, ACK slot, arbitration theo từng bit hoặc error frame hoàn chỉnh.
+
+## Bản đồ ngoại vi MMIO
+
+| Thiết bị | Dải địa chỉ | Bus |
+|---|---|---|
+| UART | `0x10000000-0x10000013` | TileLink-UL |
+| LED Matrix | `0xFF000000-0xFF000FFF` | TileLink-UL |
+| Mouse | `0xFF100000-0xFF100013` | TileLink-UL |
+| CAN Controller | `0xFF200000-0xFF2000FF` | TileLink-UL |
+| DMA Registers | `0xFFED0000-0xFFED0007` | TileLink-UH |
+| Keyboard | `0xFFFF0000-0xFFFF0007` | TileLink-UL |
 
 ## Cấu trúc thư mục
 
@@ -44,6 +57,7 @@ Dự án mô hình hóa một hệ thống SoC gồm các thành phần chính:
 │       ├── SimpleCache.js
 │       ├── tilelink*.js
 │       ├── dma.js
+│       ├── can.js
 │       └── peripheral modules
 ├── test/
 │   ├── assembler_verify.mjs
@@ -103,6 +117,9 @@ Các kiểm thử cơ bản có thể chạy trực tiếp bằng Node.js:
 node test/assembler_verify.mjs
 node test/mmu_basic_verify.mjs
 node test/tilelink_verify.mjs
+node test/can_verify.mjs
+node test/can_mmio_verify.mjs
+node test/asm_programs_verify.mjs
 ```
 
 Các kiểm thử đối chiếu với GNU toolchain và Spike:

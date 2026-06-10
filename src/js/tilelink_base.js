@@ -241,6 +241,16 @@ export class TileLinkBase {
         this.sendResponse(resp);
     }
 
+    canAccept(req) {
+        if (!isFiniteAddress(req?.address)) return true;
+
+        const entry = this._selectSlaveEntry(req.address);
+        if (typeof entry.target?.canAccept === 'function') {
+            return entry.target.canAccept(req);
+        }
+        return true;
+    }
+
     directRead(address, size = 2, accessType = 'direct') {
         const entry = this._selectSlaveEntry(address);
         const isRuntime = accessType !== 'peek' && accessType !== 'poke' && accessType !== 'view' && accessType !== 'debug' && accessType !== 'direct-debug' && accessType !== 'peek-word';

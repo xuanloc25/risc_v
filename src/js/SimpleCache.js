@@ -113,8 +113,7 @@ export class SimpleCache {
         const shouldLogWrite = accessType !== 'fill' && accessType !== 'fill-bypass' && accessType !== 'write-through';
         const shouldCache = this.enabled && this.isCacheable(physicalAddress);
         if (!shouldCache) {
-            this.lowerPort.directWrite(physicalAddress, value, size, accessType);
-            return;
+            return this.lowerPort.directWrite(physicalAddress, value, size, accessType);
         }
 
         this.statistics.numWrite++;
@@ -147,6 +146,17 @@ export class SimpleCache {
         this.lowerPort.directWrite(physicalAddress, value ?? 0, size, accessType);
     }
 
+    canAccept(req) {
+        const address = req?.address >>> 0;
+        const shouldCache = this.enabled && req?.cacheable !== false && this.isCacheable(address);
+        if (shouldCache) return true;
+
+        if (typeof this.lowerPort?.canAccept === 'function') {
+            return this.lowerPort.canAccept(req);
+        }
+        return true;
+    }
+
     // Nhận request từ upper level; cache chỉ xử lý một request tại một thời điểm.
     receiveRequest(req) {
         if (this.pendingRequest || this.pendingFill || this.pendingBurstResponse) return;
@@ -160,11 +170,13 @@ export class SimpleCache {
         else this.statistics.numWrite++;
 
         const shouldCache = this.enabled && req.cacheable !== false && this.isCacheable(req.address >>> 0);
-        const latency = shouldCache ? this._handleCacheRequest(req) : this._handleBypassRequest(req);
+        const result = shouldCache ? this._handleCacheRequest(req) : this._handleBypassRequest(req);
+        const latency = typeof result === 'number' ? result : result.latency;
 
         this.pendingRequest = {
             req,
-            readyCycle: this.cycle + latency
+            readyCycle: this.cycle + latency,
+            retryBypass: typeof result === 'object' && result.retryBypass === true
         };
     }
 
@@ -193,6 +205,13 @@ export class SimpleCache {
 
         if (this.pendingBurstResponse) {
             this._advancePendingBurstResponse();
+        }
+
+        if (this.pendingRequest?.retryBypass && this.cycle >= this.pendingRequest.readyCycle && !this.pendingResponse) {
+            const result = this._handleBypassRequest(this.pendingRequest.req, { retry: true });
+            const latency = typeof result === 'number' ? result : result.latency;
+            this.pendingRequest.readyCycle = this.cycle + latency;
+            this.pendingRequest.retryBypass = typeof result === 'object' && result.retryBypass === true;
         }
 
         if (!this.pendingRequest || this.cycle < this.pendingRequest.readyCycle || !this.pendingResponse) return;
@@ -289,7 +308,7 @@ export class SimpleCache {
     }
 
     // Xử lý request không cacheable hoặc khi cache off: bypass trực tiếp.
-    _handleBypassRequest(req) {
+    _handleBypassRequest(req, { retry = false } = {}) {
         const address = req.address >>> 0;
         const size = getTransferSizeLog2(req, 2);
         const lowerLatency = req.cacheable === false ? 0: (this.lowerPort?.memoryTarget?.latency ?? this.lowerPort?.latency );
@@ -303,9 +322,21 @@ export class SimpleCache {
             data = this.lowerPort.directRead(address, size, req.type) >>> 0;
             type = TL_D_Opcode.AccessAckData;
         } else if (isTileLinkWrite(req.type)) {
+            if (!this._canAcceptBypass(req)) {
+                if (!retry) {
+                    console.log(`[${this.name}] BYPASS_STALL addr=0x${address.toString(16)} waiting for lower target`);
+                }
+                return { latency: 1, retryBypass: true };
+            }
             console.log(`[${this.name}] BYPASS_WRITE addr=0x${address.toString(16)} latency=${bypassLatency}cy (miss_phase=${this.missLatency}cy + RAM_latency=${lowerLatency}cy)`);
             this.lowerPort.directWrite(address, req.value ?? 0, size, req.type);
         } else if (isTileLinkAtomic(req.type)) {
+            if (!this._canAcceptBypass(req)) {
+                if (!retry) {
+                    console.log(`[${this.name}] BYPASS_STALL addr=0x${address.toString(16)} waiting for lower target`);
+                }
+                return { latency: 1, retryBypass: true };
+            }
             console.log(`[${this.name}] BYPASS_ATOMIC addr=0x${address.toString(16)} latency=${bypassLatency}cy (miss_phase=${this.missLatency}cy + RAM_latency=${lowerLatency}cy)`);
             data = this.lowerPort.directRead(address, size, req.type) >>> 0;
             const nextValue = applyTileLinkAtomic(req, data, size);
@@ -323,7 +354,12 @@ export class SimpleCache {
             virtualAddress: req.virtualAddress,
             size
         };
-        return bypassLatency;
+        return { latency: bypassLatency, retryBypass: false };
+    }
+
+    _canAcceptBypass(req) {
+        if (typeof this.lowerPort?.canAccept !== 'function') return true;
+        return this.lowerPort.canAccept(req);
     }
 
     // Phục vụ dữ liệu từ block: read trả giá trị, write cập nhật block và write-through xuống lower.

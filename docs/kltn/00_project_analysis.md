@@ -73,7 +73,7 @@ Bằng chứng chính:
 | Memory/MMU/Cache | `src/js/mem.js`, `src/js/mmu.js`, `src/js/SimpleCache.js` | RAM byte-addressed, dịch địa chỉ/TLB, cache set-associative. |
 | TileLink/bus | `src/js/tilelink.js`, `src/js/tilelink_base.js`, `src/js/tilelink_UH.js`, `src/js/tilelink_UL.js`, `src/js/tilelink_bridge.js`, `src/js/port_link.js` | Opcode, A/D channel snapshot, bus queue, routing, bridge UH/UL, port adapter. |
 | DMA | `src/js/dma.js` | Descriptor, register CTRL/DESC, FIFO, transfer step qua TileLink. |
-| Peripheral/I/O | `src/js/uart.js`, `src/js/led_matrix.js`, `src/js/keyboard.js`, `src/js/mouse.js` | UART MMIO, LED matrix canvas, keyboard buffer, mouse position/status. |
+| Peripheral/I/O | `src/js/uart.js`, `src/js/can.js`, `src/js/led_matrix.js`, `src/js/keyboard.js`, `src/js/mouse.js` | UART MMIO, CAN frame/message MMIO, LED matrix canvas, keyboard buffer, mouse position/status. |
 | Visualization/log | `src/js/soc_diagram.js`, `src/js/system_log_bootstrap.js` | Sơ đồ SoC SVG, phân loại/capture system logs. |
 | Test/demo | `test/` | Unit/smoke verification, sample ASM demo, GNU/Spike/riscv-tests scripts. |
 | Tài liệu | `README.md`, `verification_plan.docx`, `test/README_rv32imf_verification.md`, `docs/ref/` | Mô tả project, kế hoạch kiểm thử, tài liệu KLTN/TileLink/de cương. |
@@ -188,25 +188,25 @@ Bằng chứng từ source:
 File liên quan:
 
 - UART: `src/js/uart.js`
+- CAN: `src/js/can.js`
 - LED/display: `src/js/led_matrix.js`
 - Keyboard: `src/js/keyboard.js`
 - Mouse: `src/js/mouse.js`
 - MMIO endpoint/map: `src/js/soc.js`
 - I/O UI: `src/index.html`, `src/js/javascript.js`, `src/style.css`
-- Demo/test: `test/uart_test.asm`, `test/demo_uart.asm`, `test/uart_baud_test.asm`, `test/uart_divisor_examples.asm`, `test/led_demo.asm`, `test/test_keyboard.asm`, `test/mouse_demo.asm`, `test/dma_led_demo.asm`, `test/soc_full_demo.asm`
+- Demo/test: `test/uart_test.asm`, `test/demo_uart.asm`, `test/uart_baud_test.asm`, `test/uart_divisor_examples.asm`, `test/can_loopback.asm`, `test/can_verify.mjs`, `test/can_mmio_verify.mjs`, `test/led_demo.asm`, `test/test_keyboard.asm`, `test/mouse_demo.asm`, `test/dma_led_demo.asm`, `test/soc_full_demo.asm`
 
 Bằng chứng từ source:
 
 - UART base `0x10000000`, range `0x14`; register `TX`, `RX`, `STATUS`, `CTRL`, `BAUD` trong `src/js/uart.js`.
+- CAN base `0xFF200000`, range `0x100`; controller mức frame/message có TX/RX FIFO, loopback và ID chuẩn/mở rộng trong `src/js/can.js`.
 - LED Matrix base `0xFF000000`, kích thước `32 * 32 * 4`; `src/js/led_matrix.js` dùng canvas và VRAM `Uint32Array`.
 - Keyboard base `0xFFFF0000`, range `0x08`; `KEYBOARD_CTRL` và `KEYBOARD_DATA` trong `src/js/keyboard.js`.
 - Mouse base `0xFF100000`, range `0x14`; register X/Y/button/status/control trong `src/js/mouse.js`.
-- `src/js/soc.js` tạo endpoint MMIO cho UART/LED/Keyboard/Mouse qua TileLink-UL.
+- `src/js/soc.js` tạo endpoint MMIO cho UART/CAN/LED/Keyboard/Mouse qua TileLink-UL.
 - `src/js/javascript.js` gắn callback UART console, keyboard input, pointer event từ LED canvas vào mouse peripheral.
 
-Chưa xác định từ source:
-
-- CAN/Controller Area Network: không tìm thấy module/file/địa chỉ MMIO rõ ràng cho CAN trong source. Cần xác nhận nếu đề cương hoặc demo ngoài repo có phần này.
+Giới hạn CAN xác định từ source: mô hình chỉ ở mức frame/message qua MMIO, không mô phỏng bit-level/physical layer đầy đủ, CRC thật, ACK slot, arbitration theo từng bit hoặc error frame hoàn chỉnh.
 
 ### 4.5. UI/Visualization
 
@@ -229,7 +229,7 @@ Bằng chứng từ source:
 - Memory view có Instruction Memory và Data Segment.
 - SoC view render SVG từ `src/js/soc_diagram.js`, có node/edge và tooltip.
 - MMU view có overview, page table, TLB, history; cache view có L1I/L1D/L2.
-- I/O view có LED matrix canvas, UART console/input, keyboard input/status.
+- I/O view có LED matrix canvas, UART console/input, CAN TX/RX/inject frame, keyboard input/status.
 - System log terminal có filter theo CPU/MMU/cache/TileLink/DMA/memory/I/O/system trong `src/index.html` và logic phân loại trong `src/js/system_log_bootstrap.js`.
 
 ### 4.6. Test, demo, benchmark
@@ -281,14 +281,14 @@ Benchmark:
 | LED Matrix display | `src/js/led_matrix.js`, `src/index.html`, `src/js/javascript.js` | Chương ngoại vi/visualization: display 32x32 memory-mapped. |
 | Keyboard MMIO | `src/js/keyboard.js`, `src/js/soc.js`, `src/js/javascript.js` | Chương ngoại vi: input buffer và polling. |
 | Mouse MMIO | `src/js/mouse.js`, `src/js/soc.js`, `src/js/javascript.js` | Chương ngoại vi: tọa độ/click/status qua MMIO. |
-| CAN | Chưa tìm thấy source | Không nên viết là đã hiện thực nếu không có bằng chứng bổ sung. |
+| CAN | `src/js/can.js`, `src/js/soc.js`, `src/js/javascript.js`, `test/can_verify.mjs`, `test/can_mmio_verify.mjs` | Đã hiện thực ở mức frame/message qua MMIO; không phải mô phỏng bit-level/physical-layer đầy đủ. |
 | Web UI shell | `src/index.html`, `src/style.css` | Chương giao diện: layout, sidebar, view, I/O panels, log terminal. |
 | Runtime UI/update loop | `src/js/javascript.js` | Chương giao diện/mô phỏng: assemble/load/run/step/reset/render. |
 | SoC visualization | `src/js/soc_diagram.js`, `docs/ref/SoC.png` | Chương trực quan hóa: sơ đồ block và transaction highlight. |
 | System log | `src/js/system_log_bootstrap.js`, `src/index.html` | Chương debug/visualization: capture/filter log theo module. |
 | Verification assembler | `test/assembler_verify.mjs`, `test/verify_rv32imf_against_gnu.mjs`, `test/README_rv32imf_verification.md`, `verification_plan.docx` | Chương kiểm thử: local corpus, GNU binutils, riscv-tests artifact. |
-| Verification bus/cache/MMU/DMA | `test/mmu_basic_verify.mjs`, `test/tilelink_verify.mjs`, `test/dma_verify.mjs`, `test/run_demo.mjs` | Chương kiểm thử: xác minh module và tích hợp SoC. |
-| Demo chương trình assembly | `test/*.asm` | Chương demo/kết quả: chương trình mẫu cho UART, DMA, LED, keyboard, mouse, cache, FPU, SoC full. |
+| Verification bus/cache/MMU/DMA/CAN | `test/mmu_basic_verify.mjs`, `test/tilelink_verify.mjs`, `test/dma_verify.mjs`, `test/can_verify.mjs`, `test/can_mmio_verify.mjs`, `test/run_demo.mjs` | Chương kiểm thử: xác minh module và tích hợp SoC. |
+| Demo chương trình assembly | `test/*.asm` | Chương demo/kết quả: chương trình mẫu cho UART, CAN, DMA, LED, keyboard, mouse, cache, FPU, SoC full. |
 | Tài liệu tham khảo TileLink | `docs/ref/tilelink_spec_1.8.1.pdf` | Cơ sở lý thuyết TileLink và đối chiếu thuật ngữ. |
 | Đề cương đề tài | `docs/ref/22520793_22520610_Phát triển trình mô phỏng hệ thống trên chip dựa trên kiến trúc tập lệnh risc-v rv32imf và giao thức tilelink.pdf` | Xác nhận tên đề tài, GVHD, sinh viên, mục tiêu ban đầu. |
 | Quy định/mẫu KLTN | `docs/ref/KTMT_KLTN_Phu luc 2_Hinh thuc trinh bay KLTN_20250922.docx`, `docs/ref/KTMT_KLTN_Phu luc 3_Mau bao cao_new_20250922 (1).docx`, `docs/ref/KTMT_KLTN_Phu luc 5_Checklist.docx` | Căn cứ hình thức, bố cục, checklist khi viết báo cáo. |
@@ -361,8 +361,8 @@ Benchmark:
    - Chưa thấy CPU trap/interrupt controller/IRQ line hoặc exception pipeline đầy đủ.
 
 5. CAN peripheral:
-   - Không tìm thấy source/module/test/demo cho CAN.
-   - Không nên viết CAN là đã hiện thực nếu không có tài liệu/source bổ sung.
+   - Có source/module/test/demo tại `src/js/can.js`, `test/can_loopback.asm`, `test/can_verify.mjs`, `test/can_mmio_verify.mjs`.
+   - Chỉ mô tả là controller giáo dục ở mức frame/message qua MMIO; không tuyên bố mô phỏng bit-level/physical-layer hoặc tuân thủ đầy đủ ISO 11898.
 
 6. Benchmark định lượng:
    - Chưa thấy benchmark riêng.
@@ -400,8 +400,8 @@ Benchmark:
    - Có muốn đưa phần interrupt DMA không, trong khi source chưa thấy IRQ vào CPU?
 
 4. Peripheral:
-   - CAN có nằm trong phạm vi cuối cùng không? Nếu có, source nằm ở đâu?
-   - UART/Keyboard interrupt có phải mục tiêu không hay chỉ polling?
+   - CAN nằm trong phạm vi cuối cùng ở mức frame/message qua MMIO; source chính là `src/js/can.js`.
+   - UART/CAN/Keyboard interrupt hiện mới ở mức cờ/trạng thái hay polling, chưa có IRQ tới CPU.
 
 5. Verification:
    - Cung cấp log chính thức của `verify_rv32imf_against_gnu.mjs`, `verify_project_assembler_spike.mjs`, `verify_riscv_tests_spike.mjs`.
@@ -442,6 +442,6 @@ Các tài liệu đã nhận diện:
 
 ## 10. Kết luận chuẩn bị viết báo cáo
 
-Project có bằng chứng source rõ ràng cho một Web-based RISC-V SoC simulator gồm assembler, CPU interpreter, FPU register/operation subset, MMU/TLB, cache hierarchy, TileLink-style UH/UL interconnect, DMA controller, RAM, UART, LED Matrix, keyboard, mouse, SoC visualization và system log.
+Project có bằng chứng source rõ ràng cho một Web-based RISC-V SoC simulator gồm assembler, CPU interpreter, FPU register/operation subset, MMU/TLB, cache hierarchy, TileLink-style UH/UL interconnect, DMA controller, RAM, UART, CAN frame/message controller, LED Matrix, keyboard, mouse, SoC visualization và system log.
 
-Các điểm không nên viết như chức năng đã hoàn chỉnh nếu chưa có xác nhận: CAN, full TileLink coherence/conformance, full RV32IMF theo mọi CSR/FCSR/exception detail, interrupt controller, benchmark định lượng chính thức. Trước khi viết chương báo cáo, cần chốt phạm vi kỹ thuật và lấy log verification chính thức.
+Các điểm không nên viết như chức năng đã hoàn chỉnh: CAN bit-level/physical-layer hoặc full ISO compliance, full TileLink coherence/conformance, full RV32IMF theo mọi CSR/FCSR/exception detail, interrupt controller, benchmark định lượng chính thức. Trước khi viết chương báo cáo, cần chốt phạm vi kỹ thuật và lấy log verification chính thức.

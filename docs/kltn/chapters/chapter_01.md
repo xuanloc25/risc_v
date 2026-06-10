@@ -70,15 +70,15 @@ Hệ thống mô phỏng ở mức hành vi/chức năng (behavioral/functional)
 
 Hệ thống hỗ trợ một tập con của RV32IMF phục vụ các chương trình ở chế độ người dùng; phần dấu phẩy động tính theo chuẩn IEEE 754 [10]. Một số thành phần của kiến trúc đầy đủ nằm ngoài phạm vi: lệnh truy cập thanh ghi điều khiển và trạng thái (Control and Status Register – CSR) cùng chế độ đặc quyền; thanh ghi điều khiển dấu phẩy động (FCSR), cờ ngoại lệ (fflags) và chế độ làm tròn động (frm); lệnh `fence` được mã hóa nhưng chưa thực thi; lệnh `AMOADD.W` thuộc phần mở rộng RV32A chỉ là mở rộng minh họa, nằm ngoài tên đề tài.
 
-Về giao thức TileLink, hệ thống mô phỏng ở mức giao dịch trên hai kênh yêu cầu (A) và phản hồi (D) tương ứng TileLink-UL và TileLink-UH; chưa hiện thực các kênh B, C, E cùng cơ chế nhất quán bộ nhớ đệm (coherence) của TileLink-C. Cơ chế điều phối bus ở mức hàng đợi một giao dịch và chưa có đường tín hiệu ngắt (Interrupt Request – IRQ) tới bộ xử lý; trạng thái hoàn tất của DMA và ngoại vi được nhận biết qua cơ chế đọc thăm dò (polling). Các ngoại vi đã hiện thực gồm UART (Universal Asynchronous Receiver–Transmitter), ma trận LED, bàn phím và chuột; thiết bị CAN chỉ được để ngỏ cho hướng phát triển. Bảng 1.2 tóm tắt phạm vi chức năng của hệ thống theo ba mức.
+Về giao thức TileLink, hệ thống mô phỏng ở mức giao dịch trên hai kênh yêu cầu (A) và phản hồi (D) tương ứng TileLink-UL và TileLink-UH; chưa hiện thực các kênh B, C, E cùng cơ chế nhất quán bộ nhớ đệm (coherence) của TileLink-C. Cơ chế điều phối bus ở mức hàng đợi một giao dịch và chưa có đường tín hiệu ngắt (Interrupt Request – IRQ) tới bộ xử lý; trạng thái hoàn tất của DMA và ngoại vi được nhận biết qua cơ chế đọc thăm dò (polling). Các ngoại vi đã hiện thực gồm UART (Universal Asynchronous Receiver–Transmitter), bộ điều khiển CAN, ma trận LED, bàn phím và chuột. CAN được mô phỏng ở mức frame/message qua MMIO để phục vụ giáo dục và demo SoC, không phải mô phỏng bit-level/physical-layer đầy đủ. Bảng 1.2 tóm tắt phạm vi chức năng của hệ thống theo ba mức.
 
 **Bảng 1.2. Tóm tắt phạm vi chức năng của hệ thống**
 
 | Mức độ | Nội dung |
 |---|---|
-| Đã hỗ trợ | Trình biên dịch hợp ngữ hai lượt; lõi xử lý với các nhóm lệnh RV32I, RV32M, RV32F; tệp thanh ghi số nguyên và dấu phẩy động; MMU với phân trang và TLB; phân cấp bộ nhớ đệm; bus TileLink-UH/UL và cầu nối; DMA; ngoại vi UART, LED, bàn phím, chuột; trực quan hóa sơ đồ SoC, bộ nhớ, thanh ghi và nhật ký hệ thống |
-| Hỗ trợ một phần | Dấu phẩy động đơn theo biểu diễn IEEE 754 nhưng chưa đủ FCSR/fflags/frm; lệnh `fence` được mã hóa nhưng chưa thực thi; thao tác nguyên tử mới có `AMOADD.W`; điều phối bus ở mức hàng đợi một giao dịch |
-| Ngoài phạm vi | Lệnh CSR và chế độ đặc quyền; các kênh B/C/E và nhất quán bộ nhớ đệm của TileLink-C; cơ chế ngắt phần cứng tới CPU; thiết bị CAN; mô phỏng đặc tính định thời/năng lượng vật lý |
+| Đã hỗ trợ | Trình biên dịch hợp ngữ hai lượt; lõi xử lý với các nhóm lệnh RV32I, RV32M, RV32F; tệp thanh ghi số nguyên và dấu phẩy động; MMU với phân trang và TLB; phân cấp bộ nhớ đệm; bus TileLink-UH/UL và cầu nối; DMA; ngoại vi UART, CAN, LED, bàn phím, chuột; trực quan hóa sơ đồ SoC, bộ nhớ, thanh ghi và nhật ký hệ thống |
+| Hỗ trợ một phần | Dấu phẩy động đơn theo biểu diễn IEEE 754 nhưng chưa đủ FCSR/fflags/frm; lệnh `fence` được mã hóa nhưng chưa thực thi; thao tác nguyên tử mới có `AMOADD.W`; điều phối bus ở mức hàng đợi một giao dịch; CAN ở mức frame/message qua MMIO |
+| Ngoài phạm vi | Lệnh CSR và chế độ đặc quyền; các kênh B/C/E và nhất quán bộ nhớ đệm của TileLink-C; cơ chế ngắt phần cứng tới CPU; mô phỏng CAN bit-level/physical-layer đầy đủ; mô phỏng đặc tính định thời/năng lượng vật lý |
 
 ### 1.3.3. Định hướng đánh giá
 
@@ -98,7 +98,7 @@ Các đóng góp chính của đề tài gồm:
 
 - Một trình mô phỏng SoC dựa trên RISC-V RV32IMF hoạt động trên nền web, tích hợp trong cùng một công cụ: trình biên dịch hợp ngữ, lõi xử lý, phân cấp bộ nhớ (cache và MMU), hệ thống bus TileLink, bộ điều khiển DMA và nhiều thiết bị ngoại vi, cùng các khung trực quan hóa trạng thái hệ thống.
 - Mở rộng phạm vi tập lệnh so với khóa luận liên quan trước đó [9]: bổ sung nhóm lệnh nhân/chia số nguyên (RV32M) và nhóm lệnh dấu phẩy động đơn (RV32F) cùng tệp thanh ghi dấu phẩy động.
-- Bổ sung số lượng và chủng loại thiết bị ngoại vi tương tác (UART có cấu hình tốc độ, ma trận LED, bàn phím, chuột) cùng các khung quan sát bổ trợ: sơ đồ SoC động, khung quan sát MMU và bộ nhớ đệm, và nhật ký hệ thống có khả năng lọc theo từng mô-đun.
+- Bổ sung số lượng và chủng loại thiết bị ngoại vi tương tác (UART có cấu hình tốc độ, CAN ở mức frame/message, ma trận LED, bàn phím, chuột) cùng các khung quan sát bổ trợ: sơ đồ SoC động, khung quan sát MMU và bộ nhớ đệm, và nhật ký hệ thống có khả năng lọc theo từng mô-đun.
 - Một quy trình kiểm chứng đối chiếu với các công cụ được cộng đồng công nhận (GNU binutils và Spike) trên bộ riscv-tests, kèm bộ kiểm thử nội bộ cho các mô-đun. Những đóng góp này hướng đến một công cụ phục vụ giảng dạy và học tập kiến trúc máy tính ở mức hệ thống, thay vì chỉ ở mức tập lệnh.
 
 ## 1.6. Cấu trúc báo cáo

@@ -32,6 +32,18 @@ export class TileLinkBridge {
         this.name = name;
     }
 
+    canAccept(req) {
+        if (!req || typeof this.downstreamBus?._selectSlaveEntry !== 'function') {
+            return true;
+        }
+
+        const downstreamEntry = this.downstreamBus._selectSlaveEntry(req.address);
+        if (typeof downstreamEntry?.target?.canAccept === 'function') {
+            return downstreamEntry.target.canAccept(req);
+        }
+        return true;
+    }
+
     receiveRequest(req) {
         const size = getTransferSizeLog2(req, 2);
         const upstreamName = describeBus(this.upstreamBus);

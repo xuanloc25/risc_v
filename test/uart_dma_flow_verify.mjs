@@ -90,6 +90,22 @@ assert.equal(
 assert.equal(transmitted, MESSAGE, 'Nội dung phát ra UART không khớp message nguồn.');
 
 // 3) Phải thực sự đã đầy FIFO và stall (chứng minh đúng cơ chế fill->stall->drain).
+//
+// PHỤ THUỘC NGẦM: hai assertion cơ chế bên dưới (FIFO high-water === txQueueDepth
+// và stalledWhileFullCycles > 0) CHỈ đúng khi UART phát thật nhanh để FIFO kịp đầy.
+// demo_uart_dma.asm đạt điều này bằng cách ghi BAUD divisor = 1
+// (li t4, 1 ; sw t4, 16(t1) -> UART_BAUD offset 0x10). Mặc định divisor = 26 (chậm),
+// nếu chậm thì FIFO drain kịp, không bao giờ đầy -> không stall -> các assertion dưới SAI.
+// Vì vậy phải kiểm tra divisor === 1 TRƯỚC, để một lần sửa baud trong asm sau này
+// (vô tình làm UART chậm lại) sẽ bị bắt ngay tại đây thay vì âm thầm vô hiệu hoá cơ chế.
+assert.equal(
+    simulator.uart.baudDivisor,
+    1,
+    `UART baud divisor = ${simulator.uart.baudDivisor} (kỳ vọng 1). ` +
+    `demo_uart_dma.asm phải ghi divisor = 1 để FIFO TX kịp đầy và DMA stall. ` +
+    `Nếu sửa dòng baud trong asm làm UART chậm lại, các assertion cơ chế ` +
+    `(FIFO high-water === txQueueDepth, stalledWhileFullCycles > 0) sẽ không còn ý nghĩa.`
+);
 assert.equal(fifoHighWater, simulator.uart.txQueueDepth, 'FIFO TX chưa từng đầy — luồng không như mô tả.');
 assert.ok(sawFullStall && stalledWhileFullCycles > 0, 'DMA không hề stall khi FIFO đầy.');
 

@@ -264,14 +264,15 @@ Khi cần di chuyển một khối lượng lớn dữ liệu giữa hai vùng n
 
 Một đặc điểm quan trọng của vùng MMIO là các truy cập tới nó thường có **hiệu ứng phụ** (side effect): chẳng hạn, đọc một thanh ghi dữ liệu có thể lấy đi một ký tự khỏi bộ đệm nhận của thiết bị, hoặc ghi một thanh ghi có thể kích hoạt một hành động. Vì vậy, các vùng MMIO phải được đánh dấu **không lưu đệm** (mục 2.4, 2.5) để mọi thao tác đọc/ghi đều tác động trực tiếp lên thiết bị thay vì lên một bản sao trong bộ nhớ đệm. Việc giao tiếp với thiết bị qua MMIO cũng có thể theo kiểu đọc thăm dò hoặc theo kiểu hướng ngắt, tương tự như đã trình bày ở mục 2.7.
 
-Ở mức khái niệm, hệ thống của đề tài có bốn thiết bị ngoại vi, mỗi thiết bị chiếm một vùng địa chỉ MMIO riêng:
+Ở mức khái niệm, hệ thống của đề tài có năm thiết bị ngoại vi, mỗi thiết bị chiếm một vùng địa chỉ MMIO riêng:
 
 - **Bộ thu phát không đồng bộ đa năng (Universal Asynchronous Receiver/Transmitter – UART):** thiết bị giao tiếp nối tiếp, dùng làm cổng console để truyền và nhận dữ liệu dạng ký tự, có thể cấu hình tốc độ truyền (baud).
+- **Bộ điều khiển mạng CAN (Controller Area Network – CAN):** mô hình controller ở mức frame/message qua MMIO, có hàng đợi truyền/nhận và loopback để minh họa luồng dữ liệu trong SoC; không đại diện physical layer hoặc giao thức theo từng bit đầy đủ.
 - **Ma trận đèn (Light-Emitting Diode – LED):** thiết bị hiển thị dạng lưới điểm ảnh, trạng thái các điểm ảnh được lưu trong một vùng bộ nhớ hiển thị (video memory) được ánh xạ vào không gian địa chỉ.
 - **Bàn phím (keyboard):** thiết bị nhập, dùng một bộ đệm để lưu các ký tự gõ vào theo thứ tự, phần mềm đọc lần lượt qua thanh ghi dữ liệu.
 - **Chuột (mouse):** thiết bị nhập, cung cấp tọa độ con trỏ và trạng thái nút nhấn qua các thanh ghi tương ứng.
 
-*Liên hệ đề tài:* Cả bốn thiết bị ngoại vi nêu trên được gắn vào bus ngoại vi TL-UL và được điều khiển qua các thanh ghi MMIO không lưu đệm (xem source: `src/js/soc.js`, `src/js/uart.js`, `src/js/led_matrix.js`, `src/js/keyboard.js`, `src/js/mouse.js`). Phù hợp với mục 2.7, trạng thái thiết bị được nhận biết qua đọc thăm dò. Bản đồ địa chỉ tổng thể được trình bày ở Chương 3, còn chi tiết bản đồ thanh ghi của từng thiết bị được trình bày ở Chương 4.
+*Liên hệ đề tài:* Cả năm thiết bị ngoại vi nêu trên được gắn vào bus ngoại vi TL-UL và được điều khiển qua các thanh ghi MMIO không lưu đệm (xem source: `src/js/soc.js`, `src/js/uart.js`, `src/js/can.js`, `src/js/led_matrix.js`, `src/js/keyboard.js`, `src/js/mouse.js`). Phù hợp với mục 2.7, trạng thái thiết bị được nhận biết qua đọc thăm dò. Bản đồ địa chỉ tổng thể được trình bày ở Chương 3, còn chi tiết bản đồ thanh ghi của từng thiết bị được trình bày ở Chương 4.
 
 ## 2.9. Công nghệ nền tảng web
 

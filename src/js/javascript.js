@@ -18,6 +18,13 @@ import { assembler } from './assembler.js';
 import { simulator } from './soc.js';
 import { configureRiscvEditorHints } from './editor_hint.js';
 import { SOC_NODES, renderSocDiagram, updateSocTraceHighlights } from './soc_diagram.js';
+import {
+    CAN_CMD_BITS,
+    CAN_CTRL_BITS,
+    CAN_DEFAULT_BASE_ADDRESS,
+    CAN_REGISTERS,
+    CAN_STATUS_BITS
+} from './can.js';
 
 // --- THAM CHIẾU DOM ---
 let instructionInput; // Sẽ được khởi tạo bởi CodeMirror
@@ -104,6 +111,22 @@ const runState = {
     cyclesInLastSecond: 0,
     programOutputStarted: false
 };
+
+const CAN_TX_LOG_LIMIT = 32;
+const CAN_ERROR_NAMES = Object.freeze({
+    0: 'NONE',
+    1: 'DISABLED',
+    2: 'INVALID_DLC',
+    3: 'INVALID_ID',
+    4: 'TX_FULL',
+    5: 'RX_OVERRUN',
+    6: 'EXT_DISABLED',
+    7: 'INVALID_BITRATE'
+});
+let canTxLogFrames = [];
+let canBoundController = null;
+let canUiMessage = '';
+let canUiMessageKind = '';
 
 // --- SYSTEM LOG TERMINAL LOGIC ---
 const logContent = document.getElementById('logContent');
@@ -231,7 +254,7 @@ function fallbackInferLogModules(text) {
     const modules = new Set();
 
     if (firstTag.includes('soc') || firstTag.includes('arch') || firstTag.includes('ui') || firstTag.includes('syscall')) modules.add('system');
-    if (firstTag.includes('io map') || firstTag.includes('uart') || firstTag.includes('keyboard') || firstTag.includes('mouse')) modules.add('io');
+    if (firstTag.includes('io map') || firstTag.includes('uart') || firstTag.includes('can') || firstTag.includes('keyboard') || firstTag.includes('mouse')) modules.add('io');
     if (firstTag.includes('cpu') || firstTag.startsWith('cycle ')) modules.add('cpu');
     if (firstTag.includes('mmu')) modules.add('mmu');
     if (firstTag.includes('cache') || /\bl[12][id]?\s+cache\b/i.test(firstTag)) modules.add('cache');
@@ -257,7 +280,7 @@ function fallbackInferLogModules(text) {
     if (/\btilelink(?:-[a-z]+)?\b/i.test(rawText)) modules.add('tilelink');
     if (/\bdma\b/i.test(rawText)) modules.add('dma');
     if (/\bmain memory\b/i.test(rawText)) modules.add('memory');
-    if (/\b(?:uart|keyboard|mouse)\b/i.test(rawText) || lowerText.includes('led matrix') || lowerText.includes('io map')) modules.add('io');
+    if (/\b(?:uart|keyboard|mouse)\b/i.test(rawText) || /\bcan controller\b/i.test(rawText) || lowerText.includes('led matrix') || lowerText.includes('io map')) modules.add('io');
 
     if (modules.size === 0) modules.add('other');
     return modules;
@@ -864,6 +887,193 @@ function renderDataSegmentTable() {
     }
 }
 
+function getCANBase(can = simulator?.can) {
+    return (can?.baseAddress ?? CAN_DEFAULT_BASE_ADDRESS) >>> 0;
+}
+
+function formatCANHex(value, pad = 0) {
+    return `0x${(value >>> 0).toString(16).toUpperCase().padStart(pad, '0')}`;
+}
+
+function formatCANByte(value) {
+    return (value & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+}
+
+function formatCANFrame(frame) {
+    if (!frame) return 'No frame';
+    const dlc = Math.max(0, Math.min(8, frame.dlc ?? 0));
+    const idPad = frame.extended ? 8 : 3;
+    const data = Array.isArray(frame.data) || ArrayBuffer.isView(frame.data)
+        ? Array.from(frame.data).slice(0, dlc)
+        : [];
+    const payload = data.length > 0 ? data.map(formatCANByte).join(' ') : '(none)';
+    return `${frame.extended ? 'EXT' : 'STD'} ID=${formatCANHex(frame.id ?? 0, idPad)} DLC=${dlc} DATA=${payload}`;
+}
+
+function setCANMessage(message = '', kind = '') {
+    canUiMessage = message;
+    canUiMessageKind = kind;
+}
+
+function renderCANFrameList(container, frames, emptyText, limit = 6) {
+    if (!container) return;
+    const list = Array.isArray(frames) ? frames : [];
+    if (list.length === 0) {
+        container.textContent = emptyText;
+        return;
+    }
+
+    container.textContent = list
+        .slice(0, limit)
+        .map((frame, index) => `${index + 1}. ${formatCANFrame(frame)}`)
+        .join('\n');
+}
+
+function renderCANView() {
+    const can = simulator?.can;
+    const statusEn = document.getElementById('canStatusEn');
+    const statusLoopback = document.getElementById('canStatusLoopback');
+    const statusTxCount = document.getElementById('canStatusTxCount');
+    const statusRxCount = document.getElementById('canStatusRxCount');
+    const statusError = document.getElementById('canStatusError');
+    const txLog = document.getElementById('canTxLog');
+    const rxPreview = document.getElementById('canRxPreview');
+    const injectStatus = document.getElementById('canInjectStatus');
+
+    if (!statusEn && !statusLoopback && !txLog && !rxPreview && !injectStatus) return;
+
+    if (!can) {
+        if (statusEn) statusEn.textContent = 'OFF';
+        if (statusLoopback) statusLoopback.textContent = 'OFF';
+        if (statusTxCount) statusTxCount.textContent = '0';
+        if (statusRxCount) statusRxCount.textContent = '0';
+        if (statusError) statusError.textContent = 'No CAN';
+        renderCANFrameList(txLog, [], 'No transmitted frames yet.');
+        renderCANFrameList(rxPreview, [], 'RX FIFO is empty.');
+        return;
+    }
+
+    const base = getCANBase(can);
+    const ctrl = can.readRegister(base + CAN_REGISTERS.CTRL) >>> 0;
+    const status = can.readRegister(base + CAN_REGISTERS.STATUS) >>> 0;
+    const txCount = (status >>> 8) & 0xFF;
+    const rxCount = (status >>> 16) & 0xFF;
+    const lastError = (status >>> 24) & 0xFF;
+    const rxOverrun = (status & CAN_STATUS_BITS.RX_OVERRUN) !== 0;
+    const hasError = (status & CAN_STATUS_BITS.ERROR) !== 0;
+
+    if (statusEn) statusEn.textContent = (ctrl & CAN_CTRL_BITS.EN) ? 'ON' : 'OFF';
+    if (statusLoopback) statusLoopback.textContent = (ctrl & CAN_CTRL_BITS.LOOPBACK) ? 'ON' : 'OFF';
+    if (statusTxCount) statusTxCount.textContent = `${txCount} pending / ${canTxLogFrames.length} sent`;
+    if (statusRxCount) statusRxCount.textContent = `${rxCount} queued`;
+    if (statusError) {
+        if (!rxOverrun && !hasError) {
+            statusError.textContent = 'OK';
+        } else {
+            const parts = [];
+            if (rxOverrun) parts.push('RX_OVERRUN');
+            if (hasError) parts.push(CAN_ERROR_NAMES[lastError] || `ERR_${lastError}`);
+            statusError.textContent = parts.join(' / ');
+        }
+    }
+
+    renderCANFrameList(txLog, canTxLogFrames, 'No transmitted frames yet.', 10);
+    renderCANFrameList(rxPreview, can.rxFifo || [], 'RX FIFO is empty.', 5);
+
+    if (injectStatus) {
+        injectStatus.textContent = canUiMessage;
+        injectStatus.classList.toggle('ok', canUiMessageKind === 'ok');
+        injectStatus.classList.toggle('error', canUiMessageKind === 'error');
+    }
+}
+
+function parseCANHexInteger(rawValue, label) {
+    const text = String(rawValue ?? '').trim();
+    if (!text) throw new Error(`${label} is required.`);
+    const hex = text.replace(/^0x/i, '');
+    if (!/^[0-9a-f]+$/i.test(hex)) {
+        throw new Error(`${label} must be a hexadecimal value.`);
+    }
+    const value = Number.parseInt(hex, 16);
+    if (!Number.isFinite(value)) throw new Error(`${label} is invalid.`);
+    return value >>> 0;
+}
+
+function parseCANPayloadBytes(rawValue) {
+    const text = String(rawValue ?? '').trim();
+    if (!text) return [];
+
+    const tokens = text.split(/[\s,]+/).filter(Boolean);
+    if (tokens.length > 8) {
+        throw new Error('Payload has more than 8 bytes.');
+    }
+
+    return tokens.map((token) => {
+        const hex = token.replace(/^0x/i, '');
+        if (!/^[0-9a-f]{1,2}$/i.test(hex)) {
+            throw new Error(`Invalid payload byte "${token}". Use hex bytes like 11 22 AA.`);
+        }
+        return Number.parseInt(hex, 16) & 0xFF;
+    });
+}
+
+function injectCANFrameFromUI() {
+    const can = simulator?.can;
+    const idInput = document.getElementById('canInjectId');
+    const extendedInput = document.getElementById('canInjectExtended');
+    const dlcInput = document.getElementById('canInjectDlc');
+    const payloadInput = document.getElementById('canInjectPayload');
+
+    if (!can || !idInput || !extendedInput || !dlcInput || !payloadInput) return;
+
+    try {
+        const extended = !!extendedInput.checked;
+        const id = parseCANHexInteger(idInput.value, 'CAN ID');
+        const maxId = extended ? 0x1FFFFFFF : 0x7FF;
+        if (id > maxId) {
+            throw new Error(`${extended ? 'Extended' : 'Standard'} CAN ID must be <= ${formatCANHex(maxId)}.`);
+        }
+
+        const dlc = Number.parseInt(dlcInput.value, 10);
+        if (!Number.isInteger(dlc) || dlc < 0 || dlc > 8) {
+            throw new Error('DLC must be an integer from 0 to 8.');
+        }
+
+        const payload = parseCANPayloadBytes(payloadInput.value);
+        if (payload.length > dlc) {
+            throw new Error('Payload has more bytes than DLC.');
+        }
+
+        const paddedPayload = payload.slice();
+        while (paddedPayload.length < dlc) paddedPayload.push(0);
+
+        const frame = { id, extended, dlc, data: paddedPayload };
+        const accepted = can.injectFrame(frame);
+        if (!accepted) {
+            setCANMessage('CAN rejected frame. Check RX FIFO space and CTRL EXT_ID_EN for extended IDs.', 'error');
+        } else {
+            const paddingNote = paddedPayload.length > payload.length ? ' Missing bytes padded with 00.' : '';
+            setCANMessage(`Injected ${formatCANFrame(frame)}.${paddingNote}`, 'ok');
+        }
+    } catch (error) {
+        setCANMessage(error.message, 'error');
+    }
+
+    renderCANView();
+    renderSocView();
+}
+
+function clearCANLogAndStatus() {
+    canTxLogFrames = [];
+    const can = simulator?.can;
+    if (can) {
+        can.writeRegister(getCANBase(can) + CAN_REGISTERS.CMD, CAN_CMD_BITS.CLEAR_ERROR);
+    }
+    setCANMessage('Cleared CAN UI log and sticky error status.', 'ok');
+    renderCANView();
+    renderSocView();
+}
+
 function updateUIGlobally() {
     const currentSimulator = simulator;
 
@@ -913,6 +1123,7 @@ function updateUIGlobally() {
     renderCacheView();
     renderMMUView();
     renderSocView();
+    renderCANView();
 
     setTimeout(() => {
         document.querySelectorAll('tr.highlight').forEach(row => row.classList.remove('highlight'));
@@ -1028,6 +1239,18 @@ function renderSocView() {
         uartStatusText.textContent = `TX: ${simulator.uart.txBuffer?.length || 0} / RX: ${simulator.uart.rxBuffer?.length || 0}`;
     }
 
+    // 7b. Update CAN Status
+    const canStatusText = document.getElementById('soc-status-can');
+    if (canStatusText && simulator.can) {
+        const can = simulator.can;
+        const status = can.readRegister(getCANBase(can) + CAN_REGISTERS.STATUS) >>> 0;
+        const txCount = (status >>> 8) & 0xFF;
+        const rxCount = (status >>> 16) & 0xFF;
+        const hasError = (status & CAN_STATUS_BITS.ERROR) !== 0;
+        const rxOverrun = (status & CAN_STATUS_BITS.RX_OVERRUN) !== 0;
+        canStatusText.textContent = `TX:${txCount} RX:${rxCount}${rxOverrun ? ' OVR' : ''}${hasError ? ' ERR' : ''}`;
+    }
+
     // 8. Update LED Matrix Status
     const ledStatusText = document.getElementById('soc-status-led');
     if (ledStatusText && simulator.trace) {
@@ -1081,6 +1304,7 @@ function setupSocInteractivity() {
                             if (id === 'memory') return tx.linkName === 'uhToMainMemory';
                             if (id === 'dma') return tx.linkName.toLowerCase().includes('dma');
                             if (id === 'uart') return tx.linkName === 'ulToUart';
+                            if (id === 'can') return tx.linkName === 'ulToCan';
                             if (id === 'led') return tx.linkName === 'ulToLedMatrix';
                             if (id === 'keyboard') return tx.linkName === 'ulToKeyboard';
                             if (id === 'mouse') return tx.linkName === 'ulToMouse';
@@ -1458,6 +1682,57 @@ function setupUARTCallbacks() {
 
 // --- EVENT HANDLERS (Nút điều khiển) ---
 
+function setupCANCallbacks() {
+    if (typeof simulator === 'undefined' || !simulator.can) return;
+
+    const can = simulator.can;
+    if (canBoundController !== can) {
+        canBoundController = can;
+        canTxLogFrames = [];
+        setCANMessage('', '');
+    }
+
+    can.onTransmit = (frame) => {
+        canTxLogFrames.push(frame);
+        if (canTxLogFrames.length > CAN_TX_LOG_LIMIT) {
+            canTxLogFrames = canTxLogFrames.slice(-CAN_TX_LOG_LIMIT);
+        }
+        renderCANView();
+    };
+
+    can.onReceive = () => {
+        renderCANView();
+    };
+
+    renderCANView();
+}
+
+function setupCANControls() {
+    const injectButton = document.getElementById('canInjectButton');
+    const clearButton = document.getElementById('canClearButton');
+    const payloadInput = document.getElementById('canInjectPayload');
+
+    if (injectButton && injectButton.dataset.canBound !== 'true') {
+        injectButton.dataset.canBound = 'true';
+        injectButton.addEventListener('click', injectCANFrameFromUI);
+    }
+
+    if (clearButton && clearButton.dataset.canBound !== 'true') {
+        clearButton.dataset.canBound = 'true';
+        clearButton.addEventListener('click', clearCANLogAndStatus);
+    }
+
+    if (payloadInput && payloadInput.dataset.canBound !== 'true') {
+        payloadInput.dataset.canBound = 'true';
+        payloadInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                injectCANFrameFromUI();
+            }
+        });
+    }
+}
+
 function scrollBinaryOutputToBottom() {
     if (binaryOutput) binaryOutput.scrollTop = binaryOutput.scrollHeight;
 }
@@ -1500,6 +1775,7 @@ function handleAssemble() {
     simulator.init();
     setupSyscallCallbacks();
     setupUARTCallbacks(); // Setup lại UART callbacks sau reset
+    setupCANCallbacks();
 
     setTimeout(() => {
         try {
@@ -1515,6 +1791,7 @@ function handleAssemble() {
             simulator.loadProgram(programData);
             setupSyscallCallbacks();
             setupUARTCallbacks(); // Setup lại callbacks sau load program
+            setupCANCallbacks();
 
             let dataStartAddrFound = false;
             if (programData.memory && Object.keys(programData.memory).length > 0) {
@@ -1758,6 +2035,7 @@ function handleReset() {
     if (runState.isRunning) finishRun();
     simulator.init();
     setupUARTCallbacks();
+    setupCANCallbacks();
     setupSyscallCallbacks();
 
     if (assembler && typeof assembler._reset === 'function') {
@@ -1854,6 +2132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     stopButton?.addEventListener('click', handleStop);
     stepButton?.addEventListener('click', handleStep);
     resetButton?.addEventListener('click', handleReset);
+    setupCANControls();
     updateRunControlUI();
 
     // [MỚI] Sự kiện thanh trượt tốc độ
@@ -1877,6 +2156,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setRegisterView('integer');
         updateUIGlobally();
         setupUARTCallbacks(); // Setup UART callbacks lần đầu
+        setupCANCallbacks();
         setupSocInteractivity(); // Initialize SoC diagram tooltips and navigation
     }
 

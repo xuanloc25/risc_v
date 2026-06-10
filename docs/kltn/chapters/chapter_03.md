@@ -28,7 +28,7 @@ Nhóm yêu cầu chức năng bao quát toàn bộ vòng đời thao tác của 
 | FR10 | Quan sát MMU | Hiển thị cấu hình, bảng trang, bộ đệm dịch địa chỉ (TLB) và lịch sử dịch địa chỉ | `src/index.html`, `src/js/mmu.js`, `src/js/javascript.js` |
 | FR11 | Quan sát bộ nhớ đệm | Hiển thị trạng thái và thống kê trúng/trượt của L1I, L1D, L2 | `src/index.html`, `src/js/SimpleCache.js` |
 | FR12 | Quan sát sơ đồ SoC | Hiển thị sơ đồ khối động, làm nổi bật các giao dịch trên bus theo thời gian thực | `src/js/soc_diagram.js`, `src/js/javascript.js` |
-| FR13 | Tương tác ngoại vi | Tương tác với UART (console), ma trận LED, bàn phím và chuột | `src/index.html`, `src/js/javascript.js` |
+| FR13 | Tương tác ngoại vi | Tương tác với UART (console), CAN ở mức frame/message, ma trận LED, bàn phím và chuột | `src/index.html`, `src/js/javascript.js` |
 | FR14 | Nhật ký hệ thống | Ghi và lọc nhật ký hệ thống theo từng mô-đun (CPU, MMU, cache, bus, DMA…) | `src/js/system_log_bootstrap.js`, `src/index.html` |
 | FR15 | Khởi tạo lại hệ thống | Đặt lại trạng thái mô phỏng (Reset) mà vẫn giữ mã nguồn trong trình soạn thảo | `src/js/javascript.js`, `src/js/soc.js` |
 
@@ -67,7 +67,7 @@ Về tổng thể, hệ thống tái hiện một SoC RISC-V điển hình theo 
 
 — Lớp bus: dưới L2 là khối bus "TileLink-UH" (giữa) và khối bus "TileLink-UL" (phải).
 
-— Lớp bộ nhớ và ngoại vi (dưới cùng): khối "Main Memory (RAM)" ở trái nối vào TileLink-UH; hàng ngoại vi gồm "UART", "LED Matrix", "Keyboard", "Mouse" nối vào TileLink-UL.
+— Lớp bộ nhớ và ngoại vi (dưới cùng): khối "Main Memory (RAM)" ở trái nối vào TileLink-UH; hàng ngoại vi gồm "UART", "CAN", "LED Matrix", "Keyboard", "Mouse" nối vào TileLink-UL.
 
 Các cung (mũi tên) và nhãn cổng/bus:
 - CPU → MMU: cung một chiều xuống dưới, nhãn cổng `cpu-to-mmu` (nhóm bus core).
@@ -78,9 +78,9 @@ Các cung (mũi tên) và nhãn cổng/bus:
 - TileLink-UH ↔ DMA: hai cung hai chiều chạy vòng lên góc phải — một cung là DMA đóng vai trò master phát yêu cầu lên UH (nhãn `uh-to-dma`), một cung là các thanh ghi điều khiển DMA đóng vai trò slave nhận yêu cầu từ UH (nhãn `uh-to-dma-regs`).
 - TileLink-UH ↔ TileLink-UL: cung hai chiều qua cầu nối, nhãn `bridge (UH↔UL)`; thể hiện hai cầu nối một chiều ghép lại (UH→UL và UL→UH).
 - TileLink-UL ↔ DMA: cung hai chiều, nhãn `ul-to-dma`; thể hiện DMA cũng là master trên bus UL.
-- TileLink-UL → {UART, LED Matrix, Keyboard, Mouse}: bốn cung hai chiều xuống hàng ngoại vi, nhãn `ul-to-uart`, `ul-to-led`, `ul-to-keyboard`, `ul-to-mouse`.
+- TileLink-UL → {UART, CAN, LED Matrix, Keyboard, Mouse}: năm cung hai chiều xuống hàng ngoại vi, gồm `ul-to-uart`, `ul-to-can`, `ul-to-led`, `ul-to-keyboard`, `ul-to-mouse`.
 
-Chú giải màu: nhóm "compute/master" (CPU, DMA), nhóm "memory & cache" (MMU, L1I, L1D, L2, RAM), nhóm "TileLink interconnect" (UH, UL), nhóm "MMIO peripherals" (UART, LED, Keyboard, Mouse). Điểm cần nhấn mạnh: khối DMA có cung nối tới CẢ HAI bus UH và UL, thể hiện DMA là master trên cả hai phân hệ bus.] (xem source: `src/js/soc.js`, `src/js/soc_diagram.js`)
+Chú giải màu: nhóm "compute/master" (CPU, DMA), nhóm "memory & cache" (MMU, L1I, L1D, L2, RAM), nhóm "TileLink interconnect" (UH, UL), nhóm "MMIO peripherals" (UART, CAN, LED, Keyboard, Mouse). Điểm cần nhấn mạnh: khối DMA có cung nối tới CẢ HAI bus UH và UL, thể hiện DMA là master trên cả hai phân hệ bus.] (xem source: `src/js/soc.js`, `src/js/soc_diagram.js`)
 
 Có hai đặc điểm thiết kế cần nêu rõ để tránh hiểu nhầm về phạm vi.
 
@@ -104,11 +104,12 @@ Mỗi khối phần cứng trong sơ đồ kiến trúc được hiện thực b
 | Lõi giao thức TileLink | Định nghĩa mã thao tác kênh A/D, mặt nạ byte, thao tác nguyên tử, ảnh chụp giao dịch | `src/js/tilelink.js` | Thư viện dùng chung cho các bus và endpoint |
 | Hạ tầng interconnect | Hàng đợi yêu cầu/phản hồi, định tuyến master/slave theo địa chỉ | `src/js/tilelink_base.js` | Lớp cơ sở của hai bus; một giao dịch in-flight |
 | Bus TileLink-UH | Bus hiệu năng cao cho RAM, thanh ghi DMA và cầu nối; cho phép đủ tập thao tác (kể cả nguyên tử) | `src/js/tilelink_UH.js` | Nối L2, RAM, DMA (master + thanh ghi), cầu nối UH→UL |
-| Bus TileLink-UL | Bus nhẹ cho thiết bị ngoại vi; cho phép đọc/ghi và lệnh gợi ý | `src/js/tilelink_UL.js` | Nối UART, LED, bàn phím, chuột, DMA (master), cầu nối UL→UH |
+| Bus TileLink-UL | Bus nhẹ cho thiết bị ngoại vi; cho phép đọc/ghi và lệnh gợi ý | `src/js/tilelink_UL.js` | Nối UART, CAN, LED, bàn phím, chuột, DMA (master), cầu nối UL→UH |
 | Cầu nối UH↔UL | Chuyển giao dịch giữa bus hiệu năng cao và bus ngoại vi | `src/js/tilelink_bridge.js` | Hai cầu nối một chiều; slave trên bus này, truy cập trực tiếp sang bus kia |
 | Lớp cổng kết nối (Port) | Trừu tượng hóa việc nối hai mô-đun hoặc đăng ký endpoint vào bus | `src/js/port_link.js` | Cung cấp các loại cổng link/upper/lower/memory |
 | Bộ điều khiển DMA | Truyền khối dữ liệu độc lập với CPU theo mô tả truyền | `src/js/dma.js`, `src/js/soc.js` | Master trên cả UH và UL; thanh ghi điều khiển là slave trên UH (0xFFED0000) |
 | UART | Giao tiếp nối tiếp dạng console, có cấu hình tốc độ | `src/js/uart.js`, `src/js/soc.js` | Endpoint MMIO không lưu đệm trên UL (0x10000000) |
+| Bộ điều khiển CAN | Mô phỏng CAN controller ở mức frame/message qua MMIO với TX/RX FIFO, loopback và ID chuẩn/mở rộng | `src/js/can.js`, `src/js/soc.js` | Endpoint MMIO không lưu đệm trên UL (`0xFF200000`–`0xFF2000FF`); phục vụ giáo dục và demo SoC, không mô phỏng bit-level/physical layer đầy đủ |
 | Ma trận LED | Hiển thị lưới 32×32 điểm ảnh từ vùng bộ nhớ hiển thị | `src/js/led_matrix.js`, `src/js/soc.js` | Endpoint MMIO trên UL (0xFF000000); vẽ bằng canvas |
 | Bàn phím | Bộ đệm ký tự nhập vào để phần mềm đọc thăm dò | `src/js/keyboard.js`, `src/js/soc.js` | Endpoint MMIO trên UL (0xFFFF0000) |
 | Chuột | Cung cấp tọa độ con trỏ và trạng thái nút qua thanh ghi | `src/js/mouse.js`, `src/js/soc.js` | Endpoint MMIO trên UL (0xFF100000) |
@@ -129,9 +130,10 @@ Các thành phần của hệ thống chia sẻ một không gian địa chỉ p
 |---|---|---|---|---|---|
 | Bộ nhớ chính (RAM) | (mọi địa chỉ không thuộc MMIO) | — | Phần còn lại của không gian địa chỉ | TileLink-UH | Có |
 | UART | `0x10000000` | 20 byte (`0x14`) | `0x10000000`–`0x10000013` | TileLink-UL | Không |
-| DMA (thanh ghi điều khiển) | `0xFFED0000` | 8 byte (`0x08`) | `0xFFED0000`–`0xFFED0007` | TileLink-UH | Không |
 | LED Matrix (VRAM) | `0xFF000000` | 4096 byte (32×32×4) | `0xFF000000`–`0xFF000FFF` | TileLink-UL | Không |
 | Mouse | `0xFF100000` | 20 byte (`0x14`) | `0xFF100000`–`0xFF100013` | TileLink-UL | Không |
+| CAN Controller | `0xFF200000` | 256 byte (`0x100`) | `0xFF200000`–`0xFF2000FF` | TileLink-UL | Không |
+| DMA (thanh ghi điều khiển) | `0xFFED0000` | 8 byte (`0x08`) | `0xFFED0000`–`0xFFED0007` | TileLink-UH | Không |
 | Keyboard | `0xFFFF0000` | 8 byte (`0x08`) | `0xFFFF0000`–`0xFFFF0007` | TileLink-UL | Không |
 
 Trong vùng bộ nhớ chính, trình biên dịch hợp ngữ sử dụng hai địa chỉ nền quy ước để nạp chương trình: vùng mã lệnh (`.text`) bắt đầu tại `0x00400000` và vùng dữ liệu (`.data`) bắt đầu tại `0x10010000` (xem source: `src/js/assembler.js`). Cả hai vùng này đều là địa chỉ bộ nhớ chính, do đó được truy cập qua TileLink-UH và có thể lưu đệm. Có thể thấy vùng dữ liệu `0x10010000` nằm cao hơn dải của UART (`0x10000000`–`0x10000013`) nên không xảy ra chồng lấn giữa vùng dữ liệu chương trình và vùng MMIO. Bản đồ địa chỉ này là cơ sở để hệ thống định tuyến mỗi yêu cầu tới đúng thành phần đích; cơ chế định tuyến cụ thể được trình bày ở mục 3.3.2 và Chương 4.
@@ -188,7 +190,7 @@ Thanh bên gồm bảy mục điều hướng, mỗi mục tương ứng một k
 | MMU | Tổng quan và cấu hình; bảng trang phần mềm; bảng TLB; lịch sử dịch địa chỉ gần đây | FR10 |
 | Cache | Trạng thái L1I, L1D, L2 (tập, đường, hợp lệ, bẩn, thẻ); thống kê trúng/trượt | FR11 |
 | Memory | Bộ nhớ lệnh (địa chỉ, mã máy, disassembly, cột đặt điểm dừng); vùng dữ liệu theo hàng, chuyển đổi hex/ASCII | FR6, FR9 |
-| I/O | Ma trận LED (canvas); console UART (xuất/nhập); ô nhập bàn phím và trạng thái bộ đệm | FR13 |
+| I/O | Ma trận LED; console UART; khung CAN TX/RX và inject frame; ô nhập bàn phím và trạng thái bộ đệm | FR13 |
 | Help | Tra cứu lệnh, pseudo-instruction, directive, syscall, bản đồ địa chỉ và hướng dẫn quy trình chạy | (hỗ trợ FR1–FR5) |
 
 Thanh công cụ phía trên chứa các nút điều khiển thực thi theo đúng vòng đời thao tác: **Assemble** (biên dịch và nạp), **Reset** (khởi tạo lại), **Run** (chạy liên tục), **Pause** (tạm dừng/tiếp tục), **Stop** (dừng hẳn) và **Step** (chạy từng bước). Bên cạnh đó là một thanh trượt điều chỉnh tốc độ (Speed) cho phép thay đổi số chu kỳ thực thi trên mỗi khung hình, và một chỉ số hiển thị tốc độ thực thi ước lượng (IPS — số lệnh/chu kỳ trên giây) cập nhật trong khi chạy (xem source: `src/index.html`, `src/js/javascript.js`). Trạng thái khả dụng của các nút thay đổi theo trạng thái chạy: ví dụ Pause và Stop chỉ được kích hoạt khi chương trình đang chạy, còn Step bị vô hiệu hóa khi đang chạy liên tục mà chưa tạm dừng.
