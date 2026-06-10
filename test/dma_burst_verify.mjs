@@ -93,7 +93,7 @@ assert.equal(dataOk, true, 'Burst copy phải bảo toàn toàn bộ dữ liệu
 
 // ── Yêu cầu 1 (tiếp): buffer đọc/ghi độc lập ──
 assert.equal(buffersIndependent, true, 'readFifo và writeFifo phải là hai buffer độc lập.');
-const datapathMoves = countLines('[DMA][DATAPATH] moved');
+const datapathMoves = countLines('[DMA][FIFO] MOVE');
 assert.ok(datapathMoves > 0, 'Phải có datapath chuyển byte từ read buffer sang write buffer.');
 
 // ── Yêu cầu 2: burst transfer thật cho cả đọc và ghi ──

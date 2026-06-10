@@ -599,15 +599,16 @@ export class DMAController {
                         this.registers.pushReadFifo(data & 0xFF);
                     }
 
-                    // Read-buffer occupancy after each source beat lands. In the
-                    // normal fill phase the datapath drains it again immediately
-                    // (read stays low); but while the write side is back-pressured
-                    // (e.g. UART TX FIFO full) the read buffer visibly fills toward
-                    // its depth (read=4,8,...,32) before any byte can move across,
-                    // making the independent read/write buffering observable here.
+                    // FIFO flow log — stage 1/3 READ: a source beat just landed in
+                    // the read FIFO. In the normal fill phase the datapath drains it
+                    // again immediately (read stays low); while the write side is
+                    // back-pressured (e.g. UART TX FIFO full) the read FIFO visibly
+                    // fills toward its depth (read=4,8,...,32) before any byte can move
+                    // across. Pair with the MOVE and WRITE stages below.
                     console.log(
-                        `[DMA][BUFFER] read buffer +${srcElemSize} byte(s) from source ` +
-                        `(read=${this.registers.readFifoCount}, write=${this.registers.writeFifoCount})`
+                        `[DMA][FIFO] READ  +${srcElemSize}B  src->readFifo       ` +
+                        `read=${this.registers.readFifoCount}/${this.registers.readFifoDepth} ` +
+                        `write=${this.registers.writeFifoCount}/${this.registers.writeFifoDepth}`
                     );
 
                     this.activeRequestLink = null;
@@ -634,18 +635,29 @@ export class DMAController {
 
                     // Pack one destination element worth of bytes from the WRITE buffer.
                     const packElement = () => {
+                        let value;
                         if (this.dstWidth === 2) {
                             const b0 = this.registers.popWriteFifo();
                             const b1 = this.registers.popWriteFifo();
                             const b2 = this.registers.popWriteFifo();
                             const b3 = this.registers.popWriteFifo();
-                            return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+                            value = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
                         } else if (this.dstWidth === 1) {
                             const b0 = this.registers.popWriteFifo();
                             const b1 = this.registers.popWriteFifo();
-                            return (b0 | (b1 << 8)) >>> 0;
+                            value = (b0 | (b1 << 8)) >>> 0;
+                        } else {
+                            value = this.registers.popWriteFifo() >>> 0;
                         }
-                        return this.registers.popWriteFifo() >>> 0;
+                        // FIFO flow log — stage 3/3 WRITE: one destination element just
+                        // left the write FIFO toward the destination (the matching
+                        // bus transaction is the ISSUE_WRITE line below).
+                        console.log(
+                            `[DMA][FIFO] WRITE -${dstElemSize}B  writeFifo->dst      ` +
+                            `read=${this.registers.readFifoCount}/${this.registers.readFifoDepth} ` +
+                            `write=${this.registers.writeFifoCount}/${this.registers.writeFifoDepth}`
+                        );
+                        return value;
                     };
 
                     if (this._useWriteBurst(writesToEnqueue)) {
@@ -721,7 +733,12 @@ export class DMAController {
             moved++;
         }
         if (moved > 0) {
-            console.log(`[DMA][DATAPATH] moved ${moved} byte(s) read->write buffer (read=${regs.readFifoCount}, write=${regs.writeFifoCount})`);
+            // FIFO flow log — stage 2/3 MOVE: bytes shuttled read FIFO -> write FIFO.
+            console.log(
+                `[DMA][FIFO] MOVE  ${moved}B  readFifo->writeFifo  ` +
+                `read=${regs.readFifoCount}/${regs.readFifoDepth} ` +
+                `write=${regs.writeFifoCount}/${regs.writeFifoDepth}`
+            );
         }
     }
 
