@@ -63,9 +63,6 @@ export class MMU {
 
         this.pageTable = new Map();
 
-        // Shadow map phục vụ khả năng tương thích ngược với mã UI và kiểm thử
-        this.tlb = new Map();
-
         // Khởi tạo các block vật lý cho TLB (Set-Associative)
         this.tlbBlocks = Array.from({ length: this.tlbSize }, (_, id) => {
             const set = Math.floor(id / this.tlbWays);
@@ -134,14 +131,12 @@ export class MMU {
         const vpn = this._getPageNumber(entry.virtualBase);
         this.pageTable.set(vpn, entry);
         this._invalidateTlbVpn(vpn);
-        this._syncTlbMap();
     }
 
     unmapPage(virtualBase) {
         const vpn = this._getPageNumber(virtualBase >>> 0);
         this.pageTable.delete(vpn);
         this._invalidateTlbVpn(vpn);
-        this._syncTlbMap();
     }
 
     clearMappings() {
@@ -149,7 +144,6 @@ export class MMU {
         for (const block of this.tlbBlocks) {
             this._resetTlbBlock(block);
         }
-        this._syncTlbMap();
     }
 
     reset() {
@@ -161,7 +155,6 @@ export class MMU {
         for (const block of this.tlbBlocks) {
             this._resetTlbBlock(block);
         }
-        this._syncTlbMap();
 
         for (const entry of this.pageTable.values()) {
             entry.lastReference = 0;
@@ -179,13 +172,21 @@ export class MMU {
         // cổng cấp thấp nhận một địa chỉ vật lý, trong khi VA gốc được giữ lại
         // để đường dẫn phản hồi vẫn có thể trả về đúng địa chỉ lúc đầu của CPU.
         const accessType = classifyAccess(req.type);
-        const translated = this.translateAddress(req.address, accessType);
+        let translated;
+        try {
+            translated = this.translateAddress(req.address, accessType);
+        } catch (error) {
+            // Truy cập lỗi quyền không bao giờ đến được dòng log REQUEST bên dưới,
+            // nên cần một dòng [MMU] riêng để fault hiển thị trong Systems Log Console.
+            console.warn(`[MMU] FAULT from=${from} type=${describeOpcode(req.type)} access=${accessType}: ${error.message}`);
+            throw error;
+        }
         const targetName = describeEndpoint(lowerPort, req.type === 'fetch' ? 'instruction-cache' : 'data-cache');
 
         console.log(
             `[MMU] REQUEST from=${from} type=${describeOpcode(req.type)} access=${accessType} ` +
             `va=0x${(req.address >>> 0).toString(16)} -> pa=0x${translated.physicalAddress.toString(16)} ` +
-            `mode=${translated.mode} cacheable=${translated.cacheable} next=${targetName}`
+            `mode=${translated.mode} src=${translated.source} cacheable=${translated.cacheable} next=${targetName}`
         );
 
         lowerPort.receiveRequest({
@@ -254,7 +255,6 @@ export class MMU {
                 this._insertIntoTlb(vpn, entry);
             }
         }
-        this._syncTlbMap();
 
         if (!entry) {
             // Các chương trình bare-metal trong dự án này có thể chạy mà không cần thiết lập
@@ -267,7 +267,6 @@ export class MMU {
                 cacheable: !!this.cacheabilityPredicate(va),
                 mode: 'identity',
                 vpn,
-                ppn: this._getPageNumber(va),
                 offset,
                 source,
                 lastReference
@@ -283,15 +282,12 @@ export class MMU {
         try {
             this._assertPermission(entry, accessType, va);
         } catch (error) {
-            this.stats.permissionFaults++;
-            this.stats[`${accessType}Faults`] = (this.stats[`${accessType}Faults`] ?? 0) + 1;
             this._recordTranslation({
                 virtualAddress: va,
                 physicalAddress: null,
                 cacheable: entry.cacheable,
                 mode: 'fault',
                 vpn,
-                ppn: this._getPageNumber(entry.physicalBase),
                 offset,
                 source,
                 accessType,
@@ -309,7 +305,6 @@ export class MMU {
             cacheable: entry.cacheable && !!this.cacheabilityPredicate(physicalAddress),
             mode: 'mapped',
             vpn,
-            ppn: this._getPageNumber(physicalAddress),
             offset,
             source,
             lastReference
@@ -355,11 +350,7 @@ export class MMU {
             tlbRefills: 0,
             tlbEvictions: 0,
             pageTableHits: 0,
-            identityFallbacks: 0,
-            permissionFaults: 0,
-            readFaults: 0,
-            writeFaults: 0,
-            executeFaults: 0
+            identityFallbacks: 0
         };
     }
 
@@ -473,22 +464,5 @@ export class MMU {
             this.stats.tlbRefills++;
         }
         return block;
-    }
-
-    _syncTlbMap() {
-        this.tlb.clear();
-        for (const block of this.tlbBlocks) {
-            if (block.valid) {
-                this.tlb.set(block.vpn, {
-                    virtualBase: block.virtualBase,
-                    physicalBase: block.physicalBase,
-                    read: block.read,
-                    write: block.write,
-                    execute: block.execute,
-                    cacheable: block.cacheable,
-                    lastReference: block.lastReference
-                });
-            }
-        }
     }
 }

@@ -1338,7 +1338,7 @@ function setupSocInteractivity() {
 }
 
 function renderMMUView() {
-    if (!mmuOverviewStats || !mmuConfigTableBody || !mmuPageTableBody || !mmuTlbTableBody || !mmuHistoryTableBody) return;
+    if (!mmuOverviewStats || !mmuPageTableBody || !mmuTlbTableBody || !mmuHistoryTableBody) return;
 
     const mmu = simulator.mmu;
     const formatHex = (value, pad = 8) => {
@@ -1382,24 +1382,25 @@ function renderMMUView() {
 
     if (!mmu) {
         mmuRenderedValues.clear();
-        insertEmptyRow(mmuConfigTableBody, 2, 'MMU not initialized.');
+        if (mmuConfigTableBody) insertEmptyRow(mmuConfigTableBody, 2, 'MMU not initialized.');
         insertEmptyRow(mmuPageTableBody, 8, 'MMU not initialized.');
-        insertEmptyRow(mmuTlbTableBody, 7, 'MMU not initialized.');
-        insertEmptyRow(mmuHistoryTableBody, 11, 'MMU not initialized.');
+        insertEmptyRow(mmuTlbTableBody, 6, 'MMU not initialized.');
+        insertEmptyRow(mmuHistoryTableBody, 9, 'MMU not initialized.');
         mmuOverviewStats.textContent = 'MMU not initialized';
         return;
     }
 
     const pageSize = mmu.pageSize ?? 4096;
-    const offsetBits = Math.log2(pageSize);
-    const vpnBits = 32 - offsetBits;
     const pageTableEntries = Array.from(mmu.pageTable?.entries?.() ?? []).sort(([a], [b]) => a - b);
     const historyEntries = Array.isArray(mmu.translationHistory) ? mmu.translationHistory : [];
     const s = mmu.stats ?? {};
     const translations = s.translations ?? 0;
     const tlbHits = s.tlbHits ?? 0;
-    const tlbMisses = s.tlbMisses ?? 0;
-    const hitRate = translations > 0 ? `${((tlbHits / translations) * 100).toFixed(1)}%` : '0.0%';
+    // Truy cập identity (chưa map) không bao giờ được nạp vào TLB, nên hit/miss
+    // chỉ tính trên các truy cập có ánh xạ để tỷ lệ hit phản ánh đúng hành vi TLB.
+    const tlbMisses = s.pageTableHits ?? 0;
+    const mappedLookups = tlbHits + tlbMisses;
+    const hitRate = mappedLookups > 0 ? `${((tlbHits / mappedLookups) * 100).toFixed(1)}%` : '—';
 
     const overviewMetrics = [
         ['Translations', translations],
@@ -1420,19 +1421,20 @@ function renderMMUView() {
         markMmuChanged(metric, `overview:${label}`, value);
     });
 
-    const configRows = [
-        ['Page size', `${pageSize} bytes (${formatHex(pageSize, 4)})`],
-        ['TLB', `${mmu.tlbSize} entries, ${mmu.tlbSets} sets x ${mmu.tlbWays} ways, LRU`],
-        ['Permission checks', 'Read / Write / Execute'],
-        ['Identity fallback', 'Enabled (bare-metal)']
-    ];
-
-    mmuConfigTableBody.innerHTML = '';
-    configRows.forEach(([name, value]) => {
-        const row = mmuConfigTableBody.insertRow();
-        row.insertCell().textContent = name;
-        insertTrackedCell(row, `config:${name}`, value);
-    });
+    if (mmuConfigTableBody) {
+        const configRows = [
+            ['Page size', `${pageSize} bytes (${formatHex(pageSize, 4)})`],
+            ['TLB', `${mmu.tlbSize} entries, ${mmu.tlbSets} sets x ${mmu.tlbWays} ways, LRU`],
+            ['Permission checks', 'Read / Write / Execute'],
+            ['Identity fallback', 'Enabled (bare-metal)']
+        ];
+        mmuConfigTableBody.innerHTML = '';
+        configRows.forEach(([name, value]) => {
+            const row = mmuConfigTableBody.insertRow();
+            row.insertCell().textContent = name;
+            insertTrackedCell(row, `config:${name}`, value);
+        });
+    }
 
     if (mmuAddressMapTableBody) {
         const addressMap = simulator.addressMap ?? [];
@@ -1468,7 +1470,8 @@ function renderMMUView() {
             insertTrackedCell(row, `${entryKey}:pa`, formatHex(entry.physicalBase));
             insertTrackedCell(row, `${entryKey}:perms`, permissionText(entry));
             insertTrackedCell(row, `${entryKey}:cacheable`, formatBool(entry.cacheable), { html: true });
-            insertTrackedCell(row, `${entryKey}:in-tlb`, formatBool(mmu.tlb?.has?.(vpn)), { html: true });
+            const inTlb = (mmu.tlbBlocks ?? []).some(block => block.valid && block.vpn === vpn);
+            insertTrackedCell(row, `${entryKey}:in-tlb`, formatBool(inTlb), { html: true });
             insertTrackedCell(row, `${entryKey}:last-ref`, entry.lastReference ?? 0);
         });
     }
@@ -1499,27 +1502,26 @@ function renderMMUView() {
     }
 
     if (historyEntries.length === 0) {
-        insertEmptyRow(mmuHistoryTableBody, 11, 'No translations yet. Assemble and step/run a program to populate this table.');
+        insertEmptyRow(mmuHistoryTableBody, 9, 'No translations yet. Assemble and step/run a program to populate this table.');
     } else {
         mmuHistoryTableBody.innerHTML = '';
         historyEntries.forEach(record => {
             const row = mmuHistoryTableBody.insertRow();
             const historyKey = `history:${record.lastReference ?? historyEntries.indexOf(record)}`;
+            const isOk = record.result === 'ok';
             insertTrackedCell(row, `${historyKey}:ref`, record.lastReference ?? '-');
             insertTrackedCell(row, `${historyKey}:source`, record.source ?? '-');
             insertTrackedCell(row, `${historyKey}:access`, record.accessType ?? '-');
-            insertTrackedCell(row, `${historyKey}:mode`, record.mode ?? '-');
             insertTrackedCell(row, `${historyKey}:va`, formatHex(record.virtualAddress));
             insertTrackedCell(row, `${historyKey}:vpn`, formatId(record.vpn));
             insertTrackedCell(row, `${historyKey}:offset`, formatHex(record.offset, 3));
             insertTrackedCell(row, `${historyKey}:pa`, formatHex(record.physicalAddress));
-            insertTrackedCell(row, `${historyKey}:ppn`, formatId(record.ppn));
-            insertTrackedCell(row, `${historyKey}:cacheable`, formatBool(record.cacheable), { html: true });
-            const resultText = record.result === 'ok' ? 'OK' : (record.result ?? 'Fault');
+            insertTrackedCell(row, `${historyKey}:cacheable`, isOk ? formatBool(record.cacheable) : '-', { html: isOk });
+            const resultText = isOk ? 'OK' : (record.result ?? 'Fault');
             insertTrackedCell(
                 row,
                 `${historyKey}:result`,
-                `<span class="mmu-status ${record.result === 'ok' ? 'mmu-status-on' : 'mmu-status-fault'}">${resultText}</span>`,
+                `<span class="mmu-status ${isOk ? 'mmu-status-on' : 'mmu-status-fault'}">${resultText}</span>`,
                 { html: true }
             );
         });
