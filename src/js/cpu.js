@@ -3,18 +3,18 @@ import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic } from './tilelink.js';
 // TileLink-UL CPU implementation
 export class CPU {
     constructor() {
-        this.registers = new Int32Array(32);
-        this.fregisters = new Float32Array(32);
-        this.pc = 0;
+        this.registers = new Int32Array(32);        //các thanh ghi từ x0 -> x32
+        this.fregisters = new Float32Array(32);     //các thanh ghi số thực f0 -> f32
+        this.pc = 0;                                
         this.lowerPort = null;
         this.isRunning = false;
         this.instructionCount = 0;
-        this.pendingResponse = null;
-        this.waitingRequest = null;
+        this.pendingResponse = null;                //chứa phản hồi từ bus trả về cpu (data)
+        this.waitingRequest = null;                 //chứa yêu cầu mà cpu gửi (data request)
 
-        this.fetchPending = null;
-        this.fetchWaiting = false;
-        this.replayInstruction = null;
+        this.fetchPending = null;                   //chứa yêu cầu fetch instruction được nạp từ ram lên
+        this.fetchWaiting = false;                  //đánh dấu đang chờ phản hồi fetch instruction từ ram
+        this.replayInstruction = null;              //lưu lại lệnh nếu bị stall data
         
         this.onSyscallOutput = null;
         this.onSyscallExit = null;
