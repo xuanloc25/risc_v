@@ -1,20 +1,8 @@
 // javascript.js
 // File này điều khiển giao diện người dùng, tương tác với assembler và simulator.
 
-// --- Cấu hình cú pháp RISC-V cho CodeMirror ---
-CodeMirror.defineSimpleMode("riscv", {
-    start: [
-        { regex: /#.*/, token: "comment" },
-        { regex: /"(?:[^\\]|\\.)*?"/, token: "string" },
-        { regex: /\.(?:text|data|globl|word|float|ascii|asciiz|space|align|eqv)\b/, token: "keyword" },
-        { regex: /(?:la|li|mv|j|add|addi|sub|lw|sw|beq|bne|fadd\.s|flw|fsw|fsub\.s|ecall)\b/, token: "variable" },
-        { regex: /(?:zero|ra|sp|gp|tp|t0|t1|t2|s0|fp|s1|a0|a1|a2|a3|a4|a5|s2|s3|s4|s5|fa0|fa1|fa2|x[0-9]+\b|f[0-9]+\b)/, token: "variable-2" },
-        { regex: /[a-zA-Z_][\w]*:/, token: "tag" },
-        { regex: /0x[a-f\d]+|[-+]?(?:\.\d+|\d+\.?\d*)/i, token: "number" },
-    ]
-});
-
 import { assembler } from './assembler.js';
+import { OPCODES } from './isa.js';
 import { simulator } from './soc.js';
 import { configureRiscvEditorHints } from './editor_hint.js';
 import { SOC_NODES, renderSocDiagram, updateSocTraceHighlights } from './soc_diagram.js';
@@ -25,6 +13,37 @@ import {
     CAN_REGISTERS,
     CAN_STATUS_BITS
 } from './can.js';
+
+// --- Cấu hình cú pháp RISC-V cho CodeMirror ---
+// Mnemonic và directive được build động từ nguồn chuẩn (OPCODES trong isa.js,
+// assembler.directives) để highlight luôn khớp với tập lệnh assembler hỗ trợ.
+// CodeMirror nạp bằng <script> thường trước module này nên global đã sẵn sàng;
+// import được hoist nên OPCODES/assembler cũng khả dụng tại đây.
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Dài trước ngắn để alternation không match cụt (vd. 'fmv.s' chặn 'fmv.x.w').
+const longestFirst = (a, b) => b.length - a.length || (a < b ? -1 : 1);
+
+const mnemonicPattern = Object.keys(OPCODES)
+    .sort(longestFirst)
+    .map(escapeRegExp)
+    .join('|');
+const directivePattern = Object.keys(assembler.directives)
+    .map((name) => name.slice(1)) // bỏ '.' đầu, regex bên dưới thêm lại
+    .sort(longestFirst)
+    .map(escapeRegExp)
+    .join('|');
+
+CodeMirror.defineSimpleMode("riscv", {
+    start: [
+        { regex: /#.*/, token: "comment" },
+        { regex: /"(?:[^\\]|\\.)*?"/, token: "string" },
+        { regex: new RegExp(`\\.(?:${directivePattern})\\b`), token: "keyword" },
+        { regex: new RegExp(`(?:${mnemonicPattern})\\b`), token: "variable" },
+        { regex: /(?:zero|ra|sp|gp|tp|t0|t1|t2|s0|fp|s1|a0|a1|a2|a3|a4|a5|s2|s3|s4|s5|fa0|fa1|fa2|x[0-9]+\b|f[0-9]+\b)/, token: "variable-2" },
+        { regex: /[a-zA-Z_][\w]*:/, token: "tag" },
+        { regex: /0x[a-f\d]+|[-+]?(?:\.\d+|\d+\.?\d*)/i, token: "number" },
+    ]
+});
 
 // --- THAM CHIẾU DOM ---
 let instructionInput; // Sẽ được khởi tạo bởi CodeMirror
