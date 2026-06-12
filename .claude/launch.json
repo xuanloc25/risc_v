@@ -4,8 +4,8 @@
     {
       "name": "assembler-web",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8731", "--directory", "src"],
-      "port": 8731
+      "runtimeArgs": ["tools/dev_server.py", "8732"],
+      "port": 8732
     }
   ]
 }

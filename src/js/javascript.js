@@ -1045,10 +1045,16 @@ function clearCANLogAndStatus() {
     renderSocView();
 }
 
+// Only the active sidebar tab is visible, so per-frame rendering of hidden
+// views is wasted work. activateView() re-renders on every tab switch.
+function isViewActive(viewId) {
+    return !!document.getElementById(viewId)?.classList.contains('active');
+}
+
 function updateUIGlobally() {
     const currentSimulator = simulator;
 
-    if (registerTableBody) {
+    if (registerTableBody && isViewActive('view-editor')) {
         for (let i = 0; i < 32; i++) {
             const row = document.getElementById(`reg-${i}`);
             const value = currentSimulator.cpu.registers[i];
@@ -1071,7 +1077,7 @@ function updateUIGlobally() {
         }
     }
 
-    if (fpRegisterTableBody && currentSimulator.cpu?.fregisters) {
+    if (fpRegisterTableBody && currentSimulator.cpu?.fregisters && isViewActive('view-editor')) {
         for (let i = 0; i < 32; i++) {
             const row = document.getElementById(`freg-${i}`);
             const value = currentSimulator.cpu.fregisters[i];
@@ -1089,12 +1095,14 @@ function updateUIGlobally() {
         }
     }
 
-    renderDataSegmentTable();
-    renderInstructionView();
-    renderCacheView();
-    renderMMUView();
-    renderSocView();
-    renderCANView();
+    if (isViewActive('view-memory')) {
+        renderDataSegmentTable();
+        renderInstructionView();
+    }
+    if (isViewActive('view-cache')) renderCacheView();
+    if (isViewActive('view-mmu')) renderMMUView();
+    renderSocView(); // self-gated: always builds the diagram once, updates only when visible
+    if (isViewActive('view-io')) renderCANView();
 
     setTimeout(() => {
         document.querySelectorAll('tr.highlight').forEach(row => row.classList.remove('highlight'));
@@ -1115,6 +1123,10 @@ function renderSocView() {
     const socContainer = document.querySelector('.soc-view-container');
     if (!socContainer || !simulator) return;
     renderSocDiagram(socContainer, simulator);
+
+    // The diagram must exist for setupSocInteractivity(), but status text and
+    // flow animation only matter while the SoC tab is actually visible.
+    if (!isViewActive('view-processor')) return;
 
     // 1. Update RISC-V Core Status
     const cpuStatusText = document.getElementById('soc-status-cpu');
@@ -1446,14 +1458,16 @@ function renderCacheView() {
             return;
         }
 
-        const assoc = cache.policy?.numWays ?? cache.numWays ?? 1;
+        const assoc = Number(cache.policy?.numWays ?? cache.numWays ?? 1) || 1;
+        const numSets = Number(cache.policy?.numSets ?? cache.numSets ?? Math.ceil((cache.blocks?.length ?? 0) / assoc)) || 0;
+        const blockSize = Number(cache.policy?.blockSize ?? cache.blockSize ?? 0) || 0;
         let validCount = 0;
         cache.blocks.forEach(block => {
             if (!block.valid) return;
             validCount++;
             const row = tableBody.insertRow();
-            row.insertCell().textContent = Math.floor(block.id / assoc);
-            row.insertCell().textContent = block.id % assoc;
+            row.insertCell().textContent = block.set ?? Math.floor(block.id / assoc);
+            row.insertCell().textContent = block.way ?? (block.id % assoc);
             row.insertCell().textContent = formatHex(block.tag);
             row.insertCell().textContent = block.modified ? '1' : '0';
         });
@@ -1464,6 +1478,7 @@ function renderCacheView() {
         if (statsNode) {
             const s = cache.statistics;
             statsNode.innerHTML = `
+                <div>Config: ${numSets} sets x ${assoc} ways | Block: ${blockSize} bytes</div>
                 <div>Reads: ${s.numRead} | Writes: ${s.numWrite}</div>
                 <div>Hits: ${s.numHit} | Misses: ${s.numMiss}</div>
                 <div>Total Cycles: ${s.totalCycles}</div>
@@ -1680,6 +1695,9 @@ function collectBreakpointAddresses() {
     return breakpointAddresses;
 }
 
+// Above this speed (cycles/frame), per-cycle logs are suppressed during Run.
+const TICK_LOG_MAX_SPEED = 5;
+
 function cancelRunFrame() {
     if (runState.frameId !== null) {
         cancelAnimationFrame(runState.frameId);
@@ -1739,6 +1757,10 @@ function runLoop() {
         cyclesPerFrame = parseInt(speedSlider.value, 10);
         if (cyclesPerFrame === 100) cyclesPerFrame = 1000;
     }
+
+    // Per-cycle console logging costs ~400x the simulation itself (classifier
+    // regexes + console + Systems Log DOM). Keep it only at demo speeds (<=5x).
+    simulator.suppressTickLogs = cyclesPerFrame > TICK_LOG_MAX_SPEED;
 
     let executedThisFrame = 0;
     for (let i = 0; i < cyclesPerFrame; i++) {
@@ -1860,6 +1882,7 @@ function handleStep() {
     }
 
     try {
+        simulator.suppressTickLogs = false; // stepping is for inspection — always log
         simulator.stepInstruction();
         updateUIGlobally();
     } catch (e) {
@@ -2014,6 +2037,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (targetSection) {
             targetSection.classList.add('active');
         }
+
+        // Hidden views are not rendered per-frame, so refresh the one just shown.
+        updateUIGlobally();
 
         if (targetId === 'view-editor' && instructionInput) {
             setTimeout(() => {

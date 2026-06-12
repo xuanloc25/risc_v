@@ -628,7 +628,7 @@
                                     </tr>
                                     <tr>
                                         <td>Cache</td>
-                                        <td>Xem L1I, L1D, L2 cache: set, way, valid, dirty, tag, hit/miss.</td>
+                                        <td>Xem L1I, L1D, L2 cache: set, way, dirty, tag, hit/miss.</td>
                                         <td>Dùng Cache view và Systems Log Console để quan sát hành vi bộ nhớ.</td>
                                     </tr>
                                     <tr>
@@ -1564,7 +1564,7 @@ _start:
                                 <li>MMIO như UART/CAN/LED/Keyboard/Mouse đi qua TileLink-UL và thường không cache.</li>
                                 <li>Cache view có 3 tab: L1I cho instruction fetch, L1D cho data access, L2 shared
                                     cache.</li>
-                                <li>Bảng cache hiển thị set/way/tag/valid/dirty và thống kê
+                                <li>Bảng cache hiển thị set/way/tag/dirty và thống kê
                                     read/write/hit/miss.</li>
                                 <li>MMU view hiển thị nội dung TLB: VPN, PPN và thuộc tính trang
                                     (V = valid, R/W/X = quyền truy cập, C = cacheable — rút gọn từ page table entry
@@ -1584,12 +1584,12 @@ _start:
                                 <tbody>
                                     <tr>
                                         <td>L1I / L1D</td>
-                                        <td>16 sets x 4 ways, block 128 byte; L1I dùng cho instruction fetch, L1D dùng
+                                        <td>16 sets x 4 ways, block 64 byte; L1I dùng cho instruction fetch, L1D dùng
                                             cho load/store dữ liệu.</td>
                                     </tr>
                                     <tr>
                                         <td>L2</td>
-                                        <td>64 sets x 4 ways, block 128 byte; shared phía dưới L1I/L1D.</td>
+                                        <td>64 sets x 4 ways, block 64 byte; shared phía dưới L1I/L1D.</td>
                                     </tr>
                                     <tr>
                                         <td>MMU</td>

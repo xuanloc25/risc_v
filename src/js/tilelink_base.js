@@ -149,6 +149,18 @@ export class TileLinkBase {
             // so the master (DMA/CPU) stalls instead of losing the beat.
             if (typeof slaveEntry.target.canAccept === 'function' && !slaveEntry.target.canAccept(nextReq)) {
                 this.signals.a.ready = false;
+                // Report the held beat so the SoC diagram shows the link as busy
+                // instead of going dark for the whole stall (e.g. UART TX FIFO full).
+                if (typeof this.onTraceTransaction === 'function') {
+                    this.onTraceTransaction('request', {
+                        from: nextReq.from,
+                        type: nextReq.type,
+                        address: nextReq.address,
+                        value: nextReq.value,
+                        slaveName: slaveEntry.name,
+                        stalled: true
+                    });
+                }
             } else {
                 const opcodeName = describeAOpcode(nextReq.type);
                 if (typeof this.onTraceTransaction === 'function') {

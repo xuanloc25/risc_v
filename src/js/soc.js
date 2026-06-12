@@ -133,6 +133,10 @@ export const simulator = {
     ports: null,
     cycleCount: 0,
     useCache: true,
+    // Khi true, tick() bỏ qua toàn bộ console.log per-cycle (header + component logs).
+    // Run loop bật cờ này ở tốc độ cao: chi phí log (classifier + console + log drawer)
+    // lớn gấp ~400 lần chi phí mô phỏng thuần nên phải tắt để giữ tốc độ khung hình.
+    suppressTickLogs: false,
 
     trace: {
         activeLinks: {},
@@ -160,11 +164,15 @@ export const simulator = {
                 activeEntry.expiresAt = Math.max(activeEntry.expiresAt, now + TRACE_ACTIVE_MS * 0.5);
             }
 
-            if (linkName === 'uhToMainMemory') {
-                if (isWrite) this.memoryWriteCount++;
-                else this.memoryReadCount++;
-            } else if (linkName === 'ulToLedMatrix' && isWrite) {
-                this.ledWriteCount++;
+            // Stalled beats (A-channel held by backpressure) keep the link visually
+            // active but must not inflate completed-transfer counters.
+            if (!details?.stalled) {
+                if (linkName === 'uhToMainMemory') {
+                    if (isWrite) this.memoryWriteCount++;
+                    else this.memoryReadCount++;
+                } else if (linkName === 'ulToLedMatrix' && isWrite) {
+                    this.ledWriteCount++;
+                }
             }
 
             if (!details) return;
@@ -187,7 +195,7 @@ export const simulator = {
                 const opName = typeof details.opcode === 'number'
                     ? getOpcodeName(TL_A_Opcode, details.opcode)
                     : (details.opcode || 'Access');
-                description = `${comps.src} ${opName} ${addrHex} -> ${comps.dst}`;
+                description = `${comps.src} ${opName} ${addrHex} -> ${comps.dst}${details.stalled ? ' (stalled)' : ''}`;
             } else if (details.type === 'response') {
                 const opName = typeof details.opcode === 'number'
                     ? getOpcodeName(TL_D_Opcode, details.opcode)
@@ -538,6 +546,8 @@ export const simulator = {
         const traceDirectLink = (details) => {
             if (details.slaveName === 'Main Memory') return 'uhToMainMemory';
             if (details.slaveName === 'DMA Controller') return 'uhToDmaRegs';
+            if (details.slaveName === 'uh-to-ul-bridge') return 'uhToUlBridge';
+            if (details.slaveName === 'ul-to-uh-bridge') return 'ulToUhBridge';
             if (details.slaveName === 'UART') return 'ulToUart';
             if (details.slaveName === 'CAN Controller') return 'ulToCan';
             if (details.slaveName === 'LED Matrix') return 'ulToLedMatrix';
@@ -582,7 +592,8 @@ export const simulator = {
                 address: details.address,
                 isWrite,
                 opcode: details.type,
-                value: details.value !== undefined ? details.value : details.data
+                value: details.value !== undefined ? details.value : details.data,
+                stalled: details.stalled === true
             });
         };
 
@@ -638,27 +649,35 @@ export const simulator = {
         };
     },
 
+    // UART still has bytes in flight (shift register or TX FIFO)?
+    isUartBusy() {
+        return !!this.uart && (this.uart.pendingTx !== null || this.uart.txQueue.length > 0);
+    },
+
     tick() {
         const cpuActive = this.cpu.isRunning;
         const dmaActive = this.dma?.registers?.busy;
         const currentCycle = this.cycleCount + 1;
 
-        if (!cpuActive && !dmaActive) {
+        // Keep ticking while the UART is draining so output written right
+        // before exit still reaches the console (otherwise the last bytes
+        // would stay stuck in the FIFO forever).
+        if (!cpuActive && !dmaActive && !this.isUartBusy()) {
             console.log('Simulation halted.');
             return;
         }
 
         const pcNow = this.cpu.pc;
-        const cycleLabel =
-            `[Cycle ${currentCycle}] CPU active=${cpuActive} pc=0x${pcNow.toString(16)} ` +
-            `| DMA busy=${this.dma?.registers?.busy ?? false} ` +
-            `progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`;
         const isNewStall = _stalledSince === null || pcNow !== _stalledSince.pc;
+        const suppressLogs = this.suppressTickLogs === true;
 
-        // Buffer component logs so we can print the cycle header only when needed
+        // Buffer component logs so we can print the cycle header only when needed.
+        // In suppressed mode, drop them outright (no buffering, no header).
         const componentLogs = [];
         const origLog = console.log;
-        console.log = (...args) => componentLogs.push(args.map(String).join(' '));
+        console.log = suppressLogs
+            ? () => {}
+            : (...args) => componentLogs.push(args.map(String).join(' '));
 
         // Tick order: upstream → downstream (request propagation)
         // CPU/DMA issue requests → L1 caches → L2 cache → TileLink buses → Memory/peripherals
@@ -694,7 +713,11 @@ export const simulator = {
         console.log = origLog;
 
         // Print cycle header + buffered logs only when PC changed (new stall) or components logged
-        if (isNewStall || componentLogs.length > 0) {
+        if (!suppressLogs && (isNewStall || componentLogs.length > 0)) {
+            const cycleLabel =
+                `[Cycle ${currentCycle}] CPU active=${cpuActive} pc=0x${pcNow.toString(16)} ` +
+                `| DMA busy=${this.dma?.registers?.busy ?? false} ` +
+                `progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`;
             origLog(cycleLabel);
             for (const line of componentLogs) {
                 for (const subLine of String(line).split(/\r?\n/)) {

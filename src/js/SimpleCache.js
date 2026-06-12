@@ -56,14 +56,20 @@ export class SimpleCache {
         };
 
         // Khởi tạo toàn bộ block vật lý của cache với policy đã chỉ định.
-        this.blocks = Array.from({ length: numSets * numWays }, (_, id) => ({
-            id,
-            valid: false,
-            modified: false,
-            tag: 0,
-            lastReference: 0,
-            data: new Uint8Array(blockSize)
-        }));
+        this.blocks = Array.from({ length: numSets * numWays }, (_, id) => {
+            const set = Math.floor(id / numWays);
+            const way = id % numWays;
+            return {
+                id,
+                set,
+                way,
+                valid: false,
+                modified: false,
+                tag: 0,
+                lastReference: 0,
+                data: new Uint8Array(blockSize)
+            };
+        });
     }
 
     attachUpperPort(upperPort) {
