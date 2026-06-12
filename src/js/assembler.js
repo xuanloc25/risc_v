@@ -2,6 +2,8 @@
 // Chịu trách nhiệm biên dịch mã assembly RISC-V (RV32IMF) thành mã máy.
 // Thực hiện quy trình biên dịch hai lượt (two-pass) để xử lý các nhãn.
 
+import { OPCODES } from './isa.js';
+
 export const assembler = {
     // --- Trạng thái nội bộ của assembler, được reset mỗi khi biên dịch ---
     memory: {},              // Lưu trữ dữ liệu và mã lệnh (địa chỉ byte -> giá trị byte)
@@ -86,100 +88,9 @@ export const assembler = {
         '.org': function (operands) { this._handleOrgDirective(operands); }, // Chỉ thị đặt địa chỉ
     },
 
-    // Bảng định nghĩa các lệnh và thông tin mã hóa của chúng
-    opcodes: {
-        // ----- RV32I Base Integer Instructions -----
-        'lb': { opcode: '0000011', funct3: '000', type: 'I' }, 'lh': { opcode: '0000011', funct3: '001', type: 'I' },
-        'lw': { opcode: '0000011', funct3: '010', type: 'I' }, 'lbu': { opcode: '0000011', funct3: '100', type: 'I' },
-        'lhu': { opcode: '0000011', funct3: '101', type: 'I' }, 'sb': { opcode: '0100011', funct3: '000', type: 'S' },
-        'sh': { opcode: '0100011', funct3: '001', type: 'S' }, 'sw': { opcode: '0100011', funct3: '010', type: 'S' },
-        'addi': { opcode: '0010011', funct3: '000', type: 'I' }, 'slti': { opcode: '0010011', funct3: '010', type: 'I' },
-        'sltiu': { opcode: '0010011', funct3: '011', type: 'I' }, 'xori': { opcode: '0010011', funct3: '100', type: 'I' },
-        'ori': { opcode: '0010011', funct3: '110', type: 'I' }, 'andi': { opcode: '0010011', funct3: '111', type: 'I' },
-        'slli': { opcode: '0010011', funct3: '001', funct7: '0000000', type: 'I-shamt' },
-        'srli': { opcode: '0010011', funct3: '101', funct7: '0000000', type: 'I-shamt' },
-        'srai': { opcode: '0010011', funct3: '101', funct7: '0100000', type: 'I-shamt' },
-        'add': { opcode: '0110011', funct3: '000', funct7: '0000000', type: 'R' },
-        'sub': { opcode: '0110011', funct3: '000', funct7: '0100000', type: 'R' },
-        'sll': { opcode: '0110011', funct3: '001', funct7: '0000000', type: 'R' },
-        'slt': { opcode: '0110011', funct3: '010', funct7: '0000000', type: 'R' },
-        'sltu': { opcode: '0110011', funct3: '011', funct7: '0000000', type: 'R' },
-        'xor': { opcode: '0110011', funct3: '100', funct7: '0000000', type: 'R' },
-        'srl': { opcode: '0110011', funct3: '101', funct7: '0000000', type: 'R' },
-        'sra': { opcode: '0110011', funct3: '101', funct7: '0100000', type: 'R' },
-        'or': { opcode: '0110011', funct3: '110', funct7: '0000000', type: 'R' },
-        'and': { opcode: '0110011', funct3: '111', funct7: '0000000', type: 'R' },
-        'lui': { opcode: '0110111', type: 'U' }, 'auipc': { opcode: '0010111', type: 'U' },
-        'jal': { opcode: '1101111', type: 'J' }, 'jalr': { opcode: '1100111', funct3: '000', type: 'I' },
-        'beq': { opcode: '1100011', funct3: '000', type: 'B' }, 'bne': { opcode: '1100011', funct3: '001', type: 'B' },
-        'blt': { opcode: '1100011', funct3: '100', type: 'B' }, 'bge': { opcode: '1100011', funct3: '101', type: 'B' },
-        'bltu': { opcode: '1100011', funct3: '110', type: 'B' }, 'bgeu': { opcode: '1100011', funct3: '111', type: 'B' },
-        'ecall': { opcode: '1110011', funct3: '000', funct7: '0000000', type: 'I' },
-        'ebreak': { opcode: '1110011', funct3: '000', funct7: '0000001', type: 'I' },
-        'fence': { opcode: '0001111', funct3: '000', type: 'I' },
-
-        // ----- RV32M Standard Extension (Multiply/Divide) -----
-        'mul': { opcode: '0110011', funct3: '000', funct7: '0000001', type: 'R' },
-        'mulh': { opcode: '0110011', funct3: '001', funct7: '0000001', type: 'R' },
-        'mulhsu': { opcode: '0110011', funct3: '010', funct7: '0000001', type: 'R' },
-        'mulhu': { opcode: '0110011', funct3: '011', funct7: '0000001', type: 'R' },
-        'div': { opcode: '0110011', funct3: '100', funct7: '0000001', type: 'R' },
-        'divu': { opcode: '0110011', funct3: '101', funct7: '0000001', type: 'R' },
-        'rem': { opcode: '0110011', funct3: '110', funct7: '0000001', type: 'R' },
-        'remu': { opcode: '0110011', funct3: '111', funct7: '0000001', type: 'R' },
-
-        // ----- RV32F Standard Extension (Single-Precision Floating-Point) -----
-        'flw': { opcode: '0000111', funct3: '010', type: 'I-FP' },
-        'fsw': { opcode: '0100111', funct3: '010', type: 'S-FP' },
-
-        'fmadd.s': { opcode: '1000011', fmt: '00', type: 'R4-FP' },
-        'fmsub.s': { opcode: '1000111', fmt: '00', type: 'R4-FP' },
-        'fnmsub.s': { opcode: '1001011', fmt: '00', type: 'R4-FP' },
-        'fnmadd.s': { opcode: '1001111', fmt: '00', type: 'R4-FP' },
-
-        'fadd.s': { opcode: '1010011', funct7: '0000000', type: 'R-FP' },
-        'fsub.s': { opcode: '1010011', funct7: '0000100', type: 'R-FP' },
-        'fmul.s': { opcode: '1010011', funct7: '0001000', type: 'R-FP' },
-        'fdiv.s': { opcode: '1010011', funct7: '0001100', type: 'R-FP' },
-        'fsqrt.s': { opcode: '1010011', funct7: '0101100', rs2_subfield: '00000', type: 'R-FP-CVT' },
-        'fmin.s': { opcode: '1010011', funct3: '000', funct7: '0010100', type: 'R-FP' },
-        'fmax.s': { opcode: '1010011', funct3: '001', funct7: '0010100', type: 'R-FP' },
-
-        'fsgnj.s': { opcode: '1010011', funct3: '000', funct7: '0010000', type: 'R-FP' },
-        'fsgnjn.s': { opcode: '1010011', funct3: '001', funct7: '0010000', type: 'R-FP' },
-        'fsgnjx.s': { opcode: '1010011', funct3: '010', funct7: '0010000', type: 'R-FP' },
-
-        'fcvt.w.s': { opcode: '1010011', funct7: '1100000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
-        'fcvt.wu.s': { opcode: '1010011', funct7: '1100000', rs2_subfield: '00001', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
-        'fcvt.s.w': { opcode: '1010011', funct7: '1101000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
-        'fcvt.s.wu': { opcode: '1010011', funct7: '1101000', rs2_subfield: '00001', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
-
-        'feq.s': { opcode: '1010011', funct3: '010', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
-        'flt.s': { opcode: '1010011', funct3: '001', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
-        'fle.s': { opcode: '1010011', funct3: '000', funct7: '1010000', type: 'R-FP-CMP', dest_is_int: true },
-        'fclass.s': { opcode: '1010011', funct3: '001', funct7: '1110000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
-
-        'fmv.x.w': { opcode: '1010011', funct3: '000', funct7: '1110000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_int: true, src1_is_fp: true },
-        'fmv.w.x': { opcode: '1010011', funct3: '000', funct7: '1111000', rs2_subfield: '00000', type: 'R-FP-CVT', dest_is_fp: true, src1_is_int: true },
-
-        // ----- RV32A Standard Extension (Atomic Instructions) -----
-        'amoadd.w': { opcode: '0101111', funct3: '010', funct7: '0000000', type: 'R-AMO' },
-
-        // ----- Pseudo Instructions -----
-        'nop': { type: 'Pseudo', expandsTo: 'addi', args: ['x0', 'x0', '0'] },
-        'li': { type: 'Pseudo' },
-        'mv': { type: 'Pseudo', expandsTo: 'addi', args: [null, null, '0'] },
-        'j': { type: 'Pseudo', expandsTo: 'jal', args: ['x0', null] },
-        'jr': { type: 'Pseudo', expandsTo: 'jalr', args: ['x0', null, '0'] },
-        'ret': { type: 'Pseudo', expandsTo: 'jalr', args: ['x0', 'x1', '0'] },
-        'call': { type: 'Pseudo' },
-        'bnez': { type: 'Pseudo', expandsTo: 'bne', args: [null, 'x0', null] },
-        'beqz': { type: 'Pseudo', expandsTo: 'beq', args: [null, 'x0', null] },
-        'la': { type: 'Pseudo' },
-        'fmv.s': { type: 'Pseudo', expandsTo: 'fsgnj.s', args: [null, null, null] },
-        'fabs.s': { type: 'Pseudo', expandsTo: 'fsgnjx.s', args: [null, null, null] },
-        'fneg.s': { type: 'Pseudo', expandsTo: 'fsgnjn.s', args: [null, null, null] },
-    },
+    // Bảng định nghĩa các lệnh và thông tin mã hóa của chúng.
+    // Dữ liệu nằm ở src/js/isa.js — nguồn chuẩn duy nhất dùng chung với CPU (decode).
+    opcodes: OPCODES,
 
     // Hàm chính, điều phối quá trình biên dịch
     assemble(assemblyCode) {

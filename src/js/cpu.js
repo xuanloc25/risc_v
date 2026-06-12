@@ -1,4 +1,5 @@
 import { TL_A_Opcode, TL_D_Opcode, TL_Param_Arithmetic } from './tilelink.js';
+import { INSTRUCTION_FORMATS } from './isa.js';
 
 // TileLink-UL CPU implementation
 export class CPU {
@@ -90,85 +91,11 @@ export class CPU {
         let opName = 'UNKNOWN';
         let rm = funct3;
 
-        const instructionFormats = {
-            'ADD': { type: 'R', opcode: '0110011', funct3: '000', funct7: '0000000' },
-            'SUB': { type: 'R', opcode: '0110011', funct3: '000', funct7: '0100000' },
-            'SLL': { type: 'R', opcode: '0110011', funct3: '001', funct7: '0000000' },
-            'SLT': { type: 'R', opcode: '0110011', funct3: '010', funct7: '0000000' },
-            'SLTU': { type: 'R', opcode: '0110011', funct3: '011', funct7: '0000000' },
-            'XOR': { type: 'R', opcode: '0110011', funct3: '100', funct7: '0000000' },
-            'SRL': { type: 'R', opcode: '0110011', funct3: '101', funct7: '0000000' },
-            'SRA': { type: 'R', opcode: '0110011', funct3: '101', funct7: '0100000' },
-            'OR': { type: 'R', opcode: '0110011', funct3: '110', funct7: '0000000' },
-            'AND': { type: 'R', opcode: '0110011', funct3: '111', funct7: '0000000' },
-            'ADDI': { type: 'I', opcode: '0010011', funct3: '000' },
-            'SLTI': { type: 'I', opcode: '0010011', funct3: '010' },
-            'SLTIU': { type: 'I', opcode: '0010011', funct3: '011' },
-            'XORI': { type: 'I', opcode: '0010011', funct3: '100' },
-            'ORI': { type: 'I', opcode: '0010011', funct3: '110' },
-            'ANDI': { type: 'I', opcode: '0010011', funct3: '111' },
-            'SLLI': { type: 'I-shamt', opcode: '0010011', funct3: '001', funct7Matcher: '0000000' },
-            'SRLI': { type: 'I-shamt', opcode: '0010011', funct3: '101', funct7Matcher: '0000000' },
-            'SRAI': { type: 'I-shamt', opcode: '0010011', funct3: '101', funct7Matcher: '0100000' },
-            'LW': { type: 'I', opcode: '0000011', funct3: '010' },
-            'LH': { type: 'I', opcode: '0000011', funct3: '001' },
-            'LB': { type: 'I', opcode: '0000011', funct3: '000' },
-            'LHU': { type: 'I', opcode: '0000011', funct3: '101' },
-            'LBU': { type: 'I', opcode: '0000011', funct3: '100' },
-            'SW': { type: 'S', opcode: '0100011', funct3: '010' },
-            'SH': { type: 'S', opcode: '0100011', funct3: '001' },
-            'SB': { type: 'S', opcode: '0100011', funct3: '000' },
-            'LUI': { type: 'U', opcode: '0110111' },
-            'AUIPC': { type: 'U', opcode: '0010111' },
-            'JAL': { type: 'J', opcode: '1101111' },
-            'JALR': { type: 'I', opcode: '1100111', funct3: '000' },
-            'BEQ': { type: 'B', opcode: '1100011', funct3: '000' },
-            'BNE': { type: 'B', opcode: '1100011', funct3: '001' },
-            'BLT': { type: 'B', opcode: '1100011', funct3: '100' },
-            'BGE': { type: 'B', opcode: '1100011', funct3: '101' },
-            'BLTU': { type: 'B', opcode: '1100011', funct3: '110' },
-            'BGEU': { type: 'B', opcode: '1100011', funct3: '111' },
-            'ECALL': { type: 'I', opcode: '1110011', funct3: '000', immFieldMatcher: '000000000000' },
-            'EBREAK': { type: 'I', opcode: '1110011', funct3: '000', immFieldMatcher: '000000000001' },
-            'MUL': { type: 'R', opcode: '0110011', funct3: '000', funct7: '0000001' },
-            'MULH': { type: 'R', opcode: '0110011', funct3: '001', funct7: '0000001' },
-            'MULHSU': { type: 'R', opcode: '0110011', funct3: '010', funct7: '0000001' },
-            'MULHU': { type: 'R', opcode: '0110011', funct3: '011', funct7: '0000001' },
-            'DIV': { type: 'R', opcode: '0110011', funct3: '100', funct7: '0000001' },
-            'DIVU': { type: 'R', opcode: '0110011', funct3: '101', funct7: '0000001' },
-            'REM': { type: 'R', opcode: '0110011', funct3: '110', funct7: '0000001' },
-            'REMU': { type: 'R', opcode: '0110011', funct3: '111', funct7: '0000001' },
-            'FLW': { type: 'I-FP', opcode: '0000111', funct3: '010' },
-            'FSW': { type: 'S-FP', opcode: '0100111', funct3: '010' },
-            'FMADD.S': { type: 'R4-FP', opcode: '1000011', funct3: 'ANY', fmt: '00' },
-            'FMSUB.S': { type: 'R4-FP', opcode: '1000111', funct3: 'ANY', fmt: '00' },
-            'FNMSUB.S': { type: 'R4-FP', opcode: '1001011', funct3: 'ANY', fmt: '00' },
-            'FNMADD.S': { type: 'R4-FP', opcode: '1001111', funct3: 'ANY', fmt: '00' },
-            'FADD.S': { type: 'R-FP', opcode: '1010011', funct3: 'ANY', funct7: '0000000' },
-            'FSUB.S': { type: 'R-FP', opcode: '1010011', funct3: 'ANY', funct7: '0000100' },
-            'FMUL.S': { type: 'R-FP', opcode: '1010011', funct3: 'ANY', funct7: '0001000' },
-            'FDIV.S': { type: 'R-FP', opcode: '1010011', funct3: 'ANY', funct7: '0001100' },
-            'FSQRT.S': { type: 'R-FP-CVT', opcode: '1010011', funct7: '0101100', rs2_subfield: '00000' },
-            'FMIN.S': { type: 'R-FP', opcode: '1010011', funct3: '000', funct7: '0010100' },
-            'FMAX.S': { type: 'R-FP', opcode: '1010011', funct3: '001', funct7: '0010100' },
-            'FSGNJ.S': { type: 'R-FP', opcode: '1010011', funct3: '000', funct7: '0010000' },
-            'FSGNJN.S': { type: 'R-FP', opcode: '1010011', funct3: '001', funct7: '0010000' },
-            'FSGNJX.S': { type: 'R-FP', opcode: '1010011', funct3: '010', funct7: '0010000' },
-            'FCVT.W.S': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1100000', rs2_subfield: '00000' },
-            'FCVT.WU.S': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1100000', rs2_subfield: '00001' },
-            'FCVT.S.W': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1101000', rs2_subfield: '00000' },
-            'FCVT.S.WU': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1101000', rs2_subfield: '00001' },
-            'FCLASS.S': { type: 'R-FP-CVT', opcode: '1010011', funct3_fixed: '001', funct7: '1110000', rs2_subfield: '00000' },
-            'FEQ.S': { type: 'R-FP-CMP', opcode: '1010011', funct3: '010', funct7_prefix: '10100' },
-            'FLT.S': { type: 'R-FP-CMP', opcode: '1010011', funct3: '001', funct7_prefix: '10100' },
-            'FLE.S': { type: 'R-FP-CMP', opcode: '1010011', funct3: '000', funct7_prefix: '10100' },
-            'FMV.X.W': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1110000', rs2_subfield: '00000', funct3_fixed: '000' },
-            'FMV.W.X': { type: 'R-FP-CVT', opcode: '1010011', funct7: '1111000', rs2_subfield: '00000', funct3_fixed: '000' },
-            'AMOADD.W': { type: 'R-AMO', opcode: '0101111', funct3: '010', funct7: '0000000' }
-        };
-
-        for (const name in instructionFormats) {
-            const format = instructionFormats[name];
+        // Bảng định dạng lệnh được dẫn xuất từ src/js/isa.js (nguồn chuẩn dùng
+        // chung với assembler) và chỉ build một lần khi nạp module — trước đây
+        // bảng này là object literal bị tạo lại ở mỗi lần decode.
+        for (const name in INSTRUCTION_FORMATS) {
+            const format = INSTRUCTION_FORMATS[name];
             let match = false;
             if (format.opcode === opcodeBin) {
                 if (format.type === 'R' || format.type === 'R-FP' || format.type === 'R-FP-CMP' || format.type === 'R-AMO') {

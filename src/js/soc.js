@@ -57,33 +57,10 @@ const TRACE_ACTIVE_REFRESH_MS = 90;
 const TRACE_TRANSACTION_THROTTLE_MS = 120;
 const TRACE_TRANSACTION_LIMIT = 6;
 
-const MMU_PAGE_SIZE_OPTIONS = [1024, 2048, 4096, 8192];
-const MMU_TLB_SIZE_OPTIONS = [4, 8, 16, 32];
-const MMU_TLB_WAY_OPTIONS = [2, 4, 'fully'];
-
 function inRange(addr, base, size) {
     const address = addr >>> 0;
     const start = base >>> 0;
     return address >= start && address < (start + size);
-}
-
-function readStoredNumber(key, fallback, allowedValues) {
-    if (typeof localStorage === 'undefined') return fallback;
-    const value = Number.parseInt(localStorage.getItem(key) ?? '', 10);
-    if (!Number.isFinite(value)) return fallback;
-    if (Array.isArray(allowedValues) && !allowedValues.includes(value)) return fallback;
-    return value;
-}
-
-function readStoredTlbWays(tlbSize) {
-    if (typeof localStorage === 'undefined') return 2;
-    const rawValue = localStorage.getItem('mmu_tlb_ways') ?? '2';
-    const value = rawValue === 'fully' ? 'fully' : Number.parseInt(rawValue, 10);
-    if (!MMU_TLB_WAY_OPTIONS.includes(value)) return 2;
-
-    const waysValue = value === 'fully' ? tlbSize : value;
-    if (waysValue > tlbSize || tlbSize % waysValue !== 0) return 2;
-    return value;
 }
 
 function createMMIOEndpoint(bus, name, { read, write, canAccept }) {
@@ -355,18 +332,11 @@ export const simulator = {
         // CPU
         this.cpu = new CPU();
 
-        // MMU
-        const mmuPageSize = isBrowser
-            ? readStoredNumber('mmu_page_size', 4096, MMU_PAGE_SIZE_OPTIONS)
-            : 4096;
-        const mmuTlbSize = isBrowser
-            ? readStoredNumber('mmu_tlb_size', 8, MMU_TLB_SIZE_OPTIONS)
-            : 8;
-        const mmuTlbWays = isBrowser ? readStoredTlbWays(mmuTlbSize) : 2;
+        // MMU — cấu hình cố định: trang 4 KB, TLB 8 entry fully associative (LRU).
         this.mmu = new MMU(null, null, {
-            pageSize: mmuPageSize,
-            tlbSize: mmuTlbSize,
-            tlbWays: mmuTlbWays,
+            pageSize: 4096,
+            tlbSize: 8,
+            tlbWays: 'fully',
             cacheabilityPredicate: isCacheableAddress
         });
 
