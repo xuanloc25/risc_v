@@ -199,10 +199,6 @@ export function attachDataPort(upper, lower, name = '') {
     return port;
 }
 
-export function connectPorts(upper, lower, name = '') {
-    return attachPort(upper, lower, name);
-}
-
 export function attachPorts(target, { upper = [], lower = [], memory = null } = {}) {
     const attached = [];
 
