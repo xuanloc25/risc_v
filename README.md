@@ -1,6 +1,12 @@
 # RISC-V SoC Simulator & Assembler
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/demo-risc--v.vercel.app-success)](https://risc-v.vercel.app)
+[![ISA: RV32IMF](https://img.shields.io/badge/ISA-RV32IMF-5277C3?logo=riscv&logoColor=white)](https://riscv.org/)
+
 RISC-V SoC Simulator & Assembler là công cụ web hỗ trợ soạn thảo, biên dịch và mô phỏng chương trình hợp ngữ RISC-V trong một mô hình System-on-Chip đơn giản. Dự án phục vụ mục tiêu học tập, kiểm thử và minh họa cách CPU, bộ nhớ, bus, cache, DMA và các ngoại vi phối hợp trong một hệ thống nhúng.
+
+Hiện thực bằng JavaScript thuần (ES modules), không phụ thuộc framework hay bước build; CodeMirror tải qua CDN.
 
 ## Demo
 
@@ -178,6 +184,14 @@ LF will be replaced by CRLF the next time Git touches it
 ```
 
 Đây là cảnh báo về line ending, không phải lỗi logic của project. Nếu muốn hạn chế thay đổi line ending ngoài ý muốn, có thể cấu hình Git theo nhu cầu của môi trường phát triển.
+
+## Trích dẫn / How to cite
+
+Nếu bạn sử dụng công cụ này trong nghiên cứu, giảng dạy hoặc đồ án, vui lòng trích dẫn:
+
+> Nguyễn Xuân Lộc và Gia Khang, *RISC-V SoC Simulator & Assembler*, Khóa luận tốt nghiệp, Khoa Kỹ thuật Máy tính, Trường Đại học Công nghệ Thông tin (ĐHQG-HCM), 2026. https://github.com/xuanloc25/risc_v
+
+Repository có sẵn file [`CITATION.cff`](CITATION.cff); GitHub sẽ hiển thị nút **"Cite this repository"** với định dạng APA/BibTeX.
 
 ## License
 

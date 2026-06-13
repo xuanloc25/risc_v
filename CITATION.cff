@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: "RISC-V SoC Simulator & Assembler"
+message: "Nếu bạn sử dụng phần mềm này, vui lòng trích dẫn theo thông tin dưới đây."
+type: software
+authors:
+  - family-names: Nguyễn
+    given-names: Xuân Lộc
+    email: locdaihiep76@gmail.com
+    affiliation: "Faculty of Computer Engineering, University of Information Technology, VNU-HCM"
+  - name: "Gia Khang"
+    email: giakhangksd@gmail.com
+    affiliation: "Faculty of Computer Engineering, University of Information Technology, VNU-HCM"
+repository-code: "https://github.com/xuanloc25/risc_v"
+url: "https://risc-v.vercel.app"
+abstract: >-
+  Công cụ web mô phỏng và biên dịch chương trình hợp ngữ RISC-V (RV32IMF) trong một mô hình
+  System-on-Chip đơn giản gồm CPU, MMU, cache, bus TileLink, DMA và các ngoại vi, phục vụ học
+  tập kiến trúc máy tính. Phát triển như khóa luận tốt nghiệp tại Trường ĐH Công nghệ Thông tin (ĐHQG-HCM).
+keywords: [risc-v, rv32imf, simulator, assembler, system-on-chip, computer-architecture, education]
+license: MIT
+version: 1.0.0
+date-released: "2026-06-13"
