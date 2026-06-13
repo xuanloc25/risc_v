@@ -1447,13 +1447,13 @@ function renderCacheView() {
         tableBody.innerHTML = '';
 
         if (!simulator.useCache) {
-            tableBody.innerHTML = '<tr><td colspan="4">Cache disabled.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="7">Cache disabled.</td></tr>';
             if (statsNode) statsNode.textContent = `${label} disabled`;
             return;
         }
 
         if (!cache) {
-            tableBody.innerHTML = '<tr><td colspan="4">Cache not initialized.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="7">Cache not initialized.</td></tr>';
             if (statsNode) statsNode.textContent = `${label} not initialized`;
             return;
         }
@@ -1461,19 +1461,19 @@ function renderCacheView() {
         const assoc = Number(cache.policy?.numWays ?? cache.numWays ?? 1) || 1;
         const numSets = Number(cache.policy?.numSets ?? cache.numSets ?? Math.ceil((cache.blocks?.length ?? 0) / assoc)) || 0;
         const blockSize = Number(cache.policy?.blockSize ?? cache.blockSize ?? 0) || 0;
-        let validCount = 0;
         cache.blocks.forEach(block => {
-            if (!block.valid) return;
-            validCount++;
             const row = tableBody.insertRow();
+            const bytesPreview = block.data
+                ? Array.from(block.data.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' ')
+                : '';
             row.insertCell().textContent = block.set ?? Math.floor(block.id / assoc);
             row.insertCell().textContent = block.way ?? (block.id % assoc);
-            row.insertCell().textContent = formatHex(block.tag);
+            row.insertCell().textContent = block.valid ? '1' : '0';
             row.insertCell().textContent = block.modified ? '1' : '0';
+            row.insertCell().textContent = formatHex(block.tag);
+            row.insertCell().textContent = block.lastReference;
+            row.insertCell().textContent = block.valid ? bytesPreview : '';
         });
-        if (validCount === 0) {
-            tableBody.innerHTML = '<tr><td colspan="4">No cached blocks yet.</td></tr>';
-        }
 
         if (statsNode) {
             const s = cache.statistics;
@@ -1695,9 +1695,6 @@ function collectBreakpointAddresses() {
     return breakpointAddresses;
 }
 
-// Above this speed (cycles/frame), per-cycle logs are suppressed during Run.
-const TICK_LOG_MAX_SPEED = 5;
-
 function cancelRunFrame() {
     if (runState.frameId !== null) {
         cancelAnimationFrame(runState.frameId);
@@ -1729,6 +1726,29 @@ function finishRun({ message = '', drainDma = false, resetClock = true } = {}) {
 
     if (drainDma) {
         while (simulator?.dma && simulator.dma.isBusy) simulator.tick();
+
+        // Flush UART TX on natural program end: with baud-accurate timing one
+        // byte takes ~8666 cycles, so a program that exits right after printing
+        // still has bytes in the shift register/FIFO. simulator.tick()
+        // early-returns once CPU+DMA halt, so tick the UART directly until the
+        // remaining bytes reach the console. Not done on Stop/breakpoint, where
+        // the UART must keep its mid-run state for an accurate resume. The UART
+        // logs its countdown every 10 cycles — silence console.log for the spin.
+        if (simulator?.uart && (simulator.uart.pendingTx !== null || simulator.uart.txQueue.length > 0)) {
+            const flushedFrom = simulator.uart.txBuffer?.length ?? 0;
+            const origLog = console.log;
+            console.log = () => {};
+            try {
+                let guard = 2000000; // ~17 bytes x 8666 cycles, with headroom
+                while ((simulator.uart.pendingTx !== null || simulator.uart.txQueue.length > 0) && guard-- > 0) {
+                    simulator.uart.tick();
+                }
+            } finally {
+                console.log = origLog;
+            }
+            const flushed = (simulator.uart.txBuffer?.length ?? 0) - flushedFrom;
+            if (flushed > 0) console.log(`[UART] Flushed ${flushed} pending TX byte(s) at end of run`);
+        }
     }
 
     if (resetClock && clockRateDisplay) clockRateDisplay.textContent = "0 Hz";
@@ -1757,10 +1777,6 @@ function runLoop() {
         cyclesPerFrame = parseInt(speedSlider.value, 10);
         if (cyclesPerFrame === 100) cyclesPerFrame = 1000;
     }
-
-    // Per-cycle console logging costs ~400x the simulation itself (classifier
-    // regexes + console + Systems Log DOM). Keep it only at demo speeds (<=5x).
-    simulator.suppressTickLogs = cyclesPerFrame > TICK_LOG_MAX_SPEED;
 
     let executedThisFrame = 0;
     for (let i = 0; i < cyclesPerFrame; i++) {
@@ -1882,7 +1898,6 @@ function handleStep() {
     }
 
     try {
-        simulator.suppressTickLogs = false; // stepping is for inspection — always log
         simulator.stepInstruction();
         updateUIGlobally();
     } catch (e) {

@@ -133,10 +133,6 @@ export const simulator = {
     ports: null,
     cycleCount: 0,
     useCache: true,
-    // Khi true, tick() bỏ qua toàn bộ console.log per-cycle (header + component logs).
-    // Run loop bật cờ này ở tốc độ cao: chi phí log (classifier + console + log drawer)
-    // lớn gấp ~400 lần chi phí mô phỏng thuần nên phải tắt để giữ tốc độ khung hình.
-    suppressTickLogs: false,
 
     trace: {
         activeLinks: {},
@@ -178,9 +174,13 @@ export const simulator = {
             if (!details) return;
             if (details.type === 'directRead' || details.type === 'directWrite') return;
 
-            const lastLinkTransactionAt = this._lastTransactionAtByLink[linkName] || 0;
+            // Stalled retries throttle under their own key: a long backpressure
+            // stall fires every cycle, and sharing the key would shadow the real
+            // completion entry that lands right after the stall clears.
+            const throttleKey = details.stalled ? `${linkName}:stalled` : linkName;
+            const lastLinkTransactionAt = this._lastTransactionAtByLink[throttleKey] || 0;
             if (now - lastLinkTransactionAt < TRACE_TRANSACTION_THROTTLE_MS) return;
-            this._lastTransactionAtByLink[linkName] = now;
+            this._lastTransactionAtByLink[throttleKey] = now;
 
             const addrHex = details.address !== undefined
                 ? `0x${(details.address >>> 0).toString(16).toUpperCase()}`
@@ -669,15 +669,11 @@ export const simulator = {
 
         const pcNow = this.cpu.pc;
         const isNewStall = _stalledSince === null || pcNow !== _stalledSince.pc;
-        const suppressLogs = this.suppressTickLogs === true;
 
-        // Buffer component logs so we can print the cycle header only when needed.
-        // In suppressed mode, drop them outright (no buffering, no header).
+        // Buffer component logs so we can print the cycle header only when needed
         const componentLogs = [];
         const origLog = console.log;
-        console.log = suppressLogs
-            ? () => {}
-            : (...args) => componentLogs.push(args.map(String).join(' '));
+        console.log = (...args) => componentLogs.push(args.map(String).join(' '));
 
         // Tick order: upstream → downstream (request propagation)
         // CPU/DMA issue requests → L1 caches → L2 cache → TileLink buses → Memory/peripherals
@@ -713,7 +709,7 @@ export const simulator = {
         console.log = origLog;
 
         // Print cycle header + buffered logs only when PC changed (new stall) or components logged
-        if (!suppressLogs && (isNewStall || componentLogs.length > 0)) {
+        if (isNewStall || componentLogs.length > 0) {
             const cycleLabel =
                 `[Cycle ${currentCycle}] CPU active=${cpuActive} pc=0x${pcNow.toString(16)} ` +
                 `| DMA busy=${this.dma?.registers?.busy ?? false} ` +
