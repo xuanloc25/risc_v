@@ -8,6 +8,12 @@ Truy cập bản triển khai trực tuyến:
 
 https://risc-v.vercel.app
 
+## Giao diện
+
+![Giao diện RISC-V SoC Simulator](docs/screenshots/overview.png)
+
+Giao diện gồm trình soạn thảo assembly (CodeMirror với gợi ý cú pháp), bảng thanh ghi số nguyên và dấu phẩy động, console xuất nhị phân, cùng các tab quan sát phần cứng: **SoC**, **MMU**, **Cache**, **Memory** và **I/O**. Thanh công cụ hỗ trợ Assemble, Run, Pause, Stop, Step và điều chỉnh tốc độ mô phỏng.
+
 ## Chức năng chính
 
 - Soạn thảo chương trình RISC-V assembly trực tiếp trên trình duyệt.
