@@ -3,6 +3,12 @@
 # Goal: touch several addresses that map to the same L1 set, then read the
 # first address again. The simulator logs should show L1 pressure while the
 # final value proves the memory path still returns the original word.
+#
+# L1 geometry (see src/js/soc.js): 64-byte block, 16 sets, 4-way, LRU.
+#   => setIndex = (addr >> 6) & 0xF   (6 offset bits, 4 set-index bits)
+# The five addresses below (0x0000, 0x1000, 0x2000, 0x3000, 0x4000) all have
+# (addr >> 6) & 0xF == 0, so they collide in set 0 with different tags. Because
+# a set holds only 4 ways, the 5th distinct tag (0x4000) evicts addr0 (LRU).
 
 .text
 .globl _start

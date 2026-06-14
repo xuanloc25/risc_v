@@ -31,7 +31,10 @@ _start:
     # fclass.s should write to integer register x5
     fclass.s x5, f6
     
-    # fcvt.w.s should write integer representation of f4 (6.5 -> 6) to x6
+    # fcvt.w.s writes the integer representation of f4 into x6.
+    # NOTE: the simulator has no FCSR/frm yet; the default rounding mode
+    # (dyn/RNE) falls back to Math.round (round-half-up), so 6.5 -> 7 (NOT 6).
+    # Only an explicit "rtz" mode (fcvt.w.s x6, f4, rtz) truncates -> 6.
     fcvt.w.s x6, f4
     
     # fcvt.s.w should write float representation of x7 (let's say 10) to f7

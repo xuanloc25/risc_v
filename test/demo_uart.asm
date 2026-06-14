@@ -1,3 +1,9 @@
+# demo_uart.asm — LƯU Ý: tên file gây hiểu nhầm.
+# Chương trình này KHÔNG chạm UART. Nó dùng DMA để copy dữ liệu RAM -> RAM
+# (descriptor word1 = dst_buf nằm trong RAM, KHÔNG phải UART @ 0x10000000).
+# Khối lượng copy: 65 phần tử, srcWidth=dstWidth=2 (32-bit) => 65 word = 260 byte.
+# (Demo DMA -> UART có thật, kèm backpressure, nằm ở demo_uart_dma.asm.)
+
 .data
 msg:
     .ascii "123456789a123456789a123456789a123456789a123456789a123456789a12345"
@@ -13,7 +19,7 @@ _start:
     li    t2, 0xFFED0004    # t2 = DMA DESC register (write-only)
     li    t3, 0xFFED0000    # t3 = DMA CTRL register
     # Configure DMA: src increment, dst increment, src=32-bit, dst=32-bit, 65 elements
-    li    t5, 0x5A200041    # t5 = DMA config (65 bytes, src=word, dst=word)
+    li    t5, 0x5A200041    # t5 = DMA config: 65 word (= 260 byte), src=word, dst=word, burst 4-beat
 
     # No UART setup needed when writing to RAM
 
@@ -21,7 +27,7 @@ _start:
     # Word0 = source address
     sw    t0, 0(t2)
     
-    # Word1 = destination address (UART TX register/base)
+    # Word1 = destination address = dst_buf trong RAM (KHÔNG phải UART)
     sw    t1, 0(t2)
     
     # Word2 = config (Bây giờ lấy trực tiếp từ t5 an toàn tuyệt đối)

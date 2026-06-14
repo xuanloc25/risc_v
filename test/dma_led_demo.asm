@@ -5,14 +5,16 @@
 #   DMA DESC @ 0xFFED0004  (3 words: src, dst, config)
 #   LED Matrix @ 0xFF000000 (32x32 pixels, 4 bytes/pixel, row-major)
 #
-# Config word format:
-#   bits[31:30] = dstMode   (0/1=fixed, 2=byte-incr, 3=word-incr)
-#   bits[29:28] = srcMode   (0/1=fixed, 2=byte-incr, 3=word-incr)
-#   bit[27]     = bswap
-#   bits[23:0]  = numElements
+# Config word format (xem src/js/dma.js -> parseConfig):
+#   bits[31:30] = dstMode    (0=fixed, 1=increment, 2=decrement)
+#   bits[29:28] = srcMode    (0=fixed, 1=increment, 2=decrement)
+#   bits[27:26] = srcWidth   (0=8-bit, 1=16-bit, 2=32-bit)
+#   bits[25:24] = dstWidth   (0=8-bit, 1=16-bit, 2=32-bit)
+#   bit[20]     = bswap
+#   bits[15:0]  = numElements
 #
-# Ví dụ này dùng srcMode=3, dstMode=3 (word-increment, 4 bytes/transfer):
-#   config = (3<<30)|(3<<28)|32 = 0xF0000020
+# Ví dụ này dùng srcMode=1, dstMode=1 (increment), srcWidth=dstWidth=2 (32-bit):
+#   config = (1<<30)|(1<<28)|(2<<26)|(2<<24)|32 = 0x5A000020  (khớp với mã ở dưới)
 #
 # Kết quả: DMA tự copy 32 pixel màu xanh lên hàng đầu LED Matrix
 # CPU đồng thời tính tổng pixel data (song song với DMA)
