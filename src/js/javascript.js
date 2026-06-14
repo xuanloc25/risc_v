@@ -4,6 +4,7 @@
 import { assembler } from './assembler.js';
 import { OPCODES } from './isa.js';
 import { simulator } from './soc.js';
+import './soc_trace.js'; // gắn lớp trace/animation lên simulator (không sửa soc.js)
 import { configureRiscvEditorHints } from './editor_hint.js';
 import { SOC_NODES, renderSocDiagram, updateSocTraceHighlights } from './soc_diagram.js';
 import {
