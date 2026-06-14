@@ -313,19 +313,6 @@ export class DMAController {
         console.log('[DMA] Controller initialized');
     }
 
-    setBuses({
-        tilelink_UH = this.tilelink_UH,
-        tilelink_UL = this.tilelink_UL,
-        registerLink = this.registerLink,
-        selectLinkForAddress = this.selectLinkForAddress
-    } = {}) {
-        this.tilelink_UH = tilelink_UH;
-        this.tilelink_UL = tilelink_UL ?? tilelink_UH;
-        this.registerLink = registerLink ?? tilelink_UH ?? tilelink_UL;
-        this.selectLinkForAddress = selectLinkForAddress;
-        this.defaultLink = this.registerLink ?? this.tilelink_UH ?? this.tilelink_UL;
-    }
-
     receiveRequest(req) {
         const registerLink = this.registerLink ?? this.defaultLink;
         console.log(
