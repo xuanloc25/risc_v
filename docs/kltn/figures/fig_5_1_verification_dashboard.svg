@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="10in" height="6in" viewBox="0 0 1000 600" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Tổng quan kết quả kiểm chứng hệ thống SoC RISC-V</title>
+  <desc id="desc">Ba lớp kiểm chứng: 14/14 script kiểm thử đơn vị Node PASS (chạy lại 14/06/2026); đối chiếu mã hóa GNU binutils 17.978 lệnh khớp 0 sai trên 61 ELF; đối chiếu thực thi Spike đã ghi nhận. Lưới 14 mô-đun đều PASS. Phạm vi không gồm CAN.</desc>
+
+  <style>
+    .t{fill:#2d3436}
+    .mut{fill:#6b7280}
+    .card{stroke-width:1.7;rx:10}
+    .green{fill:#e8f5e9;stroke:#2e7d32}
+    .gtxt{fill:#2e7d32}
+    .blue{fill:#eaf6ff;stroke:#1565c0}
+    .btxt{fill:#1565c0}
+    .amber{fill:#fff8e1;stroke:#b07d00}
+    .atxt{fill:#9a6c00}
+    .chip{fill:#f4faf5;stroke:#2e7d32;stroke-width:1.3}
+    .b{font-weight:700}
+    text{dominant-baseline:middle}
+  </style>
+
+  <rect x="0" y="0" width="1000" height="600" fill="#ffffff"/>
+
+  <!-- Header -->
+  <rect x="24" y="22" width="952" height="58" rx="10" fill="#f8fafc" stroke="#2d3436" stroke-width="1.7"/>
+  <text x="42" y="44" class="t b" font-size="21">Kết quả kiểm chứng hệ thống — Trình mô phỏng SoC RISC-V</text>
+  <text x="42" y="65" class="mut" font-size="13">Ba lớp kiểm chứng — đều tái lập trực tiếp 14/06/2026 · phạm vi: toàn hệ trừ ngoại vi CAN</text>
+  <rect x="788" y="36" width="172" height="30" rx="15" fill="#2e7d32"/>
+  <text x="874" y="52" fill="#ffffff" font-size="13.5" class="b" text-anchor="middle">PASS · 14/06/2026</text>
+
+  <!-- Three layer cards -->
+  <!-- Layer 1 -->
+  <rect x="24" y="96" width="302" height="150" class="card green"/>
+  <text x="44" y="122" class="gtxt b" font-size="14">LỚP 1 · Kiểm thử đơn vị / khối</text>
+  <text x="44" y="142" class="mut" font-size="12">Node.js — chạy lại trực tiếp</text>
+  <text x="175" y="182" class="gtxt b" font-size="50" text-anchor="middle">14/14</text>
+  <text x="175" y="218" class="t" font-size="13" text-anchor="middle">script PASS · tái lập tại chỗ</text>
+  <circle cx="300" cy="118" r="13" fill="#2e7d32"/>
+  <text x="300" y="119" fill="#fff" font-size="15" class="b" text-anchor="middle">✓</text>
+
+  <!-- Layer 2 -->
+  <rect x="349" y="96" width="302" height="150" class="card blue"/>
+  <text x="369" y="122" class="btxt b" font-size="14">LỚP 2 · Đối chiếu mã hóa</text>
+  <text x="369" y="142" class="mut" font-size="12">GNU binutils · 61 ELF riscv-tests</text>
+  <text x="500" y="182" class="btxt b" font-size="44" text-anchor="middle">17.978</text>
+  <text x="500" y="214" class="t" font-size="13" text-anchor="middle">lệnh khớp · <tspan class="b" fill="#2e7d32">0 sai</tspan> · +83 mẫu</text>
+  <text x="500" y="232" class="mut" font-size="11" text-anchor="middle">(chạy lại 14/06/2026 qua WSL · GNU binutils)</text>
+  <circle cx="625" cy="118" r="13" fill="#1565c0"/><text x="625" y="119" fill="#fff" font-size="15" class="b" text-anchor="middle">✓</text>
+
+  <!-- Layer 3 -->
+  <rect x="674" y="96" width="302" height="150" class="card green"/>
+  <text x="694" y="122" class="gtxt b" font-size="14">LỚP 3 · Đối chiếu thực thi</text>
+  <text x="694" y="142" class="mut" font-size="12">Spike 1.1.1 · RV32IMF_zicclsm</text>
+  <text x="825" y="182" class="gtxt b" font-size="50" text-anchor="middle">61/61</text>
+  <text x="825" y="218" class="t" font-size="13" text-anchor="middle">ELF pass · chạy lại 14/06</text>
+  <circle cx="950" cy="118" r="13" fill="#2e7d32"/><text x="950" y="119" fill="#fff" font-size="15" class="b" text-anchor="middle">✓</text>
+
+  <!-- Module grid label -->
+  <text x="24" y="276" class="t b" font-size="14">14 mô-đun kiểm thử đơn vị — tất cả PASS (chạy lại 14/06/2026)</text>
+
+  <!-- 14 chips: 7 cols x 2 rows -->
+  <!-- row 1 -->
+  <g font-size="12">
+    <!-- chip template repeated; each 124w x 60h -->
+    <g>
+      <rect x="30"  y="288" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="44" cy="302" r="8" fill="#2e7d32"/><text x="44" y="303" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="60" y="306" class="t b">Assembler</text>
+      <text x="42" y="330" class="mut">mã hóa · pseudo</text>
+    </g>
+    <g>
+      <rect x="166" y="288" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="180" cy="302" r="8" fill="#2e7d32"/><text x="180" y="303" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="196" y="306" class="t b">ASM mẫu</text>
+      <text x="178" y="330" class="mut">21/21 assemble</text>
+    </g>
+    <g>
+      <rect x="302" y="288" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="316" cy="302" r="8" fill="#2e7d32"/><text x="316" y="303" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="332" y="306" class="t b">CPU RV32F</text>
+      <text x="314" y="330" class="mut">26 decode · 4 exec</text>
+    </g>
+    <g>
+      <rect x="438" y="288" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="452" cy="302" r="8" fill="#2e7d32"/><text x="452" y="303" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="468" y="306" class="t b">MMU + TLB</text>
+      <text x="450" y="330" class="mut">6/6 hành vi</text>
+    </g>
+    <g>
+      <rect x="574" y="288" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="588" cy="302" r="8" fill="#2e7d32"/><text x="588" y="303" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="604" y="306" class="t b">MMU syscall</text>
+      <text x="586" y="330" class="mut">map/unmap e2e</text>
+    </g>
+    <g>
+      <rect x="710" y="288" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="724" cy="302" r="8" fill="#2e7d32"/><text x="724" y="303" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="740" y="306" class="t b">TileLink</text>
+      <text x="722" y="330" class="mut">12/12 ca tích hợp</text>
+    </g>
+    <g>
+      <rect x="846" y="288" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="860" cy="302" r="8" fill="#2e7d32"/><text x="860" y="303" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="876" y="306" class="t b">Backpressure</text>
+      <text x="858" y="330" class="mut">4 kịch bản A-chan</text>
+    </g>
+  </g>
+  <!-- row 2 -->
+  <g font-size="12">
+    <g>
+      <rect x="30"  y="356" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="44" cy="370" r="8" fill="#2e7d32"/><text x="44" y="371" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="60" y="374" class="t b">DMA cơ bản</text>
+      <text x="42" y="398" class="mut">3 kịch bản copy</text>
+    </g>
+    <g>
+      <rect x="166" y="356" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="180" cy="370" r="8" fill="#2e7d32"/><text x="180" y="371" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="196" y="374" class="t b">DMA datapath</text>
+      <text x="178" y="398" class="mut">6/6 width/mode</text>
+    </g>
+    <g>
+      <rect x="302" y="356" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="316" cy="370" r="8" fill="#2e7d32"/><text x="316" y="371" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="332" y="374" class="t b">DMA burst</text>
+      <text x="314" y="398" class="mut">4×4 beat · lat=2</text>
+    </g>
+    <g>
+      <rect x="438" y="356" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="452" cy="370" r="8" fill="#2e7d32"/><text x="452" y="371" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="468" y="374" class="t b">DMA FIFO</text>
+      <text x="450" y="398" class="mut">descriptor chain</text>
+    </g>
+    <g>
+      <rect x="574" y="356" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="588" cy="370" r="8" fill="#2e7d32"/><text x="588" y="371" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="604" y="374" class="t b">UART ← DMA</text>
+      <text x="586" y="398" class="mut">65/65 · 0 mất</text>
+    </g>
+    <g>
+      <rect x="710" y="356" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="724" cy="370" r="8" fill="#2e7d32"/><text x="724" y="371" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="740" y="374" class="t b">Log filter</text>
+      <text x="722" y="398" class="mut">9 module tag</text>
+    </g>
+    <g>
+      <rect x="846" y="356" width="124" height="60" rx="8" class="chip"/>
+      <circle cx="860" cy="370" r="8" fill="#2e7d32"/><text x="860" y="371" fill="#fff" font-size="10" class="b" text-anchor="middle">✓</text>
+      <text x="876" y="374" class="t b">Syscall I/O</text>
+      <text x="858" y="398" class="mut">print + exit</text>
+    </g>
+  </g>
+
+  <!-- KPI strip -->
+  <g>
+    <rect x="24"  y="438" width="230" height="86" rx="10" fill="#f8fafc" stroke="#2d3436" stroke-width="1.5"/>
+    <text x="139" y="470" class="gtxt b" font-size="34" text-anchor="middle">14 / 14</text>
+    <text x="139" y="500" class="mut" font-size="12" text-anchor="middle">script Node PASS</text>
+
+    <rect x="264" y="438" width="230" height="86" rx="10" fill="#f8fafc" stroke="#2d3436" stroke-width="1.5"/>
+    <text x="379" y="470" class="gtxt b" font-size="34" text-anchor="middle">21 / 21</text>
+    <text x="379" y="500" class="mut" font-size="12" text-anchor="middle">chương trình assemble</text>
+
+    <rect x="504" y="438" width="230" height="86" rx="10" fill="#f8fafc" stroke="#2d3436" stroke-width="1.5"/>
+    <text x="619" y="470" class="btxt b" font-size="30" text-anchor="middle">17.978 / 0</text>
+    <text x="619" y="500" class="mut" font-size="12" text-anchor="middle">lệnh khớp GNU / sai</text>
+
+    <rect x="744" y="438" width="232" height="86" rx="10" fill="#f8fafc" stroke="#2d3436" stroke-width="1.5"/>
+    <text x="860" y="470" class="gtxt b" font-size="30" text-anchor="middle">65 / 0</text>
+    <text x="860" y="500" class="mut" font-size="12" text-anchor="middle">byte UART phát / mất</text>
+  </g>
+
+  <!-- Footer scope note -->
+  <rect x="24" y="540" width="952" height="38" rx="8" fill="#fbfbfd" stroke="#d1d5db" stroke-width="1.2"/>
+  <text x="42" y="559" class="mut" font-size="11.5">Phạm vi trung thực: RV32IMF tập con · chưa có CSR/đặc quyền/ngắt (ngoại vi polling) · fence chỉ mã hóa · FPU thiếu FCSR/fflags/frm</text>
+  <text x="42" y="572" class="mut" font-size="11.5">TileLink chỉ kênh A/D mức giao dịch (UL+UH), bus một-giao-dịch · AMOADD.W ngoài tên đề tài · MMU 4KB fully-associative · CAN gác lại đợt này</text>
+</svg>

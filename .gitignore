@@ -7,3 +7,16 @@ docs/ref/
 
 # Bản nháp/backup của báo cáo
 docs/kltn/*.OLD_*.docx
+
+# Kết quả chạy kiểm thử (tái lập được bằng node test/*.mjs — không commit)
+test-artifacts/
+
+# File tạm trong quá trình dựng tài liệu (giải nén docx, trích text, preview...)
+docs/kltn/_*
+
+# File khóa tạm của Microsoft Office
+~$*
+
+# Python cache
+__pycache__/
+*.pyc

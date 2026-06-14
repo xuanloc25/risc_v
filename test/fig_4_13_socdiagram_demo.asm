@@ -57,7 +57,8 @@ fill:
     sw    t4, 0(s1)
     sw    s3, 0(s2)          # desc word1: source
     sw    s4, 0(s2)          # desc word2: destination
-    li    t5, 0xF0000020     # desc word3: dstMode=3, srcMode=3, 32 phần tử (word-incr)
+    li    t5, 0x5A000020     # desc word3: dstMode=1, srcMode=1, srcWidth=2, dstWidth=2, 32 phần tử (word-increment)
+    #   0x5A000020 = (1<<30)|(1<<28)|(2<<26)|(2<<24)|32 — mode tăng dần hợp lệ (calculateAddress chỉ nhận 0/1/2)
     sw    t5, 0(s2)
     li    t4, 3
     sw    t4, 0(s1)          # EN | START
