@@ -111,7 +111,7 @@ function createMMIOEndpoint(bus, name, { read, write, canAccept }) {
     };
 }
 
-let _stalledSince = null; // { pc } — tracks current stall for log dedup
+let _stalledSince = null; // { pc } — tracks current stall for log dedug
 
 export const simulator = {
     cpu: null,
@@ -228,21 +228,6 @@ export const simulator = {
             while (this.lastTransactions.length > TRACE_TRANSACTION_LIMIT) {
                 this.lastTransactions.shift();
             }
-        },
-
-        isLinkActive(linkName) {
-            const entry = this.activeLinks[linkName];
-            if (!entry) return false;
-
-            const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-            if (now < entry.expiresAt) return true;
-
-            delete this.activeLinks[linkName];
-            return false;
-        },
-
-        isLinkWrite(linkName) {
-            return !!this.activeLinks[linkName]?.isWrite;
         },
 
         clear() {
