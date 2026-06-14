@@ -52,11 +52,6 @@ const LINK_COMPONENTS = {
     ulToDma: { src: 'TileLink-UL', dst: 'DMA' }
 };
 
-const TRACE_ACTIVE_MS = 450;
-const TRACE_ACTIVE_REFRESH_MS = 90;
-const TRACE_TRANSACTION_THROTTLE_MS = 120;
-const TRACE_TRANSACTION_LIMIT = 6;
-
 function inRange(addr, base, size) {
     const address = addr >>> 0;
     const start = base >>> 0;
