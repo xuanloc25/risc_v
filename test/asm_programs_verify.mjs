@@ -7,18 +7,23 @@ import { assembler } from '../src/js/assembler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// The .asm files in test/ are executable examples, not just notes. This
-// guard keeps them from drifting away from the assembler syntax over time.
-const assemblyFiles = readdirSync(__dirname)
-  .filter((name) => name.endsWith('.asm'))
-  .sort();
+// Example .asm programs live in test/ (full library) and test/demo/ (the
+// curated set demoed at the defense). Scan both so none drift from the syntax.
+const searchDirs = [__dirname, path.join(__dirname, 'demo')];
+const assemblyFiles = searchDirs
+  .flatMap((dir) =>
+    readdirSync(dir)
+      .filter((name) => name.endsWith('.asm'))
+      .map((name) => ({ name, dir }))
+  )
+  .sort((a, b) => a.name.localeCompare(b.name));
 
-assert.ok(assemblyFiles.length > 0, 'No assembly sample files found under test/.');
+assert.ok(assemblyFiles.length > 0, 'No assembly sample files found under test/ or test/demo/.');
 
 const results = [];
 
-for (const fileName of assemblyFiles) {
-  const sourcePath = path.join(__dirname, fileName);
+for (const { name: fileName, dir } of assemblyFiles) {
+  const sourcePath = path.join(dir, fileName);
   const source = readFileSync(sourcePath, 'utf8');
   const assembled = assembler.assemble(source);
 

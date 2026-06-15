@@ -235,7 +235,9 @@ function wrapPortForTrace(sim, port, linkName) {
 // Map tên slave (truy cập trực tiếp) -> tên đường liên kết của sơ đồ.
 function traceDirectLink(details) {
     if (details.slaveName === 'Main Memory') return 'uhToMainMemory';
-    if (details.slaveName === 'DMA Controller') return 'uhToDmaRegs';
+    // Thanh ghi DMA nay nam tren UL (CPU cau hinh qua cau UH->UL), nen truy cap
+    // thanh ghi sang den canh UL->DMA (ulToDma), khong phai UH->DMA.
+    if (details.slaveName === 'DMA Controller') return 'ulToDma';
     if (details.slaveName === 'uh-to-ul-bridge') return 'uhToUlBridge';
     if (details.slaveName === 'ul-to-uh-bridge') return 'ulToUhBridge';
     if (details.slaveName === 'UART') return 'ulToUart';
@@ -249,7 +251,7 @@ function traceDirectLink(details) {
 // Map tên endpoint (request/response) -> tên đường liên kết của sơ đồ.
 function traceEndpointLink(name) {
     if (name === 'Main Memory') return 'uhToMainMemory';
-    if (name === 'DMA Controller') return 'uhToDmaRegs';
+    if (name === 'DMA Controller') return 'ulToDma';
     if (name === 'uh-to-ul-bridge') return 'uhToUlBridge';
     if (name === 'ul-to-uh-bridge') return 'ulToUhBridge';
     if (name === 'UART') return 'ulToUart';
@@ -275,9 +277,7 @@ function handleTileLinkTrace(sim, type, details = {}) {
         linkName = traceDirectLink(details);
     }
 
-    if (!linkName) return;
-
-    sim.trace.record(linkName, {
+    const recordDetails = {
         type,
         from: details.from,
         to: details.to,
@@ -286,7 +286,28 @@ function handleTileLinkTrace(sim, type, details = {}) {
         opcode: details.type,
         value: details.value !== undefined ? details.value : details.data,
         stalled: details.stalled === true
-    });
+    };
+
+    // Cạnh đích (theo slave): bus gán giao dịch theo slave đích, nên đây là cạnh
+    // tới Main Memory / cầu UH->UL / ngoại vi... tùy slaveName (request) hoặc from
+    // (response).
+    if (linkName) {
+        sim.trace.record(linkName, recordDetails);
+    }
+
+    // Cạnh master của DMA (DMA <-> TileLink-UH). DMA chỉ làm master trên UH và gọi
+    // thẳng bus bằng link.sendRequest(from='dma', ...); bus lại phát sự kiện trace
+    // theo slave ĐÍCH (Main Memory / cầu UH->UL), nên cạnh uhToDma KHÔNG bao giờ
+    // được suy ra từ slaveName. Vì vậy khi giao dịch trên bus UH có from/to === 'dma'
+    // ta tô sáng thêm cạnh uhToDma SONG SONG với cạnh đích, để thấy rõ chặng
+    // "DMA -> UH" lúc DMA đọc RAM hoặc đẩy dữ liệu ra ngoại vi (và chặng phản hồi
+    // "UH -> DMA"). 'dma' chỉ xuất hiện trên UH nên không lo nhầm sang UL.
+    const involvesDmaMaster =
+        (type === 'request' && details.from === 'dma') ||
+        (type === 'response' && details.to === 'dma');
+    if (involvesDmaMaster) {
+        sim.trace.record('uhToDma', recordDetails);
+    }
 }
 
 // Gắn (hoặc gắn lại) toàn bộ hệ thống trace lên simulator. Gọi sau mỗi init().

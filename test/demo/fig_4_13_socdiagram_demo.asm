@@ -1,6 +1,4 @@
 # fig_4_13_socdiagram_demo.asm
-# Demo phục vụ chụp Hình 4.13 — "Khung nhìn sơ đồ SoC với làm nổi bật giao dịch".
-#
 # Chương trình CHẠY VÔ HẠN: khi bấm Run liên tục, sơ đồ SoC luôn có giao dịch
 # "sống" trên NHIỀU đường bus cùng lúc, nên chụp lúc nào cũng thấy nhiều đường
 # được tô sáng (active / active-write) và các badge trạng thái có số liệu:

@@ -204,11 +204,20 @@ export const simulator = {
         this.tilelink_UL = new TileLink_UL();
 
         // DMA and bridge sit beside the core path and connect into both fabrics.
+        // Theo yêu cầu GVHD, luồng phải là:
+        //   - Cấu hình DMA: CPU -> (bypass cache) -> UH -> cầu UH->UL -> UL -> thanh ghi DMA.
+        //   - DMA <-> I/O : DMA phát mọi giao dịch DỮ LIỆU trên UH; nếu đích là ngoại vi
+        //     UL thì UH tự route qua cầu UH->UL ("DMA -> UH -> UL -> ngược lại").
+        // Vì vậy DMA chỉ làm master trên UH (selectLinkForAddress luôn trả UH). Thanh ghi
+        // điều khiển DMA nằm trên UL nhờ cổng slave ulToDmaRegs (bên dưới) + cầu UH->UL;
+        // registerLink để là UH cho khớp đường dữ liệu — trường này chỉ là link dự phòng
+        // cho nhánh phản hồi register kiểu hàng đợi, vốn không còn dùng vì truy cập register
+        // đi qua cầu bằng directWrite/readRegister đồng bộ.
         this.dma = new DMAController({
             tilelink_UH: this.tilelink_UH,
             tilelink_UL: this.tilelink_UL,
             registerLink: this.tilelink_UH,
-            selectLinkForAddress: (addr) => isUlPeripheralAddress(addr) ? this.tilelink_UL : this.tilelink_UH
+            selectLinkForAddress: () => this.tilelink_UH
         });
 
         this.uhToUlBridge = new TileLinkBridge(this.tilelink_UH, this.tilelink_UL, {
@@ -295,8 +304,11 @@ export const simulator = {
             l1dToL2: attachPort(this.dCache, this.l2Cache, 'l1d-to-l2'),
             l2ToUh: attachPort(this.l2Cache, this.tilelink_UH, 'l2-to-tilelink-uh'),
             uhToMainMemory: attachPort(this.tilelink_UH, Port.lower('Main Memory', this.mem, (addr) => isCacheableAddress(addr))),
-            uhToDmaRegs: attachPort(this.tilelink_UH, Port.lower('DMA Controller', this.dma, (addr) => dmaRegRange(addr))),
-            uhToUlBridge: attachPort(this.tilelink_UH, Port.lower('uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr))),
+            // Thanh ghi DMA KHÔNG còn nằm trên UH. CPU (trên UH) cấu hình DMA bằng cách
+            // đi qua cầu UH->UL: dải dmaRegRange được route sang UL cùng với các ngoại vi.
+            uhToUlBridge: attachPort(this.tilelink_UH, Port.lower('uh-to-ul-bridge', this.uhToUlBridge, (addr) => isUlPeripheralAddress(addr) || dmaRegRange(addr))),
+            // DMA là master trên UH: mọi giao dịch dữ liệu của DMA phát ra trên UH; khi
+            // đích là ngoại vi UL, UH tự route qua cầu UH->UL (flow "DMA -> UH -> UL").
             uhToDma: attachPort(this.tilelink_UH, Port.upper('dma', this.dma)),
             uhMemoryView: attachPort(this.tilelink_UH, Port.memory('main-memory-view', this.mem)),
             ulToUart: attachPort(this.tilelink_UL, Port.lower('UART', uartEndpoint, uartRange)),
@@ -304,8 +316,11 @@ export const simulator = {
             ulToLedMatrix: attachPort(this.tilelink_UL, Port.lower('LED Matrix', ledEndpoint, ledRange)),
             ulToKeyboard: attachPort(this.tilelink_UL, Port.lower('Keyboard', keyboardEndpoint, keyboardRange)),
             ulToMouse: attachPort(this.tilelink_UL, Port.lower('Mouse', mouseEndpoint, mouseRange)),
-            ulToUhBridge: attachPort(this.tilelink_UL, Port.lower('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr))),
-            ulToDma: attachPort(this.tilelink_UL, Port.upper('dma', this.dma))
+            // Thanh ghi DMA là slave trên UL (nhận lệnh cấu hình CPU gửi qua cầu UH->UL).
+            // Đặt TRƯỚC ul-to-uh-bridge và loại dmaRegRange khỏi match của bridge để tránh
+            // vòng lặp route UL->UH->UL.
+            ulToDmaRegs: attachPort(this.tilelink_UL, Port.lower('DMA Controller', this.dma, (addr) => dmaRegRange(addr))),
+            ulToUhBridge: attachPort(this.tilelink_UL, Port.lower('ul-to-uh-bridge', this.ulToUhBridge, (addr) => !isUlPeripheralAddress(addr) && !dmaRegRange(addr)))
         };
 
         

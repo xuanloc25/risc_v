@@ -637,6 +637,19 @@ li.CodeMirror-hint-active,
     width: 400px;
 }
 
+/* === TẠM ẨN NGOẠI VI CAN (báo cáo tạm thời chưa cần) ===
+   Chỉ ẩn trên UI, KHÔNG xóa code/HTML/JS.
+   Để hiện lại: xóa hoặc comment toàn bộ block này.
+   - .can-device-card : card "CAN Controller" trong tab I/O
+   - #block-can       : khối CAN trong sơ đồ SoC
+   - #path-ulToCan    : đường TileLink-UL nối tới CAN trong sơ đồ */
+.can-device-card,
+#block-can,
+#path-ulToCan {
+    display: none !important;
+}
+/* === HẾT phần tạm ẩn CAN === */
+
 .io-device-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);

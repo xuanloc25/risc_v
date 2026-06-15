@@ -60,7 +60,21 @@ export class TileLinkBridge {
             data = this.directRead(req.address, size, req.type);
             responseType = TL_D_Opcode.AccessAckData;
         } else if (isTileLinkWrite(req.type)) {
-            this.directWrite(req.address, req.value ?? 0, size, req.type);
+            if (Array.isArray(req.beats) && req.beats.length > 1) {
+                // Multi-beat burst write routed UH->bridge->UL (e.g. a DMA word-burst
+                // whose destination is a UL peripheral). Replay each beat to its own
+                // address so the burst is not collapsed to a single beat. `size` is
+                // log2 of the whole burst in bytes; each beat carries an equal slice.
+                const beatBytes = (1 << size) / req.beats.length;
+                const beatSize = Math.max(0, Math.log2(beatBytes) >>> 0);
+                let beatAddr = req.address >>> 0;
+                for (const beat of req.beats) {
+                    this.directWrite(beatAddr, beat >>> 0, beatSize, req.type);
+                    beatAddr = (beatAddr + beatBytes) >>> 0;
+                }
+            } else {
+                this.directWrite(req.address, req.value ?? 0, size, req.type);
+            }
         } else if (isTileLinkAtomic(req.type)) {
             data = this.directRead(req.address, size, req.type);
             const newValue = applyTileLinkAtomic(req, data, size);

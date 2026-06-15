@@ -24,7 +24,7 @@ import { simulator } from '../src/js/soc.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Lấy chuỗi msg trực tiếp từ file demo để test luôn khớp với chương trình thật.
-const source = readFileSync(path.join(__dirname, 'demo_uart_dma.asm'), 'utf8');
+const source = readFileSync(path.join(__dirname, 'demo', 'demo_uart_dma.asm'), 'utf8');
 const asciiMatch = source.match(/\.ascii\s+"([^"]*)"/);
 assert.ok(asciiMatch, 'Không tìm thấy chuỗi .ascii trong demo_uart_dma.asm');
 const MESSAGE = asciiMatch[1];
