@@ -71,9 +71,39 @@ assertHasModules(classifier, 'System reset.', ['system']);
 win.console.log('[Main Memory] Main Memory -> TileLink-UH RESPONSE_BEAT to=L2 Cache addr=0x400000 data=536871059 1/4');
 const [entry] = win.__systemLogStore.snapshot();
 
-// The primary module is used for default coloring, while modules preserves the
-// full set used by checkbox filters.
-assert.equal(entry.module, 'memory');
-assert.deepEqual(Array.from(entry.modules), ['memory', 'cache', 'tilelink']);
+// The store captures raw entries first; UI filtering classifies lazily when it
+// renders, searches, or exports.
+assert.equal(entry.module, undefined);
+assert.equal(entry.modules, undefined);
+assert.deepEqual(
+    Array.from(classifier.inferModules(entry.text)),
+    ['memory', 'cache', 'tilelink']
+);
+
+let notified = 0;
+const unsubscribe = win.__systemLogStore.subscribe(() => {
+    notified++;
+});
+win.__systemLogStore.appendRaw('log', '[Cycle 99] CPU active=true pc=0x400000 | DMA busy=false progress=0/0', { notify: false });
+unsubscribe();
+
+assert.equal(notified, 0);
+assert.equal(win.__systemLogStore.stats().captured, 2);
+assert.equal(win.__systemLogStore.stats().stored, 2);
+
+const cappedWin = createWindow();
+const maxStoredLines = cappedWin.__systemLogStore.limits.maxStoredLines;
+for (let i = 0; i <= maxStoredLines; i++) {
+    cappedWin.__systemLogStore.appendRaw('log', `line ${i}`, { notify: false });
+}
+
+const cappedStats = cappedWin.__systemLogStore.stats();
+const cappedSnapshot = cappedWin.__systemLogStore.snapshot();
+assert.equal(cappedStats.captured, maxStoredLines + 1);
+assert.equal(cappedStats.stored, maxStoredLines);
+assert.equal(cappedStats.dropped, 1);
+assert.equal(cappedSnapshot[0].text, 'line 1');
+assert.equal(cappedSnapshot[cappedSnapshot.length - 1].text, `line ${maxStoredLines}`);
+assert.match(cappedWin.__systemLogStore.dropNotice(), /Dropped 1 oldest log line/);
 
 console.log('System log filter verification passed.');

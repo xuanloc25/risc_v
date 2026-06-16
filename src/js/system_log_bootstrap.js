@@ -75,10 +75,12 @@
 
     if (global.__systemLogStore) return;
 
-    const MAX_EXPORT_LINES = 200000;
-    const EXPORT_TRIM_BATCH = 5000;
+    const MAX_STORED_LINES = 200000;
     const subscribers = new Set();
     const history = [];
+    let capturedCount = 0;
+    let droppedCount = 0;
+    let nextWriteIndex = 0;
 
     const originalConsole = {
         log: global.console.log.bind(global.console),
@@ -106,9 +108,55 @@
         return String(arg);
     }
 
-    function trimHistoryIfNeeded() {
-        if (history.length <= MAX_EXPORT_LINES + EXPORT_TRIM_BATCH) return;
-        history.splice(0, history.length - MAX_EXPORT_LINES);
+    function getStats() {
+        return {
+            captured: capturedCount,
+            stored: history.length,
+            dropped: droppedCount,
+            maxStored: MAX_STORED_LINES
+        };
+    }
+
+    function notifySubscribers(event) {
+        subscribers.forEach((notify) => notify(event));
+    }
+
+    function getDropNotice() {
+        if (droppedCount <= 0) return '';
+        return `[SYSTEM LOG] Dropped ${droppedCount} oldest log line(s); showing ${history.length} stored line(s) out of ${capturedCount} captured.`;
+    }
+
+    function orderedHistory() {
+        if (droppedCount <= 0 || history.length < MAX_STORED_LINES) {
+            return history.slice();
+        }
+        return history.slice(nextWriteIndex).concat(history.slice(0, nextWriteIndex));
+    }
+
+    function appendRaw(level, text, options = {}) {
+        const entry = {
+            level,
+            text: String(text)
+        };
+
+        capturedCount++;
+        let trimmed = false;
+        if (history.length < MAX_STORED_LINES) {
+            history.push(entry);
+        } else {
+            history[nextWriteIndex] = entry;
+            nextWriteIndex = (nextWriteIndex + 1) % MAX_STORED_LINES;
+            droppedCount++;
+            trimmed = true;
+        }
+
+        if (options.notify !== false) {
+            const stats = getStats();
+            if (trimmed) notifySubscribers({ type: 'trim', stats });
+            notifySubscribers({ type: 'entry', entry, stats });
+        }
+
+        return entry;
     }
 
     function pushEntry(level, args) {
@@ -118,24 +166,12 @@
 
         const indent = '  '.repeat(groupDepth);
         const text = indent + prefix + Array.from(args).map(formatArg).join(' ');
-        const modules = inferLogModules(text);
-
-        const entry = {
-            level,
-            module: getPrimaryLogModule(modules),
-            modules,
-            text
-        };
-
-        history.push(entry);
-        trimHistoryIfNeeded();
-
-        subscribers.forEach((notify) => notify({ type: 'entry', entry }));
+        appendRaw(level, text);
     }
 
     global.__systemLogStore = {
         snapshot() {
-            return history.slice();
+            return orderedHistory();
         },
         size() {
             return history.length;
@@ -146,13 +182,29 @@
         },
         clear() {
             history.length = 0;
-            subscribers.forEach((notify) => notify({ type: 'clear' }));
+            capturedCount = 0;
+            droppedCount = 0;
+            nextWriteIndex = 0;
+            notifySubscribers({ type: 'clear', stats: getStats() });
         },
         exportText() {
-            return history.map((entry) => entry.text).join('\n');
+            const lines = orderedHistory().map((entry) => entry.text);
+            const notice = getDropNotice();
+            if (notice) lines.unshift(notice);
+            return lines.join('\n');
+        },
+        appendRaw(level, text, options = {}) {
+            return appendRaw(level, text, options);
+        },
+        stats() {
+            return getStats();
+        },
+        dropNotice() {
+            return getDropNotice();
         },
         limits: {
-            maxExportLines: MAX_EXPORT_LINES
+            maxStoredLines: MAX_STORED_LINES,
+            maxExportLines: MAX_STORED_LINES
         },
         originalConsole
     };
@@ -168,17 +220,7 @@
         const label = Array.from(args).map(formatArg).join(' ');
         const marker = collapsed ? '[+] ' : '[-] ';
         const text = '  '.repeat(groupDepth) + marker + label;
-        const modules = inferLogModules(text);
-        const entry = {
-            level: 'info',
-            module: getPrimaryLogModule(modules),
-            modules,
-            text
-        };
-
-        history.push(entry);
-        trimHistoryIfNeeded();
-        subscribers.forEach((notify) => notify({ type: 'entry', entry }));
+        appendRaw('info', text);
         groupDepth++;
     };
 

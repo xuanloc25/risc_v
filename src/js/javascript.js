@@ -141,7 +141,9 @@ const systemLogStore = window.__systemLogStore || {
     size: () => 0,
     subscribe: () => () => { },
     clear: () => { },
-    exportText: () => ''
+    exportText: () => '',
+    stats: () => ({ captured: 0, stored: 0, dropped: 0, maxStored: 0 }),
+    dropNotice: () => ''
 };
 
 let pendingLogEntries = [];
@@ -149,6 +151,10 @@ let isAutoScrollPaused = false;
 let logFlushScheduled = false;
 const MAX_DOM_LINES = 50000;
 const MAX_LOGS_PER_FRAME = 500;
+// Per-cycle trace live rendering is throttled for performance: captured raw
+// logs stop notifying the UI above this speed, or when the Systems Log panel is
+// collapsed. Single-step always renders live. See soc.js tick().
+const TICK_LOG_MAX_SPEED = 5;
 const LOG_HEIGHT_STORAGE_KEY = 'systemLogConsoleHeight';
 const DEFAULT_LOG_HEIGHT = 300;
 const MIN_LOG_HEIGHT = 180;
@@ -192,6 +198,7 @@ function loadLogFilters() {
 
 let logFilters = loadLogFilters();
 let currentMatchingLogCount = 0;
+let logSnapshotDirty = false;
 
 function getMaxLogHeight() {
     return Math.max(MIN_LOG_HEIGHT, window.innerHeight - TOP_SAFE_SPACE);
@@ -327,11 +334,17 @@ function logEntryMatchesFilters(entry) {
 }
 
 function getFilteredLogEntries(entries = systemLogStore.snapshot()) {
+    if (!isLogFilterActive()) return entries;
     return entries.filter(logEntryMatchesFilters);
 }
 
 function exportLogEntries(entries) {
-    return entries.map((entry) => getLogEntryText(entry)).join('\n');
+    const lines = entries.map((entry) => getLogEntryText(entry));
+    const notice = typeof systemLogStore.dropNotice === 'function'
+        ? systemLogStore.dropNotice()
+        : '';
+    if (notice) lines.unshift(notice);
+    return lines.join('\n');
 }
 
 function saveLogFilters() {
@@ -373,7 +386,12 @@ function updateLogFilters(nextFilters) {
     };
     saveLogFilters();
     renderLogFilterControls();
-    renderFilteredLogSnapshot();
+    if (isSystemLogVisible()) {
+        renderFilteredLogSnapshot();
+    } else {
+        logSnapshotDirty = true;
+        updateLogStats();
+    }
 }
 
 function resetLogFilters() {
@@ -395,17 +413,48 @@ function setLogExpanded(expanded) {
     if (!systemLogTerminal) return;
     systemLogTerminal.classList.toggle('expanded', expanded);
     if (logToggleBtn) logToggleBtn.setAttribute('aria-expanded', String(expanded));
-    if (expanded) keepLogScrolledToBottom();
+    if (expanded) {
+        renderFilteredLogSnapshot();
+        keepLogScrolledToBottom();
+    }
+}
+
+function getSystemLogStats() {
+    if (typeof systemLogStore.stats === 'function') {
+        const stats = systemLogStore.stats();
+        if (stats && typeof stats === 'object') {
+            const stored = Number.isFinite(stats.stored) ? stats.stored : systemLogStore.size();
+            return {
+                captured: Number.isFinite(stats.captured) ? stats.captured : stored,
+                stored,
+                dropped: Number.isFinite(stats.dropped) ? stats.dropped : 0,
+                maxStored: Number.isFinite(stats.maxStored) ? stats.maxStored : stored
+            };
+        }
+    }
+
+    const stored = typeof systemLogStore.size === 'function'
+        ? systemLogStore.size()
+        : systemLogStore.snapshot().length;
+    return {
+        captured: stored,
+        stored,
+        dropped: 0,
+        maxStored: stored
+    };
 }
 
 function updateLogStats() {
     if (!logStats) return;
     const visibleCount = logContent ? logContent.childElementCount : 0;
-    const exportCount = typeof systemLogStore.size === 'function'
-        ? systemLogStore.size()
-        : systemLogStore.snapshot().length;
-    const matchingCount = isLogFilterActive() ? Math.min(currentMatchingLogCount, exportCount) : exportCount;
-    logStats.textContent = `Visible: ${visibleCount} / Match: ${matchingCount} / Total: ${exportCount}`;
+    const stats = getSystemLogStats();
+    const matchingCount = isLogFilterActive()
+        ? (logSnapshotDirty ? '...' : Math.min(currentMatchingLogCount, stats.stored))
+        : stats.stored;
+    const storageText = stats.dropped > 0
+        ? `Stored: ${stats.stored} / Dropped: ${stats.dropped}`
+        : `Total: ${stats.stored}`;
+    logStats.textContent = `Visible: ${visibleCount} / Match: ${matchingCount} / ${storageText}`;
 }
 
 function createLogLine(entry) {
@@ -475,8 +524,10 @@ function queueLogEntries(entries) {
 }
 
 function renderFilteredLogSnapshot() {
-    const filteredEntries = getFilteredLogEntries(systemLogStore.snapshot());
+    const snapshot = systemLogStore.snapshot();
+    const filteredEntries = getFilteredLogEntries(snapshot);
     currentMatchingLogCount = filteredEntries.length;
+    logSnapshotDirty = false;
     clearRenderedLogs();
     queueLogEntries(filteredEntries.slice(-MAX_DOM_LINES));
     updateLogStats();
@@ -618,18 +669,29 @@ if (logContent) {
         isAutoScrollPaused = !isAtBottom;
     });
 
-    renderFilteredLogSnapshot();
+    logSnapshotDirty = systemLogStore.size() > 0;
+    updateLogStats();
     systemLogStore.subscribe((event) => {
         if (event.type === 'clear') {
             currentMatchingLogCount = 0;
+            logSnapshotDirty = false;
             clearRenderedLogs();
             return;
         }
+        if (event.type === 'trim') {
+            logSnapshotDirty = true;
+            updateLogStats();
+            return;
+        }
         if (event.type === 'entry') {
-            const matchesFilters = logEntryMatchesFilters(event.entry);
-            if (matchesFilters) {
-                currentMatchingLogCount++;
-                queueLogEntries([event.entry]);
+            if (isSystemLogVisible()) {
+                const matchesFilters = logEntryMatchesFilters(event.entry);
+                if (matchesFilters) {
+                    currentMatchingLogCount++;
+                    queueLogEntries([event.entry]);
+                }
+            } else {
+                logSnapshotDirty = true;
             }
             updateLogStats();
         }
@@ -1755,6 +1817,21 @@ function finishRun({ message = '', drainDma = false, resetClock = true } = {}) {
     if (resetClock && clockRateDisplay) clockRateDisplay.textContent = "0 Hz";
     updateRunControlUI();
     updateUIGlobally();
+    refreshLogViewAfterDeferredCapture();
+}
+
+function isSystemLogVisible() {
+    return !!systemLogTerminal && systemLogTerminal.classList.contains('expanded');
+}
+
+function refreshLogViewAfterDeferredCapture() {
+    if (!logContent) return;
+    logSnapshotDirty = true;
+    if (isSystemLogVisible()) {
+        renderFilteredLogSnapshot();
+    } else {
+        updateLogStats();
+    }
 }
 
 function scheduleRunLoop() {
@@ -1778,6 +1855,10 @@ function runLoop() {
         cyclesPerFrame = parseInt(speedSlider.value, 10);
         if (cyclesPerFrame === 100) cyclesPerFrame = 1000;
     }
+
+    // Defer per-cycle trace UI notification when running fast or when the log
+    // panel is hidden. Raw lines are still captured by the System Log store.
+    simulator.suppressTickLogs = cyclesPerFrame > TICK_LOG_MAX_SPEED || !isSystemLogVisible();
 
     let executedThisFrame = 0;
     for (let i = 0; i < cyclesPerFrame; i++) {
@@ -1884,6 +1965,7 @@ function handlePause() {
     if (binaryOutput) binaryOutput.textContent += "\n--- Paused ---";
     updateRunControlUI();
     updateUIGlobally();
+    refreshLogViewAfterDeferredCapture();
 }
 
 function handleStop() {

@@ -7,23 +7,22 @@
     <title>RISC-V SoC Simulator</title>
     <link rel="icon" href="data:,">
 
-    <!-- CodeMirror Styles -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
-    <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.css">
+    <!-- Self-hosted CodeMirror Styles -->
+    <link rel="stylesheet" href="vendor/codemirror/5.65.21/lib/codemirror.css">
+    <link rel="stylesheet" href="vendor/codemirror/5.65.21/addon/hint/show-hint.css">
 
-    <!-- Material Design & Icons -->
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
+    <!-- Self-hosted Material Design & Icons -->
+    <link rel="stylesheet" href="vendor/material-icons/1.13.14/iconfont/material-icons.css">
+    <link rel="stylesheet" href="vendor/material-components-web/14.0.0/dist/material-components-web.min.css">
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css" />
 
-    <!-- Libraries Scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/mode/simple.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.js"></script>
-    <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
+    <!-- Self-hosted Library Scripts -->
+    <script src="vendor/codemirror/5.65.21/lib/codemirror.js"></script>
+    <script src="vendor/codemirror/5.65.21/addon/mode/simple.js"></script>
+    <script src="vendor/codemirror/5.65.21/addon/hint/show-hint.js"></script>
+    <script src="vendor/material-components-web/14.0.0/dist/material-components-web.min.js"></script>
 </head>
 
 <body>
@@ -1936,7 +1935,7 @@ _start:
         <div class="log-header">
             <div class="log-title-group">
                 <span>Systems Log Console</span>
-                <span id="logStats" class="log-stats">Visible: 0 / Export: 0</span>
+                <span id="logStats" class="log-stats">Visible: 0 / Match: 0 / Total: 0</span>
             </div>
             <div class="log-actions">
                 <button id="logExportBtn" class="mdc-button mdc-button--outlined log-btn">

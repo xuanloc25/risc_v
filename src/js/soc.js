@@ -107,6 +107,17 @@ function createMMIOEndpoint(bus, name, { read, write, canAccept }) {
 }
 
 let _stalledSince = null; // { pc } — tracks current stall for log dedug
+function appendTraceLogLine(line, notify, fallbackLog) {
+    const store = typeof globalThis !== 'undefined' ? globalThis.__systemLogStore : null;
+    if (store && typeof store.appendRaw === 'function') {
+        store.appendRaw('log', line, { notify });
+        return;
+    }
+
+    if (notify && typeof fallbackLog === 'function') {
+        fallbackLog(line);
+    }
+}
 
 export const simulator = {
     cpu: null,
@@ -128,6 +139,10 @@ export const simulator = {
     ports: null,
     cycleCount: 0,
     useCache: true,
+    // When true, per-cycle trace logs are captured into the raw System Log store
+    // without live UI notification. Set each frame by runLoop (high speed or
+    // hidden log panel); forced false during single-step.
+    suppressTickLogs: false,
 
 
     reset() {
@@ -356,6 +371,9 @@ export const simulator = {
         const startInstructionCount = this.cpu.instructionCount;
         let cycles = 0;
 
+        // Single-step is for observation → always emit per-cycle logs.
+        this.suppressTickLogs = false;
+
         while (this.cpu.isRunning && this.cpu.instructionCount === startInstructionCount) {
             this.tick();
             cycles++;
@@ -394,7 +412,10 @@ export const simulator = {
         const pcNow = this.cpu.pc;
         const isNewStall = _stalledSince === null || pcNow !== _stalledSince.pc;
 
-        // Buffer component logs so we can print the cycle header only when needed
+        // Buffer component logs so we can emit the cycle header only when needed.
+        // Fast runs still capture these lines, but they bypass console.log and
+        // live DOM updates; classification/rendering is deferred.
+        const deferLiveLog = this.suppressTickLogs === true;
         const componentLogs = [];
         const origLog = console.log;
         console.log = (...args) => componentLogs.push(args.map(String).join(' '));
@@ -432,16 +453,17 @@ export const simulator = {
 
         console.log = origLog;
 
-        // Print cycle header + buffered logs only when PC changed (new stall) or components logged
+        // Emit cycle header + buffered logs only when PC changed (new stall) or
+        // components logged. Fast runs append raw lines without waking the UI.
         if (isNewStall || componentLogs.length > 0) {
             const cycleLabel =
                 `[Cycle ${currentCycle}] CPU active=${cpuActive} pc=0x${pcNow.toString(16)} ` +
                 `| DMA busy=${this.dma?.registers?.busy ?? false} ` +
                 `progress=${this.dma?.transferProgress ?? 0}/${this.dma?.numElements ?? 0}`;
-            origLog(cycleLabel);
+            appendTraceLogLine(cycleLabel, !deferLiveLog, origLog);
             for (const line of componentLogs) {
                 for (const subLine of String(line).split(/\r?\n/)) {
-                    origLog('    ' + subLine);
+                    appendTraceLogLine('    ' + subLine, !deferLiveLog, origLog);
                 }
             }
         }
