@@ -20,3 +20,7 @@ docs/kltn/_*
 # Python cache
 __pycache__/
 *.pyc
+
+# Screenshots, hình ảnh và slides báo cáo
+docs/kltn/figures/
+docs/kltn/slides/
