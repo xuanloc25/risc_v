@@ -64,28 +64,40 @@
             <!-- TOOLBAR (Thanh công cụ phía trên) -->
             <div class="toolbar">
                 <div class="toolbar-group">
-                    <button class="mdc-button mdc-button--raised" id="assembleButton">
+                    <button class="mdc-button mdc-button--raised" id="assembleButton"
+                        title="Dịch mã (Assemble): biên dịch và nạp chương trình"
+                        aria-label="Dịch mã (Assemble) và nạp chương trình">
                         <i class="material-icons mdc-button__icon" aria-hidden="true">build</i>
                         <span class="mdc-button__label">Assemble</span>
                     </button>
                     <div class="separator"></div>
-                    <button class="mdc-button mdc-button--outlined" id="resetButton">
+                    <button class="mdc-button mdc-button--outlined" id="resetButton"
+                        title="Đặt lại (Reset): khởi tạo lại máy, giữ nguyên mã nguồn"
+                        aria-label="Đặt lại simulator, giữ nguyên mã nguồn">
                         <i class="material-icons mdc-button__icon" aria-hidden="true">refresh</i>
                         <span class="mdc-button__label">Reset</span>
                     </button>
-                    <button class="mdc-button mdc-button--raised success-btn" id="runButton">
+                    <button class="mdc-button mdc-button--raised success-btn" id="runButton"
+                        title="Chạy (Run): thực thi liên tục đến khi dừng"
+                        aria-label="Chạy chương trình liên tục">
                         <i class="material-icons mdc-button__icon" aria-hidden="true">play_arrow</i>
                         <span class="mdc-button__label">Run</span>
                     </button>
-                    <button class="mdc-button mdc-button--outlined pause-btn" id="pauseButton" disabled>
+                    <button class="mdc-button mdc-button--outlined pause-btn" id="pauseButton" disabled
+                        title="Tạm dừng (Pause): dừng tạm, giữ trạng thái để chạy tiếp"
+                        aria-label="Tạm dừng, giữ trạng thái để chạy tiếp">
                         <i class="material-icons mdc-button__icon" aria-hidden="true">pause</i>
                         <span class="mdc-button__label">Pause</span>
                     </button>
-                    <button class="mdc-button mdc-button--outlined stop-btn" id="stopButton" disabled>
+                    <button class="mdc-button mdc-button--outlined stop-btn" id="stopButton" disabled
+                        title="Dừng hẳn (Stop): kết thúc phiên chạy"
+                        aria-label="Dừng hẳn quá trình chạy">
                         <i class="material-icons mdc-button__icon" aria-hidden="true">stop</i>
                         <span class="mdc-button__label">Stop</span>
                     </button>
-                    <button class="mdc-button mdc-button--outlined" id="stepButton">
+                    <button class="mdc-button mdc-button--outlined" id="stepButton"
+                        title="Chạy từng bước (Step): thực thi một lệnh"
+                        aria-label="Chạy từng bước, thực thi một lệnh">
                         <i class="material-icons mdc-button__icon" aria-hidden="true">redo</i>
                         <span class="mdc-button__label">Step</span>
                     </button>
@@ -95,11 +107,13 @@
                     <!-- THANH ĐIỀU CHỈNH TỐC ĐỘ -->
                     <div class="speed-control">
                         <label for="speedSlider">Speed: <span id="speedValue">Max</span></label>
-                        <input type="range" id="speedSlider" min="1" max="100" value="100">
+                        <input type="range" id="speedSlider" min="1" max="100" value="100"
+                            title="Tốc độ mô phỏng: số chu kỳ mỗi khung hình (100 = Max)"
+                            aria-label="Thanh điều chỉnh tốc độ mô phỏng">
                     </div>
 
                     <!-- HIỂN THỊ TỐC ĐỘ THỰC TẾ -->
-                    <div
+                    <div title="IPS: tốc độ thực thi đo được (chu kỳ/giây), chỉ để xem"
                         style="margin-left: 15px; padding-left: 15px; border-left: 1px solid #ccc; color: #2d3436; font-size: 0.9rem;">
                         IPS: <strong id="clockRateDisplay" style="color: #0984e3;">0 Hz</strong>
                     </div>
@@ -124,13 +138,16 @@
                     <!-- Cột phải: Registers -->
                     <div class="editor-right">
                         <!-- Tab Header -->
-                        <div class="register-tabs">
-                            <div class="tab-item active" id="tab-integer">Registers</div>
-                            <div class="tab-item" id="tab-fp">Floating Point</div>
+                        <div class="register-tabs" role="tablist" aria-label="Chọn bảng thanh ghi">
+                            <button type="button" class="tab-item active" id="tab-integer" role="tab"
+                                aria-selected="true" aria-controls="registerTableContainer">Registers</button>
+                            <button type="button" class="tab-item" id="tab-fp" role="tab" aria-selected="false"
+                                tabindex="-1" aria-controls="fpRegisterTableContainer">Floating Point</button>
                         </div>
 
                         <!-- Bảng Integer Registers -->
-                        <div class="register-container active-table" id="registerTableContainer">
+                        <div class="register-container active-table" id="registerTableContainer" role="tabpanel"
+                            aria-labelledby="tab-integer" tabindex="0">
                             <table class="simple-table" id="registerTable">
                                 <thead>
                                     <tr>
@@ -144,7 +161,8 @@
                         </div>
 
                         <!-- Bảng Floating-Point Registers -->
-                        <div class="register-container" id="fpRegisterTableContainer" style="display:none;">
+                        <div class="register-container" id="fpRegisterTableContainer" style="display:none;"
+                            role="tabpanel" aria-labelledby="tab-fp" tabindex="0">
                             <table class="simple-table" id="fpRegisterTable">
                                 <thead>
                                     <tr>
@@ -188,9 +206,15 @@
                             <h3>Data Segment</h3>
                             <div class="control-group">
                                 <input type="text" id="dataSegmentAddressInput"
-                                    placeholder="Go to Address (e.g. 0x10010000)">
-                                <button id="goToDataSegmentAddress">Go</button>
-                                <button id="toggleDataSegmentMode">Toggle Hex/ASCII</button>
+                                    placeholder="Go to Address (e.g. 0x10010000)"
+                                    title="Nhập địa chỉ để xem (ví dụ 0x10010000); Enter để nhảy"
+                                    aria-label="Nhập địa chỉ vùng nhớ Data Segment để xem">
+                                <button id="goToDataSegmentAddress"
+                                    title="Đi tới (Go): xem vùng nhớ tại địa chỉ đã nhập"
+                                    aria-label="Đi tới địa chỉ vùng nhớ đã nhập">Go</button>
+                                <button id="toggleDataSegmentMode"
+                                    title="Đổi hiển thị Hex/ASCII của Data Segment"
+                                    aria-label="Đổi giữa hiển thị Hex và ASCII">Toggle Hex/ASCII</button>
                             </div>
                         </div>
                         <div class="table-scroll-container">
@@ -277,9 +301,9 @@
                                 <table class="simple-table">
                                     <thead>
                                         <tr>
-                                            <th>VPN</th>
-                                            <th>PPN</th>
-                                            <th title="V = Valid, R = Read, W = Write, X = Execute, C = Cacheable">
+                                            <th title="Số trang ảo (Virtual Page Number) - phần địa chỉ ảo dùng làm khóa tra cứu để tìm trang vật lý tương ứng trong TLB">VPN</th>
+                                            <th title="Số trang vật lý (Physical Page Number) - phần địa chỉ vật lý mà trang ảo được ánh xạ tới sau khi dịch địa chỉ">PPN</th>
+                                            <th title="Các cờ thuộc tính trang: V = hợp lệ (Valid), R = đọc được (Read), W = ghi được (Write), X = thực thi được (Execute), C = lưu cache được (Cacheable)">
                                                 Attributes</th>
                                         </tr>
                                     </thead>
@@ -295,26 +319,30 @@
             <div id="view-cache" class="view-section">
                 <div class="cache-layout">
                     <div class="cache-detail-layout">
-                        <div class="register-tabs cache-tabs">
-                            <div class="tab-item active" id="cache-tab-l1i">L1I</div>
-                            <div class="tab-item" id="cache-tab-l1d">L1D</div>
-                            <div class="tab-item" id="cache-tab-l2">L2</div>
+                        <div class="register-tabs cache-tabs" role="tablist" aria-label="Chọn mức cache">
+                            <button type="button" class="tab-item active" id="cache-tab-l1i" role="tab"
+                                aria-selected="true" aria-controls="cache-panel-l1i">L1I</button>
+                            <button type="button" class="tab-item" id="cache-tab-l1d" role="tab" aria-selected="false"
+                                tabindex="-1" aria-controls="cache-panel-l1d">L1D</button>
+                            <button type="button" class="tab-item" id="cache-tab-l2" role="tab" aria-selected="false"
+                                tabindex="-1" aria-controls="cache-panel-l2">L2</button>
                         </div>
 
-                        <div class="memory-panel cache-panel active-cache-panel" id="cache-panel-l1i">
+                        <div class="memory-panel cache-panel active-cache-panel" id="cache-panel-l1i" role="tabpanel"
+                            aria-labelledby="cache-tab-l1i" tabindex="0">
                             <div class="panel-header">L1 Instruction Cache</div>
                             <div class="cache-stats cache-stats-inline" id="l1iCacheStats"></div>
                             <div class="table-scroll-container">
                                 <table class="simple-table">
                                     <thead>
                                         <tr>
-                                            <th>Set</th>
-                                            <th>Way</th>
-                                            <th>Valid</th>
-                                            <th>Dirty</th>
-                                            <th>Tag</th>
-                                            <th>Last Ref</th>
-                                            <th>Bytes (0-15)</th>
+                                            <th title="Chỉ số tập hợp (set index) - nhóm các dòng cache mà một địa chỉ có thể ánh xạ tới; tính từ phần giữa của địa chỉ bộ nhớ">Set</th>
+                                            <th title="Đường (way) trong tập hợp - vị trí của dòng cache bên trong một set ở cache liên kết tập hợp (set-associative)">Way</th>
+                                            <th title="Bit hợp lệ - cho biết dòng cache này có chứa dữ liệu thực sự (1) hay đang rỗng/chưa dùng (0)">Valid</th>
+                                            <th title="Bit ghi (modified) - đánh dấu dòng cache đã từng bị ghi. Cache ở đây dùng write-through nên dữ liệu đã được ghi xuống bộ nhớ ngay; cờ này không kích hoạt ghi-ngược khi thay thế dòng">Dirty</th>
+                                            <th title="Thẻ địa chỉ - phần địa chỉ cao dùng để so khớp xem dòng cache có đúng dữ liệu đang cần hay không (hit/miss)">Tag</th>
+                                            <th title="Lần truy cập gần nhất - dấu thời gian/chu kỳ của lần dùng cuối, dùng cho thuật toán thay thế LRU (thay dòng ít dùng nhất)">Last Ref</th>
+                                            <th title="Dữ liệu trong dòng cache - 16 byte đầu của block, nội dung lệnh đang được lưu trong cache lệnh L1I">Bytes (0-15)</th>
                                         </tr>
                                     </thead>
                                     <tbody id="l1iCacheTableBody"></tbody>
@@ -322,20 +350,21 @@
                             </div>
                         </div>
 
-                        <div class="memory-panel cache-panel" id="cache-panel-l1d">
+                        <div class="memory-panel cache-panel" id="cache-panel-l1d" role="tabpanel"
+                            aria-labelledby="cache-tab-l1d" tabindex="0">
                             <div class="panel-header">L1 Data Cache</div>
                             <div class="cache-stats cache-stats-inline" id="l1dCacheStats"></div>
                             <div class="table-scroll-container">
                                 <table class="simple-table">
                                     <thead>
                                         <tr>
-                                            <th>Set</th>
-                                            <th>Way</th>
-                                            <th>Valid</th>
-                                            <th>Dirty</th>
-                                            <th>Tag</th>
-                                            <th>Last Ref</th>
-                                            <th>Bytes (first 8)</th>
+                                            <th title="Chỉ số tập hợp (set index) - nhóm các dòng cache mà một địa chỉ có thể ánh xạ tới; tính từ phần giữa của địa chỉ bộ nhớ">Set</th>
+                                            <th title="Đường (way) trong tập hợp - vị trí của dòng cache bên trong một set ở cache liên kết tập hợp (set-associative)">Way</th>
+                                            <th title="Bit hợp lệ - cho biết dòng cache này có chứa dữ liệu thực sự (1) hay đang rỗng/chưa dùng (0)">Valid</th>
+                                            <th title="Bit ghi (modified) - đánh dấu dòng cache đã từng bị ghi. Cache ở đây dùng write-through nên dữ liệu đã được ghi xuống bộ nhớ ngay; cờ này không kích hoạt ghi-ngược khi thay thế dòng">Dirty</th>
+                                            <th title="Thẻ địa chỉ - phần địa chỉ cao dùng để so khớp xem dòng cache có đúng dữ liệu đang cần hay không (hit/miss)">Tag</th>
+                                            <th title="Lần truy cập gần nhất - dấu thời gian/chu kỳ của lần dùng cuối, dùng cho thuật toán thay thế LRU (thay dòng ít dùng nhất)">Last Ref</th>
+                                            <th title="Dữ liệu trong dòng cache - 8 byte đầu của block đang được lưu trong cache">Bytes (first 8)</th>
                                         </tr>
                                     </thead>
                                     <tbody id="l1dCacheTableBody"></tbody>
@@ -343,20 +372,21 @@
                             </div>
                         </div>
 
-                        <div class="memory-panel cache-panel" id="cache-panel-l2">
+                        <div class="memory-panel cache-panel" id="cache-panel-l2" role="tabpanel"
+                            aria-labelledby="cache-tab-l2" tabindex="0">
                             <div class="panel-header">L2 Shared Cache</div>
                             <div class="cache-stats cache-stats-inline" id="l2CacheStats"></div>
                             <div class="table-scroll-container">
                                 <table class="simple-table">
                                     <thead>
                                         <tr>
-                                            <th>Set</th>
-                                            <th>Way</th>
-                                            <th>Valid</th>
-                                            <th>Dirty</th>
-                                            <th>Tag</th>
-                                            <th>Last Ref</th>
-                                            <th>Bytes (first 8)</th>
+                                            <th title="Chỉ số tập hợp (set index) - nhóm các dòng cache mà một địa chỉ có thể ánh xạ tới; tính từ phần giữa của địa chỉ bộ nhớ">Set</th>
+                                            <th title="Đường (way) trong tập hợp - vị trí của dòng cache bên trong một set ở cache liên kết tập hợp (set-associative)">Way</th>
+                                            <th title="Bit hợp lệ - cho biết dòng cache này có chứa dữ liệu thực sự (1) hay đang rỗng/chưa dùng (0)">Valid</th>
+                                            <th title="Bit ghi (modified) - đánh dấu dòng cache đã từng bị ghi. Cache ở đây dùng write-through nên dữ liệu đã được ghi xuống bộ nhớ ngay; cờ này không kích hoạt ghi-ngược khi thay thế dòng">Dirty</th>
+                                            <th title="Thẻ địa chỉ - phần địa chỉ cao dùng để so khớp xem dòng cache có đúng dữ liệu đang cần hay không (hit/miss)">Tag</th>
+                                            <th title="Lần truy cập gần nhất - dấu thời gian/chu kỳ của lần dùng cuối, dùng cho thuật toán thay thế LRU (thay dòng ít dùng nhất)">Last Ref</th>
+                                            <th title="Dữ liệu trong dòng cache - 8 byte đầu của block đang được lưu trong cache">Bytes (first 8)</th>
                                         </tr>
                                     </thead>
                                     <tbody id="l2CacheTableBody"></tbody>
@@ -419,7 +449,9 @@
                             <div>
                                 <label style="font-weight: bold; margin-bottom: 5px; display: block;">Input:</label>
                                 <div style="display: flex; gap: 5px;">
-                                    <input type="text" id="uartInput" placeholder="Type and press Enter..." style="
+                                    <input type="text" id="uartInput" placeholder="Type and press Enter..."
+                                        title="Nhập dữ liệu gửi vào UART; Enter để gửi"
+                                        aria-label="Nhập dữ liệu gửi vào UART" style="
                                         flex: 1;
                                         padding: 8px;
                                         font-family: 'Courier New', monospace;
@@ -427,10 +459,14 @@
                                         border: 1px solid #ccc;
                                         border-radius: 4px;
                                     ">
-                                    <button id="uartSendButton" class="mdc-button mdc-button--outlined">
+                                    <button id="uartSendButton" class="mdc-button mdc-button--outlined"
+                                        title="Gửi (Send): đẩy dữ liệu vào bộ đệm RX của UART"
+                                        aria-label="Gửi dữ liệu vào bộ đệm nhận UART">
                                         <span class="mdc-button__label">Send</span>
                                     </button>
-                                    <button id="uartClearButton" class="mdc-button mdc-button--outlined">
+                                    <button id="uartClearButton" class="mdc-button mdc-button--outlined"
+                                        title="Xóa (Clear): xóa output và bộ đệm TX của UART"
+                                        aria-label="Xóa output và bộ đệm truyền UART">
                                         <span class="mdc-button__label">Clear</span>
                                     </button>
                                 </div>
@@ -450,7 +486,9 @@
                         </div>
                         <div class="io-body">
                             <label style="font-weight: bold; margin-bottom: 5px; display: block;">Type here:</label>
-                            <textarea id="keyboardInput" placeholder="Type here..." style="
+                            <textarea id="keyboardInput" placeholder="Type here..."
+                                title="Bàn phím MMIO: mỗi phím gõ được đưa vào bộ đệm cho CPU đọc"
+                                aria-label="Vùng nhập bàn phím memory-mapped cho CPU đọc" style="
                                 width: 100%;
                                 height: 100px;
                                 padding: 8px;
@@ -487,12 +525,15 @@
                         <label class="help-search">
                             <i class="material-icons">search</i>
                             <input id="helpSearchInput" type="search" placeholder="Tìm lệnh, syscall, MMIO..."
-                                autocomplete="off">
+                                autocomplete="off" title="Tìm trong Help: lệnh, syscall, MMIO..."
+                                aria-label="Tìm kiếm trong trang trợ giúp">
                         </label>
 
                         <div class="help-nav-list">
                             <button type="button" class="help-nav-item active" data-help-target="help-overview">Tổng
                                 quan</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-quickstart">Quick
+                                Start (5 phút)</button>
                             <button type="button" class="help-nav-item" data-help-target="help-scope">Phạm vi hỗ
                                 trợ</button>
                             <button type="button" class="help-nav-item" data-help-target="help-workflow">Quy trình
@@ -513,10 +554,14 @@
                                 map</button>
                             <button type="button" class="help-nav-item" data-help-target="help-io">I/O
                                 peripherals</button>
+                            <button type="button" class="help-nav-item" data-help-target="help-soc-diagram">Đọc sơ
+                                đồ SoC</button>
                             <button type="button" class="help-nav-item" data-help-target="help-cache-mmu">Cache, MMU,
                                 bus</button>
                             <button type="button" class="help-nav-item"
                                 data-help-target="help-debugging">Debugging</button>
+                            <button type="button" class="help-nav-item"
+                                data-help-target="help-glossary">Glossary</button>
                             <button type="button" class="help-nav-item" data-help-target="help-examples">Ví dụ
                                 mẫu</button>
                         </div>
@@ -596,6 +641,35 @@
                                     </tr>
                                 </tbody>
                             </table>
+                        </section>
+
+                        <section class="help-section" id="help-quickstart" data-help-section>
+                            <h2>Quick Start (5 phút)</h2>
+                            <div class="help-callout">
+                                <strong>Dành cho người mới:</strong> năm bước dưới đây giúp bạn chạy chương trình
+                                RISC-V đầu tiên và biết quan sát kết quả ở đâu. Sau đó hãy đọc các mục chi tiết bên
+                                dưới để hiểu sâu hơn.
+                            </div>
+                            <ol class="help-steps">
+                                <li><strong>Viết code:</strong> mở tab <strong>Editor</strong> và gõ vài lệnh, ví dụ
+                                    <code>li a0, 5</code> rồi <code>addi a0, a0, 1</code>. Gõ rồi nhấn
+                                    <code>Ctrl-Space</code> để bật gợi ý tên lệnh, thanh ghi và nhãn.
+                                </li>
+                                <li><strong>Assemble:</strong> bấm <strong>Assemble</strong> để kiểm tra cú pháp,
+                                    expand pseudo-instruction và nạp chương trình vào CPU/memory. Nếu có lỗi, đọc dòng
+                                    lỗi trong Binary Output rồi sửa lại.</li>
+                                <li><strong>Chạy:</strong> bấm <strong>Run</strong> để thực thi liên tục, hoặc
+                                    <strong>Step</strong> để chạy từng instruction và xem PC dịch chuyển theo từng
+                                    chu kỳ.
+                                </li>
+                                <li><strong>Xem kết quả:</strong> thanh ghi cập nhật ngay trong tab
+                                    <strong>Editor</strong>; ô nhớ xem ở tab <strong>Memory</strong>; ngoại vi như
+                                    UART/LED/Keyboard/Mouse ở tab <strong>I/O</strong>; nhật ký bus, CPU, cache, DMA ở
+                                    <strong>Systems Log</strong>.
+                                </li>
+                                <li><strong>Đặt breakpoint:</strong> click vào gutter bên trái dòng lệnh trong Editor để
+                                    đặt breakpoint, sau đó bấm Run để chương trình tự dừng khi PC tới dòng đó.</li>
+                            </ol>
                         </section>
 
                         <section class="help-section" id="help-scope" data-help-section>
@@ -1449,6 +1523,107 @@ _start:
                             </table>
                         </section>
 
+                        <section class="help-section" id="help-soc-diagram" data-help-section>
+                            <h2>Đọc sơ đồ SoC</h2>
+                            <ul class="help-list">
+                                <li>Mở sơ đồ bằng tab <code>SoC</code>; sơ đồ vẽ toàn bộ khối và các đường TileLink nối
+                                    chúng.</li>
+                                <li>Khối được tô màu theo nhóm trong Legend: Compute/Master (CPU, DMA), Memory &amp;
+                                    Caches (MMU, L1I/L1D/L2, Main Memory), TileLink Interconnect (UH/UL) và MMIO
+                                    Peripherals (UART, LED, Keyboard, Mouse).</li>
+                                <li>Có hai bus TileLink: <code>TileLink-UH</code> là bus coherent tốc độ cao nối CPU
+                                    (qua L2) và DMA tới Main Memory; <code>TileLink-UL</code> là bus tiện ích tốc độ
+                                    thấp nối các ngoại vi MMIO. Một cầu nối (bridge) bắc giữa UH và UL khi request đi
+                                    sang vùng còn lại.</li>
+                                <li>Đường CPU chính là
+                                    <code>RISC-V Core → MMU → L1 Cache → L2 → TileLink-UH → Main Memory</code>; truy cập
+                                    MMIO rẽ qua bridge UH/UL xuống TileLink-UL.</li>
+                                <li>Khi chạy chương trình, các đường dây liên quan sẽ sáng lên để thể hiện luồng giao
+                                    dịch đang đi qua (ví dụ fetch lệnh làm sáng nhánh L1I, load/store làm sáng nhánh
+                                    L1D, MMIO làm sáng nhánh UL); dây tắt dần sau khi giao dịch kết thúc.</li>
+                                <li><strong>Hover</strong> vào từng khối để xem mô tả kiến trúc; nếu vừa có giao dịch,
+                                    tooltip còn hiện thêm dòng <code>Last Transaction</code> mô tả giao dịch gần nhất qua
+                                    khối.</li>
+                                <li><strong>Nhấp</strong> vào một khối để xem chi tiết ở tab tương ứng: CPU → Editor,
+                                    MMU → MMU, các cache → Cache, Main Memory → Memory, ngoại vi (UART/LED/Keyboard/Mouse)
+                                    → I/O. Nhấp vào DMA hoặc bus TileLink-UH/UL sẽ mở Systems Log đã lọc theo module đó.
+                                </li>
+                            </ul>
+                            <table class="help-table">
+                                <thead>
+                                    <tr>
+                                        <th>Khối</th>
+                                        <th>Vai trò</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>RISC-V Core</td>
+                                        <td>Lõi CPU thực thi lệnh RV32IMF; fetch lệnh và load/store dữ liệu thông qua
+                                            MMU.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>MMU</td>
+                                        <td>Dịch địa chỉ ảo (VA) sang địa chỉ vật lý (PA); trang 4 KB, TLB 16 mục
+                                            liên kết đầy đủ (fully-associative), thay thế LRU.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>L1I Cache</td>
+                                        <td>Cache lệnh L1 giữ các lệnh vừa fetch; bỏ qua với địa chỉ
+                                            non-cacheable/MMIO.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>L1D Cache</td>
+                                        <td>Cache dữ liệu L1 cho load/store của CPU; ghi theo write-through, thay thế LRU.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>L2 Cache</td>
+                                        <td>Cache chung hợp nhất, phục vụ miss của L1I/L1D trước khi xuống Main Memory.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>DMA Controller</td>
+                                        <td>Chuyển khối dữ liệu trực tiếp giữa bộ nhớ và ngoại vi, giảm tải cho CPU;
+                                            thanh ghi tại 0xFFED0000.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>TileLink-UH</td>
+                                        <td>Bus coherent tốc độ cao nối CPU (qua L2) và DMA tới Main Memory và thanh ghi.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>TileLink-UL</td>
+                                        <td>Bus tiện ích tốc độ thấp nối các ngoại vi MMIO (UART, LED, Keyboard, Mouse)
+                                            qua bridge adapter.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Main Memory</td>
+                                        <td>RAM chính chứa code và biến chương trình; mô phỏng độ trễ truy cập vật lý 20
+                                            chu kỳ.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>UART</td>
+                                        <td>Giao tiếp nối tiếp theo ký tự; in output chương trình và nhận input console
+                                            (MMIO 0x10000000).</td>
+                                    </tr>
+                                    <tr>
+                                        <td>LED Matrix</td>
+                                        <td>Ma trận màu 32x32; ghi word trong vùng 0xFF000000 cập nhật màu pixel
+                                            (0x00RRGGBB).</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Keyboard</td>
+                                        <td>Đệm phím nhấn dưới dạng mã ASCII để chương trình poll (MMIO 0xFFFF0000).</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Mouse</td>
+                                        <td>Báo tọa độ con trỏ (X, Y) và trạng thái click khi tương tác trên canvas LED
+                                            Matrix (MMIO 0xFF100000).</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
                         <section class="help-section" id="help-cache-mmu" data-help-section>
                             <h2>Cache, MMU và bus</h2>
                             <ul class="help-list">
@@ -1487,7 +1662,7 @@ _start:
                                     </tr>
                                     <tr>
                                         <td>MMU</td>
-                                        <td>Page size cố định 4 KB, TLB 8 entries fully associative (LRU);
+                                        <td>Page size cố định 4 KB, TLB 16 entries fully associative (LRU);
                                             địa chỉ chưa map dùng identity fallback (VA = PA).</td>
                                     </tr>
                                     <tr>
@@ -1594,6 +1769,194 @@ _start:
                             </table>
                         </section>
 
+                        <section class="help-section" id="help-glossary" data-help-section>
+                            <h2>Glossary (thuật ngữ)</h2>
+                            <p>Các thuật ngữ thường gặp khi dùng trình mô phỏng, sắp theo bảng chữ cái. Số liệu cấu
+                                hình (TLB, cache, trang) đúng với cấu hình thực tế của simulator.</p>
+                            <table class="help-table">
+                                <thead>
+                                    <tr>
+                                        <th>Thuật ngữ</th>
+                                        <th>Giải thích</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Breakpoint</strong></td>
+                                        <td>Điểm dừng đặt tại một dòng lệnh; khi PC chạm tới, CPU tạm dừng để bạn quan
+                                            sát thanh ghi và bộ nhớ. Đặt bằng cách click vào gutter trong Editor.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Cache hit / miss</strong></td>
+                                        <td>Hit là khi dữ liệu cần truy cập đã có trong cache (tag trùng, valid); miss là
+                                            khi không có và phải lấy từ cấp thấp hơn (L2 hoặc Main Memory).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Cacheable / non-cacheable</strong></td>
+                                        <td>Main Memory là cacheable; các vùng MMIO (UART, LED, Keyboard, Mouse, thanh
+                                            ghi DMA) là non-cacheable để phản ánh trạng thái thiết bị ngay.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Directive</strong></td>
+                                        <td>Chỉ thị cho assembler bắt đầu bằng dấu chấm (<code>.text</code>,
+                                            <code>.data</code>, <code>.word</code>, <code>.asciz</code>,
+                                            <code>.eqv</code>), không phải lệnh CPU; dùng để khai báo section, dữ liệu và
+                                            hằng số.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Dirty bit</strong></td>
+                                        <td>Cờ (<code>modified</code>) đánh dấu một dòng cache đã từng bị ghi. Trình mô
+                                            phỏng này dùng write-through nên dữ liệu được ghi xuống bộ nhớ ngay khi
+                                            store; cờ dirty được đặt nhưng không kích hoạt ghi-ngược khi thay thế dòng.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>DMA</strong></td>
+                                        <td>Direct Memory Access — khối truyền dữ liệu giữa bộ nhớ và thiết bị mà không
+                                            cần CPU sao chép từng word. Cấu hình qua thanh ghi tại <code>0xFFED0000</code>
+                                            (CTRL và DESC FIFO), kết nối qua TileLink-UH.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>ECALL / Syscall</strong></td>
+                                        <td>Lệnh <code>ecall</code> kích hoạt dịch vụ hệ thống do simulator cung cấp (in
+                                            số/chuỗi, đọc nhập, thoát chương trình...); mã dịch vụ đặt trong
+                                            <code>a7</code>, tham số trong <code>a0..a2</code>. Ví dụ <code>a7=93</code>
+                                            là exit.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>FPU / rounding mode</strong></td>
+                                        <td>Đơn vị dấu phẩy động xử lý lệnh float (<code>fadd.s</code>,
+                                            <code>fcvt</code>...). Rounding mode (<code>rne</code>, <code>rtz</code>,
+                                            <code>rdn</code>, <code>rup</code>, <code>rmm</code>, hoặc <code>dyn</code>)
+                                            đặt cách làm tròn; bỏ trống thì assembler dùng <code>dyn</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Fully associative</strong></td>
+                                        <td>Tổ chức trong đó một mục có thể nằm ở bất kỳ vị trí nào (không ràng buộc theo
+                                            set). TLB của MMU dùng kiểu fully associative 16 entry.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Identity mapping (fallback)</strong></td>
+                                        <td>Khi một địa chỉ ảo (VA) không có trong page table, MMU ánh xạ thẳng VA = PA.
+                                            Đây là cơ chế dự phòng giúp chương trình chạy được mà không cần thiết lập
+                                            bảng trang.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Immediate</strong></td>
+                                        <td>Hằng số mã hóa trực tiếp trong lệnh. Lệnh kiểu I (<code>addi</code>,
+                                            <code>lw</code>, <code>sw</code>...) có immediate 12-bit có dấu; hằng lớn dùng
+                                            <code>li</code> hoặc tách <code>lui/addi</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>IPS</strong></td>
+                                        <td>Instructions Per Second — số lệnh CPU thực thi mỗi giây, làm chỉ số tốc độ mô
+                                            phỏng. Không phản ánh tốc độ phần cứng thật, chỉ là thông lượng của trình mô
+                                            phỏng.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Little-endian</strong></td>
+                                        <td>Quy ước lưu byte thấp của một word ở địa chỉ thấp. Directive dữ liệu
+                                            (<code>.word</code>, <code>.float</code>...) và bộ nhớ đều theo little-endian.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>LRU</strong></td>
+                                        <td>Least Recently Used — chính sách thay thế chọn loại bỏ mục lâu nhất chưa được
+                                            dùng khi cần chỗ trống. Cả cache (L1/L2) và TLB của MMU đều dùng LRU.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>MMIO</strong></td>
+                                        <td>Memory-Mapped I/O — thiết bị ngoại vi được điều khiển bằng cách đọc/ghi vào
+                                            địa chỉ bộ nhớ cố định (UART, LED, Keyboard, Mouse, DMA). Các vùng này
+                                            non-cacheable và đi qua TileLink-UL.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>MMU</strong></td>
+                                        <td>Memory Management Unit — dịch địa chỉ ảo sang vật lý và kiểm tra quyền truy
+                                            cập. Cấu hình cố định trang 4 KB, TLB 16 entry, theo mô hình rút gọn của
+                                            RISC-V Sv32; dùng identity mapping khi chưa có trang.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Page (trang)</strong></td>
+                                        <td>Đơn vị bộ nhớ MMU quản lý khi dịch địa chỉ. Kích thước cố định 4 KB; địa chỉ
+                                            ảo chia thành VPN (số trang) và offset trong trang.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>PPN</strong></td>
+                                        <td>Physical Page Number — số trang vật lý sau khi dịch, ghép với offset để tạo
+                                            địa chỉ thực. Hiển thị trong bảng TLB của MMU view.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Pseudo-instruction</strong></td>
+                                        <td>Lệnh tiện ích do assembler dịch thành một hoặc nhiều lệnh thật (vd
+                                            <code>li</code>, <code>mv</code>, <code>la</code>, <code>nop</code>,
+                                            <code>j</code>). Giúp viết mã gọn nhưng CPU vẫn chỉ thực thi lệnh cơ sở.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Relocation %hi / %lo</strong></td>
+                                        <td>Cặp helper tách địa chỉ một label thành 20 bit cao (<code>%hi</code>, dùng với
+                                            <code>lui</code>) và 12 bit thấp có dấu (<code>%lo</code>, dùng với
+                                            <code>addi/lw/sw</code>) để nạp địa chỉ 32-bit qua hai lệnh.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Set</strong></td>
+                                        <td>Một nhóm trong cache mà địa chỉ ánh xạ tới theo index; mỗi set chứa nhiều way.
+                                            L1I/L1D có 16 set, L2 có 64 set (mỗi set 4 way).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Set-associative</strong></td>
+                                        <td>Tổ chức cache trong đó mỗi địa chỉ ánh xạ vào một set cố định nhưng có thể nằm
+                                            ở một trong nhiều way của set đó. Cache ở đây là 4-way set-associative.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Tag</strong></td>
+                                        <td>Phần địa chỉ lưu trong cache để xác định dòng đang giữ thuộc khối bộ nhớ nào;
+                                            so tag với địa chỉ truy cập (kèm bit valid) để quyết định hit hay miss.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>TileLink (UH / UL)</strong></td>
+                                        <td>Giao thức bus nối các khối SoC. TileLink-UH (Uncached Heavyweight) cho đường
+                                            tốc độ cao memory/cache/thanh ghi DMA; TileLink-UL (Uncached Lightweight) cho
+                                            MMIO tiện ích chậm; bridge nối hai fabric khi request đi sang vùng còn lại.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>TLB</strong></td>
+                                        <td>Translation Lookaside Buffer — bộ đệm các phép dịch VPN→PPN gần đây để tăng
+                                            tốc MMU. Cấu hình 16 entry fully associative, thay thế LRU; TLB hit tránh phải
+                                            tra page table.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Two-pass assembler</strong></td>
+                                        <td>Quy trình biên dịch hai lượt: lượt 1 thu thập địa chỉ các label, lượt 2 mã hóa
+                                            lệnh và điền địa chỉ; nhờ vậy có thể tham chiếu label nằm phía sau.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Valid bit</strong></td>
+                                        <td>Cờ cho biết một dòng cache (hoặc entry TLB) đang chứa dữ liệu hợp lệ. Tra cứu
+                                            chỉ tính là hit khi valid được đặt và tag/VPN trùng khớp.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>VPN</strong></td>
+                                        <td>Virtual Page Number — số trang ảo, phần cao của địa chỉ ảo (bỏ 12 bit offset
+                                            của trang 4 KB). MMU dùng VPN để tra TLB tìm ra PPN.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Way</strong></td>
+                                        <td>Một vị trí chứa dòng cache bên trong một set; số way là độ kết hợp
+                                            (associativity). Cache ở đây 4 way mỗi set, nên một set giữ tối đa 4 dòng.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Write-through</strong></td>
+                                        <td>Chính sách ghi của cache trong trình mô phỏng này: lệnh store vừa cập nhật
+                                            dòng cache vừa ghi đồng thời xuống cấp thấp hơn ngay. Không có bước ghi-ngược
+                                            (write-back) khi thay thế; dòng victim bị loại bỏ trực tiếp. Cả L1I/L1D và L2
+                                            đều dùng write-through.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+
                         <section class="help-section" id="help-examples" data-help-section>
                             <h2>Ví dụ mẫu</h2>
                             <div class="help-example-grid">
@@ -1637,6 +2000,41 @@ _start:
                                     </div>
                                     <button type="button" class="help-sample-button"
                                         data-sample-template="helpSampleDmaUart">
+                                        <i class="material-icons">content_paste</i>
+                                        Nạp vào editor
+                                    </button>
+                                </article>
+                                <article class="help-example">
+                                    <div>
+                                        <h3>Vòng lặp &amp; rẽ nhánh: tổng 1..N</h3>
+                                        <p>Tính 1+2+...+N bằng <code>blt</code>/<code>beq</code>/<code>addi</code>/<code>add</code>,
+                                            in kết quả bằng syscall 1.</p>
+                                    </div>
+                                    <button type="button" class="help-sample-button"
+                                        data-sample-template="helpSampleLoopSum">
+                                        <i class="material-icons">content_paste</i>
+                                        Nạp vào editor
+                                    </button>
+                                </article>
+                                <article class="help-example">
+                                    <div>
+                                        <h3>Số thực (float): (a+b)*c</h3>
+                                        <p>Dùng <code>fcvt.s.w</code>, <code>fadd.s</code>, <code>fmul.s</code>; xem bit
+                                            pattern qua <code>fmv.x.w</code> và in bằng <code>fcvt.w.s</code>.</p>
+                                    </div>
+                                    <button type="button" class="help-sample-button"
+                                        data-sample-template="helpSampleFloat">
+                                        <i class="material-icons">content_paste</i>
+                                        Nạp vào editor
+                                    </button>
+                                </article>
+                                <article class="help-example">
+                                    <div>
+                                        <h3>Số nguyên: giai thừa N!</h3>
+                                        <p>Vòng lặp nhân dồn bằng <code>mul</code> (RV32M), in kết quả bằng syscall 1.</p>
+                                    </div>
+                                    <button type="button" class="help-sample-button"
+                                        data-sample-template="helpSampleFactorial">
                                         <i class="material-icons">content_paste</i>
                                         Nạp vào editor
                                     </button>
@@ -1751,6 +2149,75 @@ _start:
                                 li a7, 93
                                 ecall</template>
 
+                            <template id="helpSampleLoopSum">.text 0x00400000
+.globl _start
+_start:
+    li   t0, 10          # N = 10 (đổi tùy ý)
+    li   t1, 1           # i = 1
+    li   t2, 0           # sum = 0
+
+loop:
+    blt  t0, t1, done    # nếu N < i thì dừng
+    add  t2, t2, t1      # sum += i
+    addi t1, t1, 1       # i++
+    beq  x0, x0, loop    # nhảy lại đầu vòng
+
+done:
+    mv   a0, t2          # a0 = sum (= 55 khi N=10)
+    li   a7, 1           # PrintInt
+    ecall
+
+    li   a0, 0
+    li   a7, 93          # Exit
+    ecall</template>
+
+                            <template id="helpSampleFloat">.text 0x00400000
+.globl _start
+_start:
+    # Tạo các hằng số nguyên rồi đổi sang float
+    li   t0, 3
+    fcvt.s.w fa0, t0      # fa0 = 3.0
+    li   t1, 4
+    fcvt.s.w fa1, t1      # fa1 = 4.0
+    li   t2, 5
+    fcvt.s.w fa2, t2      # fa2 = 5.0
+
+    fadd.s fa3, fa0, fa1  # fa3 = 3.0 + 4.0 = 7.0
+    fmul.s fa3, fa3, fa2  # fa3 = 7.0 * 5.0 = 35.0
+
+    # Quan sát bit pattern IEEE-754 ở thanh ghi nguyên
+    fmv.x.w t3, fa3       # t3 = 0x420C0000 (= 35.0f)
+
+    # Đổi về số nguyên rồi in (xem tab Floating Point cho giá trị thực)
+    fcvt.w.s a0, fa3      # a0 = 35
+    li   a7, 1            # PrintInt
+    ecall
+
+    li   a0, 0
+    li   a7, 93           # Exit
+    ecall</template>
+
+                            <template id="helpSampleFactorial">.text 0x00400000
+.globl _start
+_start:
+    li   t0, 5           # N = 5
+    li   a0, 1           # kết quả = 1
+    li   t1, 1           # i = 1
+
+fact_loop:
+    blt  t0, t1, fact_done   # i > N thì dừng
+    mul  a0, a0, t1          # kết quả *= i
+    addi t1, t1, 1           # i++
+    j    fact_loop
+
+fact_done:
+    li   a7, 1           # PrintInt -> in 120 (=5!)
+    ecall
+
+    li   a0, 0
+    li   a7, 93          # Exit
+    ecall</template>
+
                         </section>
 
                         <div class="help-empty-state" id="helpEmptyState" hidden>
@@ -1780,24 +2247,29 @@ _start:
                 <span id="logStats" class="log-stats">Rendered: 0 / Match: 0 / Total: 0</span>
             </div>
             <div class="log-actions">
-                <button id="logExportBtn" class="mdc-button mdc-button--outlined log-btn">
+                <button id="logExportBtn" class="mdc-button mdc-button--outlined log-btn"
+                    title="Xuất log ra file .txt" aria-label="Xuất nhật ký hệ thống ra file văn bản">
                     <span class="mdc-button__label">Export</span>
                 </button>
-                <button id="logClearBtn" class="mdc-button mdc-button--outlined log-btn">
+                <button id="logClearBtn" class="mdc-button mdc-button--outlined log-btn"
+                    title="Xóa toàn bộ log" aria-label="Xóa toàn bộ nhật ký hệ thống">
                     <span class="mdc-button__label">Clear</span>
                 </button>
                 <button id="logToggleBtn" class="mdc-icon-button material-icons"
-                    aria-label="Toggle Console">expand_more</button>
+                    title="Mở rộng/thu gọn bảng log"
+                    aria-label="Mở rộng hoặc thu gọn bảng nhật ký">expand_more</button>
             </div>
         </div>
         <div class="log-filter-bar" aria-label="System log filters">
             <label class="log-search-box" for="logSearchInput">
                 <i class="material-icons" aria-hidden="true">search</i>
-                <input id="logSearchInput" type="search" placeholder="Search logs" autocomplete="off">
+                <input id="logSearchInput" type="search" placeholder="Search logs" autocomplete="off"
+                    title="Tìm trong log theo từ khóa" aria-label="Tìm kiếm trong nhật ký hệ thống">
             </label>
             <label class="log-level-box" for="logLevelFilter">
                 <span>Level</span>
-                <select id="logLevelFilter">
+                <select id="logLevelFilter" title="Lọc log theo mức (All/Log/Info/Warn/Error)"
+                    aria-label="Lọc nhật ký theo mức nghiêm trọng">
                     <option value="all">All</option>
                     <option value="log">Log</option>
                     <option value="info">Info</option>

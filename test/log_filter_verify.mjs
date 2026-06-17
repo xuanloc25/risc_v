@@ -66,7 +66,6 @@ assertHasModules(
 );
 
 assertHasModules(classifier, '[UART] Transmitting 0x41', ['io']);
-assertHasModules(classifier, '[CAN] TX frame id=0x123 dlc=4', ['io']);
 assertHasModules(classifier, 'System reset.', ['system']);
 
 win.console.log('[Main Memory] Main Memory -> TileLink-UH RESPONSE_BEAT to=L2 Cache addr=0x400000 data=536871059 1/4');

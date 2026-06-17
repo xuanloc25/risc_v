@@ -16,7 +16,7 @@ Các đóng góp chính của khóa luận gồm: (1) một trình mô phỏng S
 
 > *Ghi chú: Phần Abstract tiếng Anh dưới đây được cung cấp như một lựa chọn để đưa vào báo cáo nếu Khoa yêu cầu; nội dung giữ đúng phạm vi và cách diễn đạt trung thực như bản tiếng Việt.*
 
-## ABSTRACT *(tùy chọn — nếu Khoa yêu cầu)*
+## ABSTRACT
 
 Computer architecture and System-on-Chip (SoC) design are foundational yet relatively abstract topics in Computer Engineering education. A real computing system is the coordination of several components — a processor core, the memory hierarchy, a memory management unit, an interconnect, a Direct Memory Access (DMA) controller and peripheral devices — whose internal mechanisms, such as virtual-to-physical address translation, cache behaviour, bus transactions and DMA data flow, are hard to observe directly and are not made visible by instruction-level execution alone. A survey of existing tools reveals a gap: web-based tools such as the RISC-V Interpreter and WebRISC-V are accessible but limited to the processor core; Ripes excels at micro-architectural visualization but offers limited customization of the system bus and DMA; Spike is accurate but command-line only and not visual; and a closely related prior thesis approached SoC simulation for RISC-V but was limited to the base RV32I instruction set with atomic operations and a small set of peripherals.
 

@@ -800,6 +800,35 @@ if (logContent) {
 // --- HÀM QUẢN LÝ VIEW ---
 
 /* Hàm chuyển đổi hiển thị bảng thanh ghi (Tabs Logic) */
+/* Cập nhật trạng thái 1 tab: class active + ARIA aria-selected + roving tabindex. */
+function setTabState(node, active) {
+    if (!node) return;
+    node.classList.toggle('active', active);
+    if (node.getAttribute('role') === 'tab') {
+        node.setAttribute('aria-selected', active ? 'true' : 'false');
+        node.tabIndex = active ? 0 : -1;
+    }
+}
+
+/* Điều hướng tablist bằng phím mũi tên / Home / End (theo mẫu WAI-ARIA tabs). */
+function setupTablistKeyboard(tablist) {
+    if (!tablist) return;
+    tablist.addEventListener('keydown', (e) => {
+        const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+        if (!tabs.length) return;
+        const current = tabs.indexOf(document.activeElement);
+        let next = null;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (current + 1) % tabs.length;
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (current - 1 + tabs.length) % tabs.length;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = tabs.length - 1;
+        else return;
+        e.preventDefault();
+        const target = tabs[next];
+        if (target) { target.focus(); target.click(); }
+    });
+}
+
 function setRegisterView(view) {
     const isInteger = view === 'integer';
     currentRegisterView = view;
@@ -808,15 +837,9 @@ function setRegisterView(view) {
     if (registerTableContainer) registerTableContainer.style.display = isInteger ? 'block' : 'none';
     if (fpRegisterTableContainer) fpRegisterTableContainer.style.display = isInteger ? 'none' : 'block';
 
-    // 2. Cập nhật trạng thái Active cho Tab
-    if (tabInteger) {
-        if (isInteger) tabInteger.classList.add('active');
-        else tabInteger.classList.remove('active');
-    }
-    if (tabFp) {
-        if (!isInteger) tabFp.classList.add('active');
-        else tabFp.classList.remove('active');
-    }
+    // 2. Cập nhật trạng thái Active + ARIA cho Tab
+    setTabState(tabInteger, isInteger);
+    setTabState(tabFp, !isInteger);
 }
 
 /* Tạo marker breakpoint (dấu chấm đỏ) */
@@ -825,6 +848,28 @@ function makeBreakpointMarker() {
     marker.style.color = "#e52d2d";
     marker.innerHTML = "●";
     return marker;
+}
+
+/* Placeholder mờ cho CodeMirror khi nội dung trống (mô phỏng addon display/placeholder). */
+function setupEditorPlaceholder(cm, text) {
+    if (!cm || !cm.display || !cm.display.lineSpace) return;
+    const el = document.createElement("pre");
+    el.className = "CodeMirror-placeholder CodeMirror-line-like";
+    el.textContent = text;
+    let shown = false;
+    const isEmpty = () => cm.lineCount() === 1 && cm.getLine(0) === "";
+    const sync = () => {
+        const empty = isEmpty();
+        if (empty && !shown) {
+            cm.display.lineSpace.insertBefore(el, cm.display.lineSpace.firstChild);
+            shown = true;
+        } else if (!empty && shown) {
+            if (el.parentNode) el.parentNode.removeChild(el);
+            shown = false;
+        }
+    };
+    cm.on("changes", sync);
+    sync();
 }
 
 /* Cập nhật input địa chỉ data */
@@ -841,6 +886,20 @@ const abiNames = [
     'a6', 'a7', 's2', 's3', 's4', 's5', 's6', 's7',
     's8', 's9', 's10', 's11', 't3', 't4', 't5', 't6'
 ];
+
+// Mô tả ngắn từng thanh ghi (theo thứ tự x0..x31) để hiện tooltip trong bảng Registers.
+const abiDescriptions = [
+    'Hằng số 0 (luôn bằng 0)', 'Địa chỉ trả về (return address)', 'Con trỏ ngăn xếp (stack pointer)', 'Con trỏ toàn cục (global pointer)',
+    'Con trỏ luồng (thread pointer)', 'Thanh ghi tạm (temporary)', 'Thanh ghi tạm (temporary)', 'Thanh ghi tạm (temporary)',
+    'Thanh ghi lưu / con trỏ khung (frame pointer)', 'Thanh ghi lưu (saved register)', 'Tham số / giá trị trả về', 'Tham số / giá trị trả về',
+    'Tham số (argument register)', 'Tham số (argument register)', 'Tham số (argument register)', 'Tham số (argument register)',
+    'Tham số (argument register)', 'Tham số / mã syscall', 'Thanh ghi lưu (saved register)', 'Thanh ghi lưu (saved register)',
+    'Thanh ghi lưu (saved register)', 'Thanh ghi lưu (saved register)', 'Thanh ghi lưu (saved register)', 'Thanh ghi lưu (saved register)',
+    'Thanh ghi lưu (saved register)', 'Thanh ghi lưu (saved register)', 'Thanh ghi lưu (saved register)', 'Thanh ghi lưu (saved register)',
+    'Thanh ghi tạm (temporary)', 'Thanh ghi tạm (temporary)', 'Thanh ghi tạm (temporary)', 'Thanh ghi tạm (temporary)'
+];
+const PC_DESCRIPTION = 'Bộ đếm chương trình (program counter) - địa chỉ lệnh đang thực thi';
+const FP_DESCRIPTION = 'Thanh ghi dấu phẩy động f0-f31 (FPU): lưu số thực 32/64-bit, gồm các nhóm ft (tạm), fs (lưu), fa (tham số/giá trị trả về) theo quy ước ABI';
 
 const fpAbiNames = [
     'ft0', 'ft1', 'ft2', 'ft3', 'ft4', 'ft5', 'ft6', 'ft7',
@@ -865,13 +924,17 @@ function initializeRegisterTable() {
     for (let i = 0; i < 32; i++) {
         const row = registerTableBody.insertRow();
         row.id = `reg-${i}`;
-        row.insertCell().textContent = `x${i} (${abiNames[i]})`;
+        const nameCell = row.insertCell();
+        nameCell.textContent = `x${i} (${abiNames[i]})`;
+        nameCell.title = abiDescriptions[i] || '';
         row.insertCell().textContent = '0x00000000';
         row.insertCell().textContent = '0';
     }
     const pcRow = registerTableBody.insertRow();
     pcRow.id = 'reg-pc';
-    pcRow.insertCell().textContent = 'PC';
+    const pcCell = pcRow.insertCell();
+    pcCell.textContent = 'PC';
+    pcCell.title = PC_DESCRIPTION;
     pcRow.insertCell().textContent = '0x00000000';
     pcRow.insertCell().textContent = '0';
 }
@@ -882,7 +945,9 @@ function initializeFPRegisterTable() {
     for (let i = 0; i < 32; i++) {
         const row = fpRegisterTableBody.insertRow();
         row.id = `freg-${i}`;
-        row.insertCell().textContent = `f${i} (${fpAbiNames[i] || '?'})`;
+        const fpNameCell = row.insertCell();
+        fpNameCell.textContent = `f${i} (${fpAbiNames[i] || '?'})`;
+        fpNameCell.title = FP_DESCRIPTION;
         row.insertCell().textContent = '0.0';
         row.insertCell().textContent = '0x00000000';
     }
@@ -1481,7 +1546,7 @@ function setCacheView(view) {
         { node: cacheTabL1d, active: view === 'l1d' },
         { node: cacheTabL2, active: view === 'l2' }
     ];
-    tabs.forEach(({ node, active }) => node?.classList.toggle('active', active));
+    tabs.forEach(({ node, active }) => setTabState(node, active));
 
     cachePanelL1i?.classList.toggle('active-cache-panel', view === 'l1i');
     cachePanelL1d?.classList.toggle('active-cache-panel', view === 'l1d');
@@ -1491,6 +1556,7 @@ function setCacheView(view) {
 if (cacheTabL1i) cacheTabL1i.addEventListener('click', () => setCacheView('l1i'));
 if (cacheTabL1d) cacheTabL1d.addEventListener('click', () => setCacheView('l1d'));
 if (cacheTabL2) cacheTabL2.addEventListener('click', () => setCacheView('l2'));
+setupTablistKeyboard(cacheTabL1i?.parentElement);
 setCacheView(currentCacheView);
 
 window.updateUIGlobally = updateUIGlobally;
@@ -1905,6 +1971,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     configureRiscvEditorHints(instructionInput, { assembler });
 
+    // Placeholder mờ "Enter your code here" khi editor trống (tự ẩn khi gõ).
+    setupEditorPlaceholder(instructionInput, "Enter your code here");
+
     instructionInput.on("gutterClick", function (cm, n) {
         const lineNumber = n + 1;
         const info = cm.lineInfo(n);
@@ -1921,6 +1990,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tabInteger && tabFp) {
         tabInteger.addEventListener('click', () => setRegisterView('integer'));
         tabFp.addEventListener('click', () => setRegisterView('fp'));
+        setupTablistKeyboard(tabInteger.parentElement);
     }
 
     toggleDataSegmentModeButton?.addEventListener('click', () => {
@@ -2091,6 +2161,77 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => instructionInput.refresh(), 10);
         });
     });
+
+    // Gắn nút Copy vào mọi code block hiển thị trong Help (idempotent, dùng event delegation).
+    const setupHelpCopyButtons = () => {
+        const helpRoot = document.getElementById('helpContent');
+        if (!helpRoot) return;
+
+        helpRoot.querySelectorAll('pre.help-code').forEach((pre) => {
+            if (pre.dataset.copyReady === '1') return;
+            pre.dataset.copyReady = '1';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'help-copy-btn';
+            btn.setAttribute('aria-label', 'Sao chép đoạn mã');
+            btn.innerHTML = '<i class="material-icons">content_copy</i><span>Chép</span>';
+            pre.appendChild(btn);
+        });
+
+        if (helpRoot.dataset.copyDelegated === '1') return;
+        helpRoot.dataset.copyDelegated = '1';
+
+        helpRoot.addEventListener('click', (event) => {
+            const btn = event.target.closest('.help-copy-btn');
+            if (!btn || !helpRoot.contains(btn)) return;
+            const pre = btn.closest('pre.help-code');
+            if (!pre) return;
+            const codeEl = pre.querySelector('code') || pre;
+            const text = (codeEl.innerText || codeEl.textContent || '').replace(/\s+$/, '');
+
+            const markCopied = (ok) => {
+                const span = btn.querySelector('span');
+                const icon = btn.querySelector('i');
+                btn.classList.add('is-copied');
+                if (span) span.textContent = ok ? 'Đã chép' : 'Lỗi';
+                if (icon) icon.textContent = ok ? 'check' : 'error_outline';
+                clearTimeout(btn._copyTimer);
+                btn._copyTimer = setTimeout(() => {
+                    btn.classList.remove('is-copied');
+                    if (span) span.textContent = 'Chép';
+                    if (icon) icon.textContent = 'content_copy';
+                }, 1600);
+            };
+
+            const legacyCopy = (str) => {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = str;
+                    ta.style.position = 'fixed';
+                    ta.style.top = '-1000px';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    return ok;
+                } catch (e) {
+                    return false;
+                }
+            };
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text)
+                    .then(() => markCopied(true))
+                    .catch(() => markCopied(legacyCopy(text)));
+            } else {
+                markCopied(legacyCopy(text));
+            }
+        });
+    };
+
+    setupHelpCopyButtons();
 
     // Hiển thị tọa độ chuột trên LED Matrix Canvas và bơm vào peripheral mouse (MMIO)
     const ledCanvas = document.getElementById('ledMatrixCanvas');
