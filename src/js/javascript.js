@@ -1860,6 +1860,23 @@ function handleRun() {
         return;
     }
 
+    // Guard: a program must be assembled and loaded before it can run. Without
+    // assembling, the CPU stays halted (cpu.isRunning === false), so the run
+    // loop would exit on its first tick with no visible output — a silent
+    // "Running" that never produces a result. Surface a clear message instead.
+    if (!assembler || assembler.binaryCode.length === 0) {
+        if (binaryOutput) {
+            binaryOutput.textContent += '\n(No program loaded. Please click "Assemble" first, then Run.)';
+        }
+        return;
+    }
+    if (!simulator.cpu.isRunning) {
+        if (binaryOutput) {
+            binaryOutput.textContent += '\n(Program has already finished. Click "Assemble" to reload it before running again.)';
+        }
+        return;
+    }
+
     runState.programOutputStarted = false;
     binaryOutput.textContent += "\n\n--- Running ---\n";
 
