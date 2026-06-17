@@ -41,7 +41,6 @@ const LINK_COMPONENTS = {
     uhToUlBridge: { src: 'TileLink-UH', dst: 'Bridge (UH->UL)' },
     ulToUhBridge: { src: 'TileLink-UL', dst: 'Bridge (UL->UH)' },
     ulToUart: { src: 'TileLink-UL', dst: 'UART' },
-    ulToCan: { src: 'TileLink-UL', dst: 'CAN Controller' },
     ulToLedMatrix: { src: 'TileLink-UL', dst: 'LED Matrix' },
     ulToKeyboard: { src: 'TileLink-UL', dst: 'Keyboard' },
     ulToMouse: { src: 'TileLink-UL', dst: 'Mouse' },
@@ -241,7 +240,6 @@ function traceDirectLink(details) {
     if (details.slaveName === 'uh-to-ul-bridge') return 'uhToUlBridge';
     if (details.slaveName === 'ul-to-uh-bridge') return 'ulToUhBridge';
     if (details.slaveName === 'UART') return 'ulToUart';
-    if (details.slaveName === 'CAN Controller') return 'ulToCan';
     if (details.slaveName === 'LED Matrix') return 'ulToLedMatrix';
     if (details.slaveName === 'Keyboard') return 'ulToKeyboard';
     if (details.slaveName === 'Mouse') return 'ulToMouse';
@@ -255,7 +253,6 @@ function traceEndpointLink(name) {
     if (name === 'uh-to-ul-bridge') return 'uhToUlBridge';
     if (name === 'ul-to-uh-bridge') return 'ulToUhBridge';
     if (name === 'UART') return 'ulToUart';
-    if (name === 'CAN Controller') return 'ulToCan';
     if (name === 'LED Matrix') return 'ulToLedMatrix';
     if (name === 'Keyboard') return 'ulToKeyboard';
     if (name === 'Mouse') return 'ulToMouse';

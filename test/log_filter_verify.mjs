@@ -66,6 +66,7 @@ assertHasModules(
 );
 
 assertHasModules(classifier, '[UART] Transmitting 0x41', ['io']);
+assertHasModules(classifier, '[CAN] TX frame id=0x123 dlc=4', ['io']);
 assertHasModules(classifier, 'System reset.', ['system']);
 
 win.console.log('[Main Memory] Main Memory -> TileLink-UH RESPONSE_BEAT to=L2 Cache addr=0x400000 data=536871059 1/4');
@@ -105,5 +106,9 @@ assert.equal(cappedStats.dropped, 1);
 assert.equal(cappedSnapshot[0].text, 'line 1');
 assert.equal(cappedSnapshot[cappedSnapshot.length - 1].text, `line ${maxStoredLines}`);
 assert.match(cappedWin.__systemLogStore.dropNotice(), /Dropped 1 oldest log line/);
+const cappedExport = cappedWin.__systemLogStore.exportText();
+assert.ok(cappedExport.startsWith('[SYSTEM LOG] Dropped 1 oldest log line(s);'));
+assert.ok(cappedExport.endsWith(`line ${maxStoredLines}\n`));
+assert.equal(cappedExport.split('\n').length - 1, maxStoredLines + 1);
 
 console.log('System log filter verification passed.');

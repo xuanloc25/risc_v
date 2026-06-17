@@ -47,7 +47,7 @@
         if (/\btilelink(?:-[a-z]+)?\b/i.test(normalized)) modules.add('tilelink');
         if (/\bdma\b/i.test(normalized)) modules.add('dma');
         if (/\bmain memory\b/i.test(normalized)) modules.add('memory');
-        if (/\b(?:uart|keyboard|mouse)\b/i.test(normalized) || lowerText.includes('led matrix') || lowerText.includes('io map')) modules.add('io');
+        if (/\b(?:uart|can|keyboard|mouse)\b/i.test(normalized) || lowerText.includes('led matrix') || lowerText.includes('io map')) modules.add('io');
     }
 
     function inferLogModules(text) {
@@ -191,7 +191,7 @@
             const lines = orderedHistory().map((entry) => entry.text);
             const notice = getDropNotice();
             if (notice) lines.unshift(notice);
-            return lines.join('\n');
+            return lines.length > 0 ? `${lines.join('\n')}\n` : '';
         },
         appendRaw(level, text, options = {}) {
             return appendRaw(level, text, options);

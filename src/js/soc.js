@@ -7,7 +7,6 @@ import { TileLink_UL } from './tilelink_UL.js';
 import { DMAController } from './dma.js';
 import { TileLinkBridge } from './tilelink_bridge.js';
 import { UART } from './uart.js';
-import { CANController } from './can.js';
 import { LEDMatrix } from './led_matrix.js';
 import { Keyboard } from './keyboard.js';
 import { MousePeripheral } from './mouse.js';
@@ -26,8 +25,6 @@ import {
 const LED_BASE_ADDRESS = 0xFF000000;
 const LED_SIZE_BYTES = 32 * 32 * 4;
 const UART_BASE_ADDRESS = 0x10000000;
-const CAN_BASE_ADDRESS = 0xFF200000;
-const CAN_SIZE_BYTES = 0x100;
 const MOUSE_BASE_ADDRESS = 0xFF100000;
 const KEYBOARD_BASE_ADDRESS = 0xFFFF0000;
 const DMA_REG_BASE_ADDRESS = 0xFFED0000;
@@ -45,7 +42,6 @@ const LINK_COMPONENTS = {
     uhToUlBridge: { src: 'TileLink-UH', dst: 'Bridge (UH->UL)' },
     ulToUhBridge: { src: 'TileLink-UL', dst: 'Bridge (UL->UH)' },
     ulToUart: { src: 'TileLink-UL', dst: 'UART' },
-    ulToCan: { src: 'TileLink-UL', dst: 'CAN Controller' },
     ulToLedMatrix: { src: 'TileLink-UL', dst: 'LED Matrix' },
     ulToKeyboard: { src: 'TileLink-UL', dst: 'Keyboard' },
     ulToMouse: { src: 'TileLink-UL', dst: 'Mouse' },
@@ -132,7 +128,6 @@ export const simulator = {
     uhToUlBridge: null,
     ulToUhBridge: null,
     uart: null,
-    can: null,
     ledMatrix: null,
     keyboard: null,
     mouse: null,
@@ -159,14 +154,12 @@ export const simulator = {
         const isBrowser = typeof document !== 'undefined';
 
         const uartRange = (addr) => inRange(addr, UART_BASE_ADDRESS, 0x14);
-        const canRange = (addr) => inRange(addr, CAN_BASE_ADDRESS, CAN_SIZE_BYTES);
         const ledRange = (addr) => inRange(addr, LED_BASE_ADDRESS, LED_SIZE_BYTES);
         const keyboardRange = (addr) => inRange(addr, KEYBOARD_BASE_ADDRESS, 0x08);
         const mouseRange = (addr) => inRange(addr, MOUSE_BASE_ADDRESS, 0x14);
         const dmaRegRange = (addr) => inRange(addr, DMA_REG_BASE_ADDRESS, 0x08);
         const isUlPeripheralAddress = (addr) =>
             uartRange(addr) ||
-            canRange(addr) ||
             ledRange(addr) ||
             keyboardRange(addr) ||
             mouseRange(addr);
@@ -177,10 +170,10 @@ export const simulator = {
         // CPU
         this.cpu = new CPU();
 
-        // MMU — cấu hình cố định: trang 4 KB, TLB 8 entry fully associative (LRU).
+        // MMU — cấu hình cố định: trang 4 KB, TLB 16 entry fully associative (LRU).
         this.mmu = new MMU(null, null, {
             pageSize: 4096,
-            tlbSize: 8,
+            tlbSize: 16,
             tlbWays: 'fully',
             cacheabilityPredicate: isCacheableAddress
         });
@@ -245,7 +238,6 @@ export const simulator = {
         // IO
         this.ledMatrix = isBrowser ? new LEDMatrix('ledMatrixCanvas', 32, 32, LED_BASE_ADDRESS) : null;
         this.uart = new UART(UART_BASE_ADDRESS);
-        this.can = new CANController(CAN_BASE_ADDRESS);
         this.keyboard = new Keyboard(KEYBOARD_BASE_ADDRESS);
         this.mouse = new MousePeripheral(MOUSE_BASE_ADDRESS);
         this.cycleCount = 0;
@@ -287,11 +279,6 @@ export const simulator = {
             }
         });
 
-        const canEndpoint = createMMIOEndpoint(this.tilelink_UL, 'CAN Controller', {
-            read: (addr) => this.can.readRegister(addr),
-            write: (addr, value) => this.can.writeRegister(addr, value)
-        });
-
         const ledEndpoint = createMMIOEndpoint(this.tilelink_UL, 'LED Matrix', {
             read: () => 0,
             write: (addr, value) => {
@@ -327,7 +314,6 @@ export const simulator = {
             uhToDma: attachPort(this.tilelink_UH, Port.upper('dma', this.dma)),
             uhMemoryView: attachPort(this.tilelink_UH, Port.memory('main-memory-view', this.mem)),
             ulToUart: attachPort(this.tilelink_UL, Port.lower('UART', uartEndpoint, uartRange)),
-            ulToCan: attachPort(this.tilelink_UL, Port.lower('CAN Controller', canEndpoint, canRange)),
             ulToLedMatrix: attachPort(this.tilelink_UL, Port.lower('LED Matrix', ledEndpoint, ledRange)),
             ulToKeyboard: attachPort(this.tilelink_UL, Port.lower('Keyboard', keyboardEndpoint, keyboardRange)),
             ulToMouse: attachPort(this.tilelink_UL, Port.lower('Mouse', mouseEndpoint, mouseRange)),
@@ -344,7 +330,6 @@ export const simulator = {
         console.info('[ARCH] TileLink-UH <-> TileLink-UL; DMA Controller attached to both links');
         console.info('[IO MAP] LED Matrix: 0xFF000000-0xFF000FFF');
         console.info('[IO MAP] Mouse:      0xFF100000-0xFF100013');
-        console.info('[IO MAP] CAN:        0xFF200000-0xFF2000FF');
         console.info('[IO MAP] UART:       0x10000000-0x10000013');
         console.info('[IO MAP] Keyboard:   0xFFFF0000-0xFFFF0007');
         console.info('[IO MAP] DMA Regs:   0xFFED0000-0xFFED0007');

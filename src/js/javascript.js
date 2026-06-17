@@ -7,13 +7,6 @@ import { simulator } from './soc.js';
 import './soc_trace.js'; // gắn lớp trace/animation lên simulator (không sửa soc.js)
 import { configureRiscvEditorHints } from './editor_hint.js';
 import { SOC_NODES, renderSocDiagram, updateSocTraceHighlights } from './soc_diagram.js';
-import {
-    CAN_CMD_BITS,
-    CAN_CTRL_BITS,
-    CAN_DEFAULT_BASE_ADDRESS,
-    CAN_REGISTERS,
-    CAN_STATUS_BITS
-} from './can.js';
 
 // --- Cấu hình cú pháp RISC-V cho CodeMirror ---
 // Mnemonic và directive được build động từ nguồn chuẩn (OPCODES trong isa.js,
@@ -119,11 +112,6 @@ const runState = {
     programOutputStarted: false
 };
 
-let canLastTxFrame = null;
-let canBoundController = null;
-let canUiMessage = '';
-let canUiMessageKind = '';
-
 // --- SYSTEM LOG TERMINAL LOGIC ---
 const logContent = document.getElementById('logContent');
 const logToggleBtn = document.getElementById('logToggleBtn');
@@ -146,11 +134,18 @@ const systemLogStore = window.__systemLogStore || {
     dropNotice: () => ''
 };
 
-let pendingLogEntries = [];
 let isAutoScrollPaused = false;
-let logFlushScheduled = false;
-const MAX_DOM_LINES = 50000;
-const MAX_LOGS_PER_FRAME = 500;
+let virtualLogEntries = [];
+let virtualLogSpacer = null;
+let virtualLogItems = null;
+let virtualLogRenderScheduled = false;
+let virtualLogForceRender = false;
+let virtualLogStickToBottom = false;
+let virtualLogStart = 0;
+let virtualLogEnd = 0;
+const LOG_ROW_HEIGHT = 18;
+const LOG_VERTICAL_PADDING = 10;
+const LOG_OVERSCAN_ROWS = 16;
 // Per-cycle trace live rendering is throttled for performance: captured raw
 // logs stop notifying the UI above this speed, or when the Systems Log panel is
 // collapsed. Single-step always renders live. See soc.js tick().
@@ -257,7 +252,7 @@ function fallbackInferLogModules(text) {
     const modules = new Set();
 
     if (firstTag.includes('soc') || firstTag.includes('arch') || firstTag.includes('ui') || firstTag.includes('syscall')) modules.add('system');
-    if (firstTag.includes('io map') || firstTag.includes('uart') || firstTag.includes('can') || firstTag.includes('keyboard') || firstTag.includes('mouse')) modules.add('io');
+    if (firstTag.includes('io map') || firstTag.includes('uart') || firstTag.includes('keyboard') || firstTag.includes('mouse')) modules.add('io');
     if (firstTag.includes('cpu') || firstTag.startsWith('cycle ')) modules.add('cpu');
     if (firstTag.includes('mmu')) modules.add('mmu');
     if (firstTag.includes('cache') || /\bl[12][id]?\s+cache\b/i.test(firstTag)) modules.add('cache');
@@ -283,7 +278,7 @@ function fallbackInferLogModules(text) {
     if (/\btilelink(?:-[a-z]+)?\b/i.test(rawText)) modules.add('tilelink');
     if (/\bdma\b/i.test(rawText)) modules.add('dma');
     if (/\bmain memory\b/i.test(rawText)) modules.add('memory');
-    if (/\b(?:uart|keyboard|mouse)\b/i.test(rawText) || /\bcan controller\b/i.test(rawText) || lowerText.includes('led matrix') || lowerText.includes('io map')) modules.add('io');
+    if (/\b(?:uart|keyboard|mouse)\b/i.test(rawText) || lowerText.includes('led matrix') || lowerText.includes('io map')) modules.add('io');
 
     if (modules.size === 0) modules.add('other');
     return modules;
@@ -344,7 +339,7 @@ function exportLogEntries(entries) {
         ? systemLogStore.dropNotice()
         : '';
     if (notice) lines.unshift(notice);
-    return lines.join('\n');
+    return lines.length > 0 ? `${lines.join('\n')}\n` : '';
 }
 
 function saveLogFilters() {
@@ -405,7 +400,7 @@ function resetLogFilters() {
 function keepLogScrolledToBottom() {
     if (!logContent || isAutoScrollPaused) return;
     window.requestAnimationFrame(() => {
-        logContent.scrollTop = logContent.scrollHeight;
+        scrollLogToBottom();
     });
 }
 
@@ -414,8 +409,12 @@ function setLogExpanded(expanded) {
     systemLogTerminal.classList.toggle('expanded', expanded);
     if (logToggleBtn) logToggleBtn.setAttribute('aria-expanded', String(expanded));
     if (expanded) {
-        renderFilteredLogSnapshot();
-        keepLogScrolledToBottom();
+        if (logSnapshotDirty || (virtualLogEntries.length === 0 && systemLogStore.size() > 0)) {
+            renderFilteredLogSnapshot();
+        } else {
+            scheduleVirtualLogRender({ force: true });
+            keepLogScrolledToBottom();
+        }
     }
 }
 
@@ -446,7 +445,7 @@ function getSystemLogStats() {
 
 function updateLogStats() {
     if (!logStats) return;
-    const visibleCount = logContent ? logContent.childElementCount : 0;
+    const renderedCount = getRenderedLogLineCount();
     const stats = getSystemLogStats();
     const matchingCount = isLogFilterActive()
         ? (logSnapshotDirty ? '...' : Math.min(currentMatchingLogCount, stats.stored))
@@ -454,7 +453,8 @@ function updateLogStats() {
     const storageText = stats.dropped > 0
         ? `Stored: ${stats.stored} / Dropped: ${stats.dropped}`
         : `Total: ${stats.stored}`;
-    logStats.textContent = `Visible: ${visibleCount} / Match: ${matchingCount} / ${storageText}`;
+    logStats.textContent = `Rendered: ${renderedCount} / Match: ${matchingCount} / ${storageText}`;
+    logStats.title = 'Rendered is the number of virtualized log rows currently mounted in the console; Match/Total are the log counts.';
 }
 
 function createLogLine(entry) {
@@ -476,62 +476,145 @@ function createLogLine(entry) {
     return line;
 }
 
-function trimLogDom() {
-    if (!logContent) return;
-    while (logContent.childElementCount > MAX_DOM_LINES) {
-        logContent.removeChild(logContent.firstElementChild);
+function ensureVirtualLogNodes() {
+    if (!logContent) return false;
+    if (virtualLogSpacer && virtualLogItems && virtualLogSpacer.isConnected && virtualLogItems.isConnected) {
+        return true;
     }
+
+    logContent.textContent = '';
+    virtualLogSpacer = document.createElement('div');
+    virtualLogSpacer.className = 'log-virtual-spacer';
+    virtualLogItems = document.createElement('div');
+    virtualLogItems.className = 'log-virtual-items';
+    logContent.append(virtualLogSpacer, virtualLogItems);
+    return true;
+}
+
+function getVirtualLogTotalHeight() {
+    return virtualLogEntries.length * LOG_ROW_HEIGHT;
+}
+
+function updateVirtualLogSpacer() {
+    if (!ensureVirtualLogNodes()) return;
+    virtualLogSpacer.style.height = `${getVirtualLogTotalHeight()}px`;
+}
+
+function isLogScrolledToBottom() {
+    if (!logContent) return true;
+    return Math.abs((logContent.scrollHeight - logContent.scrollTop) - logContent.clientHeight) < 10;
+}
+
+function scrollLogToBottom() {
+    if (!logContent) return;
+    logContent.scrollTop = Math.max(0, logContent.scrollHeight - logContent.clientHeight);
+}
+
+function getRenderedLogLineCount() {
+    return Math.max(0, virtualLogEnd - virtualLogStart);
+}
+
+function renderVirtualLogViewport(force = false) {
+    if (!ensureVirtualLogNodes()) return;
+
+    const total = virtualLogEntries.length;
+    if (total === 0) {
+        virtualLogItems.textContent = '';
+        virtualLogItems.style.transform = 'translateY(0px)';
+        virtualLogStart = 0;
+        virtualLogEnd = 0;
+        updateLogStats();
+        return;
+    }
+
+    const viewportHeight = Math.max(LOG_ROW_HEIGHT, logContent.clientHeight - LOG_VERTICAL_PADDING * 2);
+    const scrollTop = Math.max(0, logContent.scrollTop - LOG_VERTICAL_PADDING);
+    const firstVisibleRow = Math.floor(scrollTop / LOG_ROW_HEIGHT);
+    const visibleRows = Math.ceil(viewportHeight / LOG_ROW_HEIGHT);
+    const nextStart = Math.max(0, firstVisibleRow - LOG_OVERSCAN_ROWS);
+    const nextEnd = Math.min(total, firstVisibleRow + visibleRows + LOG_OVERSCAN_ROWS);
+
+    if (!force && nextStart === virtualLogStart && nextEnd === virtualLogEnd) {
+        updateLogStats();
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (let index = nextStart; index < nextEnd; index++) {
+        const line = createLogLine(virtualLogEntries[index]);
+        line.dataset.logIndex = String(index);
+        fragment.appendChild(line);
+    }
+
+    virtualLogItems.textContent = '';
+    virtualLogItems.style.transform = `translateY(${nextStart * LOG_ROW_HEIGHT}px)`;
+    virtualLogItems.appendChild(fragment);
+    virtualLogStart = nextStart;
+    virtualLogEnd = nextEnd;
     updateLogStats();
 }
 
-function flushPendingLogs() {
-    logFlushScheduled = false;
-    if (!logContent || pendingLogEntries.length === 0) return;
+function scheduleVirtualLogRender({ force = false, stickToBottom = false } = {}) {
+    if (!logContent) return;
+    virtualLogForceRender = virtualLogForceRender || force;
+    virtualLogStickToBottom = virtualLogStickToBottom || stickToBottom;
+    if (virtualLogRenderScheduled) return;
+    virtualLogRenderScheduled = true;
 
-    const fragment = document.createDocumentFragment();
-    const batch = pendingLogEntries.splice(0, MAX_LOGS_PER_FRAME);
-    batch.forEach((entry) => fragment.appendChild(createLogLine(entry)));
-    logContent.appendChild(fragment);
+    window.requestAnimationFrame(() => {
+        virtualLogRenderScheduled = false;
+        const shouldForce = virtualLogForceRender;
+        const shouldStickToBottom = virtualLogStickToBottom;
+        virtualLogForceRender = false;
+        virtualLogStickToBottom = false;
 
-    trimLogDom();
-
-    if (!isAutoScrollPaused) {
-        logContent.scrollTop = logContent.scrollHeight;
-    }
-
-    if (pendingLogEntries.length > 0) {
-        scheduleLogFlush();
-    }
-}
-
-function scheduleLogFlush() {
-    if (logFlushScheduled || !logContent) return;
-    logFlushScheduled = true;
-    window.requestAnimationFrame(flushPendingLogs);
+        updateVirtualLogSpacer();
+        if (shouldStickToBottom) {
+            scrollLogToBottom();
+            isAutoScrollPaused = false;
+        }
+        renderVirtualLogViewport(shouldForce);
+    });
 }
 
 function clearRenderedLogs() {
-    pendingLogEntries = [];
-    logFlushScheduled = false;
-    if (logContent) logContent.textContent = '';
+    virtualLogEntries = [];
+    virtualLogStart = 0;
+    virtualLogEnd = 0;
+    virtualLogRenderScheduled = false;
+    virtualLogForceRender = false;
+    virtualLogStickToBottom = false;
+    if (ensureVirtualLogNodes()) {
+        virtualLogSpacer.style.height = '0px';
+        virtualLogItems.textContent = '';
+        virtualLogItems.style.transform = 'translateY(0px)';
+    }
     updateLogStats();
 }
 
-function queueLogEntries(entries) {
-    if (!logContent || entries.length === 0) return;
-    pendingLogEntries.push(...entries);
-    scheduleLogFlush();
+function setVirtualLogEntries(entries, { stickToBottom = true } = {}) {
+    virtualLogEntries = entries;
+    virtualLogStart = 0;
+    virtualLogEnd = 0;
+    updateVirtualLogSpacer();
+    scheduleVirtualLogRender({ force: true, stickToBottom });
 }
 
-function renderFilteredLogSnapshot() {
+function appendVirtualLogEntry(entry) {
+    if (!logContent) return;
+    const wasAtBottom = !isAutoScrollPaused || isLogScrolledToBottom();
+    virtualLogEntries.push(entry);
+    updateVirtualLogSpacer();
+    scheduleVirtualLogRender({ stickToBottom: wasAtBottom });
+}
+
+function renderFilteredLogSnapshot({ stickToBottom = !isAutoScrollPaused } = {}) {
     const snapshot = systemLogStore.snapshot();
     const filteredEntries = getFilteredLogEntries(snapshot);
     currentMatchingLogCount = filteredEntries.length;
     logSnapshotDirty = false;
-    clearRenderedLogs();
-    queueLogEntries(filteredEntries.slice(-MAX_DOM_LINES));
+    setVirtualLogEntries(filteredEntries, { stickToBottom });
     updateLogStats();
-    keepLogScrolledToBottom();
 }
 
 // Set up UI listeners for terminal
@@ -597,6 +680,7 @@ if (logResizeHandle && systemLogTerminal) {
         event.preventDefault();
         const nextHeight = resizeState.startHeight + (resizeState.startY - event.clientY);
         applyLogHeight(nextHeight);
+        scheduleVirtualLogRender({ force: true });
         keepLogScrolledToBottom();
     };
 
@@ -613,6 +697,7 @@ if (logResizeHandle && systemLogTerminal) {
         if (shouldReleaseCapture) {
             logResizeHandle.releasePointerCapture(event.pointerId);
         }
+        scheduleVirtualLogRender({ force: true });
         keepLogScrolledToBottom();
     };
 
@@ -640,6 +725,7 @@ if (logResizeHandle && systemLogTerminal) {
 
     window.addEventListener('resize', () => {
         applyLogHeight(getCurrentLogHeight(), true);
+        scheduleVirtualLogRender({ force: true });
     });
 }
 
@@ -651,12 +737,14 @@ if (logClearBtn) {
 
 if (logExportBtn) {
     logExportBtn.addEventListener('click', () => {
-        const exportEntries = getFilteredLogEntries(systemLogStore.snapshot());
-        const blob = new Blob([exportLogEntries(exportEntries)], { type: 'text/plain' });
+        const exportText = typeof systemLogStore.exportText === 'function'
+            ? systemLogStore.exportText()
+            : exportLogEntries(systemLogStore.snapshot());
+        const blob = new Blob([exportText], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = isLogFilterActive() ? 'simulator_logs_filtered.txt' : 'simulator_logs.txt';
+        a.download = 'simulator_logs.txt';
         a.click();
         URL.revokeObjectURL(url);
     });
@@ -665,8 +753,8 @@ if (logExportBtn) {
 // Track scrolling to pause auto-scroll
 if (logContent) {
     logContent.addEventListener('scroll', () => {
-        const isAtBottom = Math.abs((logContent.scrollHeight - logContent.scrollTop) - logContent.clientHeight) < 10;
-        isAutoScrollPaused = !isAtBottom;
+        isAutoScrollPaused = !isLogScrolledToBottom();
+        scheduleVirtualLogRender();
     });
 
     logSnapshotDirty = systemLogStore.size() > 0;
@@ -684,11 +772,20 @@ if (logContent) {
             return;
         }
         if (event.type === 'entry') {
+            if (logSnapshotDirty) {
+                if (isSystemLogVisible()) {
+                    renderFilteredLogSnapshot({ stickToBottom: !isAutoScrollPaused || isLogScrolledToBottom() });
+                } else {
+                    updateLogStats();
+                }
+                return;
+            }
+
             if (isSystemLogVisible()) {
-                const matchesFilters = logEntryMatchesFilters(event.entry);
+                const matchesFilters = !isLogFilterActive() || logEntryMatchesFilters(event.entry);
                 if (matchesFilters) {
                     currentMatchingLogCount++;
-                    queueLogEntries([event.entry]);
+                    appendVirtualLogEntry(event.entry);
                 }
             } else {
                 logSnapshotDirty = true;
@@ -945,169 +1042,6 @@ function renderDataSegmentTable() {
     }
 }
 
-function getCANBase(can = simulator?.can) {
-    return (can?.baseAddress ?? CAN_DEFAULT_BASE_ADDRESS) >>> 0;
-}
-
-function formatCANHex(value, pad = 0) {
-    return `0x${(value >>> 0).toString(16).toUpperCase().padStart(pad, '0')}`;
-}
-
-function formatCANByte(value) {
-    return (value & 0xFF).toString(16).toUpperCase().padStart(2, '0');
-}
-
-function formatCANFrame(frame) {
-    if (!frame) return 'No frame';
-    const dlc = Math.max(0, Math.min(8, frame.dlc ?? 0));
-    const data = Array.isArray(frame.data) || ArrayBuffer.isView(frame.data)
-        ? Array.from(frame.data).slice(0, dlc)
-        : [];
-    const payload = data.length > 0 ? data.map(formatCANByte).join(' ') : '(none)';
-    return `STD ID=${formatCANHex(frame.id ?? 0, 3)} DLC=${dlc} DATA=${payload}`;
-}
-
-function setCANMessage(message = '', kind = '') {
-    canUiMessage = message;
-    canUiMessageKind = kind;
-}
-
-function renderCANFrame(container, frame, emptyText) {
-    if (!container) return;
-    container.textContent = frame ? formatCANFrame(frame) : emptyText;
-}
-
-function renderCANView() {
-    const can = simulator?.can;
-    const statusEn = document.getElementById('canStatusEn');
-    const statusLoopback = document.getElementById('canStatusLoopback');
-    const statusTxReady = document.getElementById('canStatusTxReady');
-    const statusRxAvailable = document.getElementById('canStatusRxAvailable');
-    const statusError = document.getElementById('canStatusError');
-    const txFrame = document.getElementById('canTxFrame');
-    const rxMailbox = document.getElementById('canRxMailbox');
-    const injectStatus = document.getElementById('canInjectStatus');
-
-    if (!statusEn && !statusLoopback && !txFrame && !rxMailbox && !injectStatus) return;
-
-    if (!can) {
-        if (statusEn) statusEn.textContent = 'OFF';
-        if (statusLoopback) statusLoopback.textContent = 'OFF';
-        if (statusTxReady) statusTxReady.textContent = 'OFF';
-        if (statusRxAvailable) statusRxAvailable.textContent = 'OFF';
-        if (statusError) statusError.textContent = 'OFF';
-        renderCANFrame(txFrame, null, 'No transmitted frame.');
-        renderCANFrame(rxMailbox, null, 'RX mailbox is empty.');
-        return;
-    }
-
-    const base = getCANBase(can);
-    const ctrl = can.readRegister(base + CAN_REGISTERS.CTRL) >>> 0;
-    const status = can.readRegister(base + CAN_REGISTERS.STATUS) >>> 0;
-    const txReady = (status & CAN_STATUS_BITS.TX_READY) !== 0;
-    const rxAvailable = (status & CAN_STATUS_BITS.RX_AVAILABLE) !== 0;
-    const hasError = (status & CAN_STATUS_BITS.ERROR) !== 0;
-
-    if (statusEn) statusEn.textContent = (ctrl & CAN_CTRL_BITS.EN) ? 'ON' : 'OFF';
-    if (statusLoopback) statusLoopback.textContent = (ctrl & CAN_CTRL_BITS.LOOPBACK) ? 'ON' : 'OFF';
-    if (statusTxReady) statusTxReady.textContent = txReady ? 'ON' : 'OFF';
-    if (statusRxAvailable) statusRxAvailable.textContent = rxAvailable ? 'ON' : 'OFF';
-    if (statusError) statusError.textContent = hasError ? 'ON' : 'OFF';
-
-    renderCANFrame(txFrame, canLastTxFrame, 'No transmitted frame.');
-    renderCANFrame(rxMailbox, can.rxMailbox, 'RX mailbox is empty.');
-
-    if (injectStatus) {
-        injectStatus.textContent = canUiMessage;
-        injectStatus.classList.toggle('ok', canUiMessageKind === 'ok');
-        injectStatus.classList.toggle('error', canUiMessageKind === 'error');
-    }
-}
-
-function parseCANHexInteger(rawValue, label) {
-    const text = String(rawValue ?? '').trim();
-    if (!text) throw new Error(`${label} is required.`);
-    const hex = text.replace(/^0x/i, '');
-    if (!/^[0-9a-f]+$/i.test(hex)) {
-        throw new Error(`${label} must be a hexadecimal value.`);
-    }
-    const value = Number.parseInt(hex, 16);
-    if (!Number.isFinite(value)) throw new Error(`${label} is invalid.`);
-    return value >>> 0;
-}
-
-function parseCANPayloadBytes(rawValue) {
-    const text = String(rawValue ?? '').trim();
-    if (!text) return [];
-
-    const tokens = text.split(/[\s,]+/).filter(Boolean);
-    if (tokens.length > 8) {
-        throw new Error('Payload has more than 8 bytes.');
-    }
-
-    return tokens.map((token) => {
-        const hex = token.replace(/^0x/i, '');
-        if (!/^[0-9a-f]{1,2}$/i.test(hex)) {
-            throw new Error(`Invalid payload byte "${token}". Use hex bytes like 11 22 AA.`);
-        }
-        return Number.parseInt(hex, 16) & 0xFF;
-    });
-}
-
-function injectCANFrameFromUI() {
-    const can = simulator?.can;
-    const idInput = document.getElementById('canInjectId');
-    const dlcInput = document.getElementById('canInjectDlc');
-    const payloadInput = document.getElementById('canInjectPayload');
-
-    if (!can || !idInput || !dlcInput || !payloadInput) return;
-
-    try {
-        const id = parseCANHexInteger(idInput.value, 'CAN ID');
-        if (id > 0x7FF) {
-            throw new Error('Standard CAN ID must be <= 0x7FF.');
-        }
-
-        const dlc = Number.parseInt(dlcInput.value, 10);
-        if (!Number.isInteger(dlc) || dlc < 0 || dlc > 8) {
-            throw new Error('DLC must be an integer from 0 to 8.');
-        }
-
-        const payload = parseCANPayloadBytes(payloadInput.value);
-        if (payload.length > dlc) {
-            throw new Error('Payload has more bytes than DLC.');
-        }
-
-        const paddedPayload = payload.slice();
-        while (paddedPayload.length < dlc) paddedPayload.push(0);
-
-        const frame = { id, dlc, data: paddedPayload };
-        const accepted = can.injectFrame(frame);
-        if (!accepted) {
-            setCANMessage('CAN rejected the frame because the RX mailbox is occupied.', 'error');
-        } else {
-            const paddingNote = paddedPayload.length > payload.length ? ' Missing bytes padded with 00.' : '';
-            setCANMessage(`Injected ${formatCANFrame(frame)}.${paddingNote}`, 'ok');
-        }
-    } catch (error) {
-        setCANMessage(error.message, 'error');
-    }
-
-    renderCANView();
-    renderSocView();
-}
-
-function clearCANLogAndStatus() {
-    canLastTxFrame = null;
-    const can = simulator?.can;
-    if (can) {
-        can.writeRegister(getCANBase(can) + CAN_REGISTERS.CMD, CAN_CMD_BITS.CLEAR_ERROR);
-    }
-    setCANMessage('Cleared latest TX display and error status.', 'ok');
-    renderCANView();
-    renderSocView();
-}
-
 // Only the active sidebar tab is visible, so per-frame rendering of hidden
 // views is wasted work. activateView() re-renders on every tab switch.
 function isViewActive(viewId) {
@@ -1165,7 +1099,6 @@ function updateUIGlobally() {
     if (isViewActive('view-cache')) renderCacheView();
     if (isViewActive('view-mmu')) renderMMUView();
     renderSocView(); // self-gated: always builds the diagram once, updates only when visible
-    if (isViewActive('view-io')) renderCANView();
 
     setTimeout(() => {
         document.querySelectorAll('tr.highlight').forEach(row => row.classList.remove('highlight'));
@@ -1285,17 +1218,6 @@ function renderSocView() {
         uartStatusText.textContent = `TX: ${simulator.uart.txBuffer?.length || 0} / RX: ${simulator.uart.rxBuffer?.length || 0}`;
     }
 
-    // 7b. Update CAN Status
-    const canStatusText = document.getElementById('soc-status-can');
-    if (canStatusText && simulator.can) {
-        const can = simulator.can;
-        const status = can.readRegister(getCANBase(can) + CAN_REGISTERS.STATUS) >>> 0;
-        const txReady = (status & CAN_STATUS_BITS.TX_READY) !== 0;
-        const rxAvailable = (status & CAN_STATUS_BITS.RX_AVAILABLE) !== 0;
-        const hasError = (status & CAN_STATUS_BITS.ERROR) !== 0;
-        canStatusText.textContent = `TX:${txReady ? 'R' : '-'} RX:${rxAvailable ? 'A' : '-'}${hasError ? ' ERR' : ''}`;
-    }
-
     // 8. Update LED Matrix Status
     const ledStatusText = document.getElementById('soc-status-led');
     if (ledStatusText && simulator.trace) {
@@ -1349,7 +1271,6 @@ function setupSocInteractivity() {
                             if (id === 'memory') return tx.linkName === 'uhToMainMemory';
                             if (id === 'dma') return tx.linkName.toLowerCase().includes('dma');
                             if (id === 'uart') return tx.linkName === 'ulToUart';
-                            if (id === 'can') return tx.linkName === 'ulToCan';
                             if (id === 'led') return tx.linkName === 'ulToLedMatrix';
                             if (id === 'keyboard') return tx.linkName === 'ulToKeyboard';
                             if (id === 'mouse') return tx.linkName === 'ulToMouse';
@@ -1595,62 +1516,6 @@ function setupUARTCallbacks() {
 
 // --- EVENT HANDLERS (Nút điều khiển) ---
 
-function setupCANCallbacks() {
-    if (typeof simulator === 'undefined' || !simulator.can) return;
-
-    const can = simulator.can;
-    if (canBoundController === can) {
-        renderCANView();
-        return;
-    }
-
-    if (canBoundController) {
-        canBoundController.onTransmit = null;
-        canBoundController.onReceive = null;
-    }
-
-    canBoundController = can;
-    canLastTxFrame = null;
-    setCANMessage('', '');
-
-    can.onTransmit = (frame) => {
-        canLastTxFrame = frame;
-        renderCANView();
-    };
-
-    can.onReceive = () => {
-        renderCANView();
-    };
-
-    renderCANView();
-}
-
-function setupCANControls() {
-    const injectButton = document.getElementById('canInjectButton');
-    const clearButton = document.getElementById('canClearButton');
-    const payloadInput = document.getElementById('canInjectPayload');
-
-    if (injectButton && injectButton.dataset.canBound !== 'true') {
-        injectButton.dataset.canBound = 'true';
-        injectButton.addEventListener('click', injectCANFrameFromUI);
-    }
-
-    if (clearButton && clearButton.dataset.canBound !== 'true') {
-        clearButton.dataset.canBound = 'true';
-        clearButton.addEventListener('click', clearCANLogAndStatus);
-    }
-
-    if (payloadInput && payloadInput.dataset.canBound !== 'true') {
-        payloadInput.dataset.canBound = 'true';
-        payloadInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                injectCANFrameFromUI();
-            }
-        });
-    }
-}
-
 function scrollBinaryOutputToBottom() {
     if (binaryOutput) binaryOutput.scrollTop = binaryOutput.scrollHeight;
 }
@@ -1693,7 +1558,6 @@ function handleAssemble() {
     simulator.init();
     setupSyscallCallbacks();
     setupUARTCallbacks(); // Setup lại UART callbacks sau reset
-    setupCANCallbacks();
 
     setTimeout(() => {
         try {
@@ -1709,7 +1573,6 @@ function handleAssemble() {
             simulator.loadProgram(programData);
             setupSyscallCallbacks();
             setupUARTCallbacks(); // Setup lại callbacks sau load program
-            setupCANCallbacks();
 
             let dataStartAddrFound = false;
             if (programData.memory && Object.keys(programData.memory).length > 0) {
@@ -1996,7 +1859,6 @@ function handleReset() {
     if (runState.isRunning) finishRun();
     simulator.init();
     setupUARTCallbacks();
-    setupCANCallbacks();
     setupSyscallCallbacks();
 
     if (assembler && typeof assembler._reset === 'function') {
@@ -2093,7 +1955,6 @@ document.addEventListener('DOMContentLoaded', () => {
     stopButton?.addEventListener('click', handleStop);
     stepButton?.addEventListener('click', handleStep);
     resetButton?.addEventListener('click', handleReset);
-    setupCANControls();
     updateRunControlUI();
 
     // [MỚI] Sự kiện thanh trượt tốc độ
@@ -2117,7 +1978,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setRegisterView('integer');
         updateUIGlobally();
         setupUARTCallbacks(); // Setup UART callbacks lần đầu
-        setupCANCallbacks();
         setupSocInteractivity(); // Initialize SoC diagram tooltips and navigation
     }
 
